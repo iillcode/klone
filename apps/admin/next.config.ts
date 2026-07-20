@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname, "../.."),
   },
-  assetPrefix: "/admin-static",
+  output: "standalone",
   experimental: {
     serverActions: {
       allowedOrigins: ["localhost:3001"],
