@@ -27,6 +27,9 @@ out/
 build
 dist
 
+# Cloudflare OpenNext
+.open-next/
+.wrangler/
 
 # Debug
 npm-debug.log*
