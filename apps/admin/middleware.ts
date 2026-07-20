@@ -2,10 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient as createSupabaseServerClient } from "@supabase/ssr";
 import { isAdminPath } from "@/lib/route-protection";
 
-export default async function proxy(request: NextRequest) {
+export default async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClientForProxy(request, response);
+  const supabase = createServerClientForMiddleware(request, response);
 
   const {
     data: { user },
@@ -28,7 +28,7 @@ export default async function proxy(request: NextRequest) {
   return response;
 }
 
-function createServerClientForProxy(request: NextRequest, response: NextResponse) {
+function createServerClientForMiddleware(request: NextRequest, response: NextResponse) {
   return createSupabaseServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
