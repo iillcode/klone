@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "DevLibrary",
-  description: "Browse and preview community components, themes, and templates.",
+  description: "Browse and preview community components and templates.",
 };
 
 export default function RootLayout({
