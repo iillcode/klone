@@ -278,21 +278,29 @@ export interface ElementInfo {
   styles: Record<string, string>;
 }
 
+export interface MultiElementInfo {
+  elements: ElementInfo[];
+  count: number;
+}
+
 export interface HtmlPreviewHandle {
   applyStyle: (property: string, value: string) => void;
   undo: () => void;
   redo: () => void;
   deleteElement: () => void;
+  selectedElementCount: () => number;
 }
 
 interface HtmlPreviewProps {
   html?: string;
   onElementSelect?: (info: ElementInfo | null) => void;
+  onMultiSelect?: (info: MultiElementInfo | null) => void;
   onStyleUpdated?: (property: string, value: string) => void;
+  onSelectionCleared?: () => void;
 }
 
 export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
-  function HtmlPreview({ html, onElementSelect, onStyleUpdated }, ref) {
+  function HtmlPreview({ html, onElementSelect, onMultiSelect, onStyleUpdated, onSelectionCleared }, ref) {
     const { theme } = useTheme();
     const isDark = theme === 'dark';
     const defaultHtml = buildHtml(isDark ? dark : light);
@@ -314,23 +322,34 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       deleteElement: () => {
         iframeRef.current?.contentWindow?.postMessage({ type: 'delete-element' }, '*');
       },
+      selectedElementCount: () => {
+        return iframeRef.current?.contentWindow?.document.querySelectorAll('[style*="solid #8b5cf6"]').length ?? 0;
+      },
     }));
 
     useEffect(() => {
       const handler = (e: MessageEvent) => {
-        if (e.data && e.data.type === 'element-selected') {
-          onElementSelect?.(e.data as ElementInfo);
+        const data = e.data;
+        if (!data) return;
+
+        if (data.type === 'multi-selected') {
+          onMultiSelect?.({ elements: data.elements, count: data.elements.length });
         }
-        if (e.data && e.data.type === 'style-updated') {
-          onStyleUpdated?.(e.data.property, e.data.value);
+        if (data.type === 'element-selected') {
+          onElementSelect?.(data as ElementInfo);
         }
-        if (e.data && e.data.type === 'selection-cleared') {
+        if (data.type === 'style-updated') {
+          onStyleUpdated?.(data.property, data.value);
+        }
+        if (data.type === 'selection-cleared') {
+          onMultiSelect?.(null);
           onElementSelect?.(null);
+          onSelectionCleared?.();
         }
       };
       window.addEventListener('message', handler);
       return () => window.removeEventListener('message', handler);
-    }, [onElementSelect, onStyleUpdated]);
+    }, [onElementSelect, onMultiSelect, onStyleUpdated, onSelectionCleared]);
 
     const srcDoc = html ? injectEditorScript(html) : defaultHtml;
 

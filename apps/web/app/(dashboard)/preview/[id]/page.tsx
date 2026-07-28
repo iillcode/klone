@@ -4,17 +4,27 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Project } from '@/lib/types';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { HtmlPreview, type HtmlPreviewHandle, type ElementInfo } from '@/components/HtmlPreview';
+import { HtmlPreview, type HtmlPreviewHandle, type ElementInfo, type MultiElementInfo } from '@/components/HtmlPreview';
 import { PreviewToolbar } from '@/components/PreviewToolbar';
 
 export default function PreviewPage() {
   const { id } = useParams<{ id: string }>();
   const [projects] = useState<Project[]>([]);
   const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
+  const [selectedElements, setSelectedElements] = useState<MultiElementInfo | null>(null);
+  const [selectedCount, setSelectedCount] = useState(1);
   const previewRef = useRef<HtmlPreviewHandle>(null);
 
   const handleElementSelect = useCallback((info: ElementInfo | null) => {
     setSelectedElement(info);
+    setSelectedElements(null);
+    setSelectedCount(1);
+  }, []);
+
+  const handleMultiSelect = useCallback((info: MultiElementInfo | null) => {
+    setSelectedElements(info);
+    setSelectedElement(null);
+    setSelectedCount(info?.count ?? 1);
   }, []);
 
   const handleStyleUpdated = useCallback((property: string, value: string) => {
@@ -71,10 +81,12 @@ export default function PreviewPage() {
         <HtmlPreview
           ref={previewRef}
           onElementSelect={handleElementSelect}
+          onMultiSelect={handleMultiSelect}
           onStyleUpdated={handleStyleUpdated}
         />
         <PreviewToolbar
           selectedElement={selectedElement}
+          selectedCount={selectedCount}
           onApplyStyle={handleApplyStyle}
           onDelete={handleDelete}
         />
