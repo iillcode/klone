@@ -278,25 +278,33 @@ export interface ElementInfo {
   styles: Record<string, string>;
 }
 
+export interface MultiElementInfo {
+  elements: { tag: string; classes: string; styles: Record<string, string> }[];
+  count: number;
+}
+
 export interface HtmlPreviewHandle {
   applyStyle: (property: string, value: string) => void;
   undo: () => void;
   redo: () => void;
   deleteElement: () => void;
+  selectedElementCount: () => number;
 }
 
 interface HtmlPreviewProps {
   html?: string;
   onElementSelect?: (info: ElementInfo | null) => void;
+  onMultiSelect?: (info: MultiElementInfo | null) => void;
   onStyleUpdated?: (property: string, value: string) => void;
 }
 
 export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
-  function HtmlPreview({ html, onElementSelect, onStyleUpdated }, ref) {
+  function HtmlPreview({ html, onElementSelect, onMultiSelect, onStyleUpdated }, ref) {
     const { theme } = useTheme();
     const isDark = theme === 'dark';
     const defaultHtml = buildHtml(isDark ? dark : light);
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const selectedCountRef = useRef(0);
 
     useImperativeHandle(ref, () => ({
       applyStyle: (property: string, value: string) => {
@@ -314,23 +322,33 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       deleteElement: () => {
         iframeRef.current?.contentWindow?.postMessage({ type: 'delete-element' }, '*');
       },
+      selectedElementCount: () => selectedCountRef.current,
     }));
 
     useEffect(() => {
       const handler = (e: MessageEvent) => {
         if (e.data && e.data.type === 'element-selected') {
+          selectedCountRef.current = 1;
           onElementSelect?.(e.data as ElementInfo);
+          onMultiSelect?.(null);
+        }
+        if (e.data && e.data.type === 'multi-selected') {
+          selectedCountRef.current = e.data.count ?? 0;
+          onMultiSelect?.(e.data as MultiElementInfo);
+          onElementSelect?.(null);
         }
         if (e.data && e.data.type === 'style-updated') {
           onStyleUpdated?.(e.data.property, e.data.value);
         }
         if (e.data && e.data.type === 'selection-cleared') {
+          selectedCountRef.current = 0;
           onElementSelect?.(null);
+          onMultiSelect?.(null);
         }
       };
       window.addEventListener('message', handler);
       return () => window.removeEventListener('message', handler);
-    }, [onElementSelect, onStyleUpdated]);
+    }, [onElementSelect, onMultiSelect, onStyleUpdated]);
 
     const srcDoc = html ? injectEditorScript(html) : defaultHtml;
 
