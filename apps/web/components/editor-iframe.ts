@@ -63,7 +63,6 @@ function findDeepestElements(els){
 }
 
 function setHover(el){
-  if(selectedEls.length>0)return;
   if(hoveredEl===el)return;
   clearHover();
   hoveredEl=el;
