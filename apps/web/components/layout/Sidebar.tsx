@@ -1,21 +1,49 @@
 'use client';
 
-import Link from 'next/link';
+import { Project } from '@/lib/types';
 
-export function Sidebar() {
+interface SidebarProps {
+  projects: Project[];
+  onSelectProject: (project: Project) => void;
+  activeProjectId?: string;
+}
+
+export function Sidebar({
+  projects,
+  onSelectProject,
+  activeProjectId,
+}: SidebarProps) {
   return (
-    <aside className="fixed left-0 top-0 h-full w-[280px] box-content bg-[#070708] z-40 flex flex-col">
-      {/* Logo */}
-      <div className="flex items-center justify-between px-3 py-5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center">
-            <svg className="w-5 h-5 text-black" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm0 2h14v2H5v-2z" />
-            </svg>
+    <div className="fixed top-0 left-0 w-[280px] h-screen flex flex-col z-20">
+      <div className="p-5">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-md bg-[#22c55e] flex items-center justify-center">
+            <span className="text-black font-bold text-sm">K</span>
           </div>
-          <span className="text-[15px] font-semibold text-white">DevLibrary</span>
+          <span className="text-base font-semibold text-white">Klone</span>
         </div>
       </div>
-    </aside>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-3">
+        <div className="space-y-1">
+          {projects.map((project) => (
+            <button
+              key={project.id}
+              onClick={() => onSelectProject(project)}
+              className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                activeProjectId === project.id
+                  ? 'bg-[#27272a] text-white'
+                  : 'text-[#a1a1aa] hover:bg-[#1a1a1d] hover:text-[#e4e4e7]'
+              }`}
+            >
+              <div className="font-medium truncate">{project.title || project.service_name}</div>
+              <div className="text-xs text-[#71717a] mt-0.5 truncate">
+                {project.service_name}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

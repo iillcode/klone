@@ -1,4 +1,3 @@
-import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 
 export default function DashboardLayout({
@@ -8,8 +7,6 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="min-h-screen bg-[#070708] text-white">
-      <Sidebar />
-
       <div className="ml-[280px] p-2 h-screen">
           <div className="rounded-[6px] bg-[#0d0d0f] h-[calc(100vh-1rem)] flex flex-col overflow-hidden border border-white/5">
           <TopBar />

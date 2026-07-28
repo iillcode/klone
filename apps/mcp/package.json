@@ -1,0 +1,29 @@
+{
+  "name": "mcp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir=.dist",
+    "start": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "lint": "eslint",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.23.0",
+    "@supabase/supabase-js": "^2.49.0",
+    "agents": "^0.2.20",
+    "jose": "^6.0.11",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260727.1",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "eslint": "^9",
+    "typescript": "^5",
+    "wrangler": "^4.112.0"
+  }
+}
