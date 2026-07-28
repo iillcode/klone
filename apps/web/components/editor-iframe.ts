@@ -191,10 +191,13 @@ document.addEventListener('click',function(e){
 document.addEventListener('mousedown',function(e){
   if(e.button!==0)return;
   if(e.ctrlKey||e.metaKey)return;
+  e.preventDefault();
   dragStartX=e.clientX;
   dragStartY=e.clientY;
   isDragging=true;
   document.body.style.cursor='crosshair';
+  document.body.style.userSelect='none';
+  document.body.style.webkitUserSelect='none';
 });
 
 document.addEventListener('mousemove',function(e){
@@ -210,6 +213,8 @@ document.addEventListener('mouseup',function(e){
   if(!isDragging)return;
   isDragging=false;
   document.body.style.cursor='';
+  document.body.style.userSelect='';
+  document.body.style.webkitUserSelect='';
   if(selectedEls.length>0){
     fireSelected();
   }else{
