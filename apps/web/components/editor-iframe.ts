@@ -3,7 +3,6 @@ export function getEditorScript(): string {
 (function(){
 var selectedEls=[];
 var hoveredEl=null;
-var marqueeEl=null;
 var isDragging=false;
 var dragStartX=0;
 var dragStartY=0;
@@ -30,7 +29,6 @@ function isClickable(el){
   if(!el||!el.tagName)return false;
   var tag=el.tagName.toLowerCase();
   if(tag==='html'||tag==='head'||tag==='body'||tag==='script')return false;
-  if(el===marqueeEl)return false;
   return true;
 }
 
@@ -41,10 +39,6 @@ function getClickableElements(){
     if(isClickable(all[i]))result.push(all[i]);
   }
   return result;
-}
-
-function rectsIntersect(a,b){
-  return a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
 }
 
 function findDeepestElements(els){
@@ -119,33 +113,17 @@ function fireSelected(){
   window.parent.postMessage({type:'element-selected',elements:infos},'*');
 }
 
-function createMarquee(x,y){
-  marqueeEl=document.createElement('div');
-  marqueeEl.style.cssText='position:fixed;border:1px dashed rgba(139,92,246,0.6);background:rgba(139,92,246,0.1);pointer-events:none;z-index:99999;';
-  marqueeEl.style.left=x+'px';
-  marqueeEl.style.top=y+'px';
-  marqueeEl.style.width='0px';
-  marqueeEl.style.height='0px';
-  document.body.appendChild(marqueeEl);
+function addToSelection(el){
+  if(selectedEls.indexOf(el)>=0)return;
+  selectedEls.push(el);
+  el.style.outline='2px solid #8b5cf6';
+  el.style.outlineOffset='2px';
 }
 
-function updateMarquee(x,y){
-  if(!marqueeEl)return;
-  var minX=Math.min(dragStartX,x);
-  var minY=Math.min(dragStartY,y);
-  var maxX=Math.max(dragStartX,x);
-  var maxY=Math.max(dragStartY,y);
-  marqueeEl.style.left=minX+'px';
-  marqueeEl.style.top=minY+'px';
-  marqueeEl.style.width=(maxX-minX)+'px';
-  marqueeEl.style.height=(maxY-minY)+'px';
-}
-
-function removeMarquee(){
-  if(marqueeEl&&marqueeEl.parentNode){
-    marqueeEl.parentNode.removeChild(marqueeEl);
-  }
-  marqueeEl=null;
+function elementFromPoint(x,y){
+  var el=document.elementFromPoint(x,y);
+  if(!el||!isClickable(el))return null;
+  return el;
 }
 
 function deleteSelected(){
@@ -161,12 +139,14 @@ function deleteSelected(){
 }
 
 document.addEventListener('mouseover',function(e){
+  if(isDragging)return;
   var el=e.target;
   if(!el||!el.tagName)return;
   setHover(el);
 });
 
 document.addEventListener('mouseout',function(e){
+  if(isDragging)return;
   var el=e.target;
   if(!el)return;
   if(hoveredEl===el){
@@ -175,6 +155,7 @@ document.addEventListener('mouseout',function(e){
 });
 
 document.addEventListener('click',function(e){
+  if(isDragging)return;
   e.stopPropagation();
   var el=e.target;
   if(!isClickable(el))return;
@@ -206,50 +187,31 @@ document.addEventListener('click',function(e){
 });
 
 document.addEventListener('mousedown',function(e){
-  if(e.target===marqueeEl)return;
+  if(e.button!==0)return;
   if(e.ctrlKey||e.metaKey)return;
-  if(!isClickable(e.target)){
-    dragStartX=e.clientX;
-    dragStartY=e.clientY;
-    isDragging=true;
-  }
+  dragStartX=e.clientX;
+  dragStartY=e.clientY;
+  isDragging=true;
+  document.body.style.cursor='crosshair';
 });
 
 document.addEventListener('mousemove',function(e){
   if(!isDragging)return;
-  var dx=e.clientX-dragStartX;
-  var dy=e.clientY-dragStartY;
-  if(!marqueeEl&&(Math.abs(dx)>5||Math.abs(dy)>5)){
-    createMarquee(dragStartX,dragStartY);
-  }
-  if(marqueeEl){
-    updateMarquee(e.clientX,e.clientY);
+  var el=elementFromPoint(e.clientX,e.clientY);
+  if(el){
+    addToSelection(el);
+    clearHover();
   }
 });
 
 document.addEventListener('mouseup',function(e){
   if(!isDragging)return;
   isDragging=false;
-  if(marqueeEl){
-    var mRect={left:Math.min(dragStartX,e.clientX),top:Math.min(dragStartY,e.clientY),right:Math.max(dragStartX,e.clientX),bottom:Math.max(dragStartY,e.clientY)};
-    var allEls=getClickableElements();
-    var found=[];
-    for(var i=0;i<allEls.length;i++){
-      var bcr=allEls[i].getBoundingClientRect();
-      if(rectsIntersect(mRect,bcr)){
-        found.push(allEls[i]);
-      }
-    }
-    removeMarquee();
-    deselect();
-    var deepest=findDeepestElements(found);
-    selectedEls=deepest;
-    highlightSelected();
-    if(selectedEls.length>0){
-      fireSelected();
-    }else{
-      window.parent.postMessage({type:'selection-cleared'},'*');
-    }
+  document.body.style.cursor='';
+  if(selectedEls.length>0){
+    fireSelected();
+  }else{
+    window.parent.postMessage({type:'selection-cleared'},'*');
   }
 });
 
