@@ -2,6 +2,7 @@ export function getEditorScript(): string {
   return `<script>
 (function(){
 var selectedEl=null;
+var hoveredEl=null;
 var undoStack=[];
 var redoStack=[];
 
@@ -10,6 +11,22 @@ function deselect(){
     selectedEl.style.outline='';
     selectedEl.style.outlineOffset='';
     selectedEl=null;
+  }
+}
+
+function setHover(el){
+  if(hoveredEl===el)return;
+  clearHover();
+  hoveredEl=el;
+  el.style.outline='1px dashed rgba(139,92,246,0.6)';
+  el.style.outlineOffset='1px';
+}
+
+function clearHover(){
+  if(hoveredEl){
+    hoveredEl.style.outline='';
+    hoveredEl.style.outlineOffset='';
+    hoveredEl=null;
   }
 }
 
@@ -51,9 +68,27 @@ function fireSelected(){
   },'*');
 }
 
+document.addEventListener('mouseover',function(e){
+  var el=e.target;
+  if(!el||!el.tagName)return;
+  setHover(el);
+});
+
+document.addEventListener('mouseout',function(e){
+  var el=e.target;
+  if(!el)return;
+  if(hoveredEl===el){
+    clearHover();
+  }
+});
+
 document.addEventListener('click',function(e){
+  e.stopPropagation();
+  var el=e.target;
+  if(!el||!el.tagName)return;
+  clearHover();
   deselect();
-  selectedEl=e.target;
+  selectedEl=el;
   selectedEl.style.outline='2px solid #8b5cf6';
   selectedEl.style.outlineOffset='2px';
   fireSelected();
