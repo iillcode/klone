@@ -78,6 +78,7 @@ function buildHtml(c: Colors): string {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { overflow: hidden; height: 100%; }
     body { font-family: system-ui, -apple-system, sans-serif; background: transparent; color: ${c.body}; line-height: 1.5; }
+    body *:hover { outline: 1px dashed rgba(139,92,246,0.6); outline-offset: 1px; }
     .scroll-wrapper { height: 100%; overflow-y: auto; padding: 2.5rem; scrollbar-width: thin; scrollbar-color: ${c.scrollThumb} transparent; }
     .scroll-wrapper::-webkit-scrollbar { width: 10px; }
     .scroll-wrapper::-webkit-scrollbar-track { background: transparent; }

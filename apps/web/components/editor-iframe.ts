@@ -2,7 +2,6 @@ export function getEditorScript(): string {
   return `<script>
 (function(){
 var selectedEl=null;
-var hoveredEl=null;
 var undoStack=[];
 var redoStack=[];
 
@@ -11,14 +10,6 @@ function deselect(){
     selectedEl.style.outline='';
     selectedEl.style.outlineOffset='';
     selectedEl=null;
-  }
-}
-
-function deselectHover(){
-  if(hoveredEl){
-    hoveredEl.style.outline='';
-    hoveredEl.style.outlineOffset='';
-    hoveredEl=null;
   }
 }
 
@@ -76,30 +67,12 @@ function clearHoverOutline(){
 }
 
 document.addEventListener('click',function(e){
-  e.preventDefault();
   deselect();
   selectedEl=e.target;
   selectedEl.style.outline='2px solid #8b5cf6';
   selectedEl.style.outlineOffset='2px';
   fireSelected();
 });
-
-document.addEventListener('mouseover',function(e){
-  setHoverOutline(e.target);
-  window.parent.postMessage({
-    type:'element-hover',
-    tag:e.target.tagName.toLowerCase(),
-    classes:e.target.className
-  },'*');
-});
-
-document.addEventListener('mouseout',function(e){
-  clearHoverOutline();
-});
-
-window.addEventListener('message',function(e){
-  var data=e.data;
-  if(!data)return;
 
   if(data.type==='apply-style'){
     if(!selectedEl)return;
