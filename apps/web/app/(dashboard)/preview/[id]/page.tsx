@@ -10,30 +10,28 @@ import { PreviewToolbar } from '@/components/PreviewToolbar';
 export default function PreviewPage() {
   const { id } = useParams<{ id: string }>();
   const [projects] = useState<Project[]>([]);
-  const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
+  const [selectedElements, setSelectedElements] = useState<ElementInfo[]>([]);
   const previewRef = useRef<HtmlPreviewHandle>(null);
 
-  const handleElementSelect = useCallback((info: ElementInfo | null) => {
-    setSelectedElement(info);
+  const handleElementSelect = useCallback((elements: ElementInfo[] | null) => {
+    setSelectedElements(elements ?? []);
   }, []);
 
   const handleStyleUpdated = useCallback((property: string, value: string) => {
-    setSelectedElement((prev) => {
-      if (!prev) return prev;
-      return { ...prev, styles: { ...prev.styles, [property]: value } };
-    });
+    setSelectedElements((prev) =>
+      prev.map((el) => ({ ...el, styles: { ...el.styles, [property]: value } }))
+    );
   }, []);
 
   const handleApplyStyle = useCallback((property: string, value: string) => {
-    previewRef.current?.applyStyle(property, value);
-    setSelectedElement((prev) => {
-      if (!prev) return prev;
-      return { ...prev, styles: { ...prev.styles, [property]: value } };
-    });
+    previewRef.current?.applyStyleMulti(property, value);
+    setSelectedElements((prev) =>
+      prev.map((el) => ({ ...el, styles: { ...el.styles, [property]: value } }))
+    );
   }, []);
 
   const handleDelete = useCallback(() => {
-    previewRef.current?.deleteElement();
+    previewRef.current?.deleteMulti();
   }, []);
 
   useEffect(() => {
@@ -52,7 +50,7 @@ export default function PreviewPage() {
         const tag = document.activeElement?.tagName;
         if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
           e.preventDefault();
-          previewRef.current?.deleteElement();
+          previewRef.current?.deleteMulti();
         }
       }
     }
@@ -74,7 +72,7 @@ export default function PreviewPage() {
           onStyleUpdated={handleStyleUpdated}
         />
         <PreviewToolbar
-          selectedElement={selectedElement}
+          selectedElements={selectedElements}
           onApplyStyle={handleApplyStyle}
           onDelete={handleDelete}
         />
