@@ -67,7 +67,6 @@ export interface ElementInfo {
 
 interface PreviewToolbarProps {
   selectedElement: ElementInfo | null;
-  selectedCount?: number;
   onApplyStyle: (property: string, value: string) => void;
   onDelete?: () => void;
   onEdit?: () => void;
@@ -94,7 +93,6 @@ function cssPx(val: string): number {
 
 export function PreviewToolbar({
   selectedElement,
-  selectedCount = 1,
   onApplyStyle,
   onDelete,
   onEdit,
@@ -110,12 +108,6 @@ export function PreviewToolbar({
           <span className="px-1.5 py-0.5 rounded bg-[#27272a] text-[#a1a1aa] text-[11px] font-mono leading-none">
             &lt;{selectedElement.tag}&gt;
           </span>
-
-          {selectedCount > 1 ? (
-            <span className="px-1.5 py-0.5 rounded bg-[#8b5cf6] text-white text-[10px] font-mono leading-none">
-              {selectedCount} selected
-            </span>
-          ) : null}
 
           <div className="w-px h-5 bg-[#27272a]" />
 
