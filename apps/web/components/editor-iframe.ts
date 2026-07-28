@@ -16,7 +16,7 @@ function deselect(){
 function parseRgbToHex(s){
   if(!s||s==='transparent'||s==='rgba(0, 0, 0, 0)')return'#000000';
   if(s.startsWith('#'))return s;
-  var m=s.match(/(\d+)/g);
+  var m=s.match(/(\\d+)/g);
   if(!m||m.length<3)return'#000000';
   var r=parseInt(m[0]).toString(16).padStart(2,'0');
   var g=parseInt(m[1]).toString(16).padStart(2,'0');
@@ -51,21 +51,6 @@ function fireSelected(){
   },'*');
 }
 
-function setHoverOutline(el){
-  deselectHover();
-  hoveredEl=el;
-  el.style.outline='1px dashed rgba(139,92,246,0.6)';
-  el.style.outlineOffset='1px';
-}
-
-function clearHoverOutline(){
-  if(hoveredEl){
-    hoveredEl.style.outline='';
-    hoveredEl.style.outlineOffset='';
-    hoveredEl=null;
-  }
-}
-
 document.addEventListener('click',function(e){
   deselect();
   selectedEl=e.target;
@@ -73,6 +58,19 @@ document.addEventListener('click',function(e){
   selectedEl.style.outlineOffset='2px';
   fireSelected();
 });
+
+document.addEventListener('keydown',function(e){
+  if(e.key==='Delete'&&selectedEl){
+    e.preventDefault();
+    selectedEl.remove();
+    deselect();
+    window.parent.postMessage({type:'selection-cleared'},'*');
+  }
+});
+
+window.addEventListener('message',function(e){
+  var data=e.data;
+  if(!data)return;
 
   if(data.type==='apply-style'){
     if(!selectedEl)return;
@@ -133,15 +131,6 @@ document.addEventListener('click',function(e){
       property:entry2.property,
       value:parseRgbToHex(s3[entry2.property])
     },'*');
-  }
-});
-
-document.addEventListener('keydown',function(e){
-  if(e.key==='Delete'&&selectedEl){
-    e.preventDefault();
-    selectedEl.remove();
-    deselect();
-    window.parent.postMessage({type:'selection-cleared'},'*');
   }
 });
 
