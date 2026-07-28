@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { Project } from '@/lib/types';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { LandingCards } from '@/components/LandingCards';
 
 export default function Home() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | undefined>();
 
   const handleSelectProject = (project: Project) => {
@@ -19,8 +20,7 @@ export default function Home() {
         onSelectProject={handleSelectProject}
         activeProjectId={activeProjectId}
       />
-
-      <div className="flex-1" />
+      <LandingCards />
     </div>
   );
 }

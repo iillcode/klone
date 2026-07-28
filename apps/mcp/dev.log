@@ -59,3 +59,4 @@ env.SUPABASE_JWT_SECRET ("(hidden)")                                      Enviro
 [wrangler:info] POST /mcp 200 OK (7798ms)
 [wrangler:info] POST /mcp 401 Unauthorized (1421ms)
 [wrangler:info] POST /mcp 200 OK (376ms)
+[wrangler:info] POST /mcp 401 Unauthorized (97ms)

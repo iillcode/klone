@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Generator API - Documentation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { overflow: hidden; height: 100%; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: transparent; color: #e4e4e7; line-height: 1.5; }
+    .scroll-wrapper { height: 100%; overflow-y: auto; padding: 2.5rem; scrollbar-width: thin; scrollbar-color: #3f3f46 transparent; }
+    .scroll-wrapper::-webkit-scrollbar { width: 10px; }
+    .scroll-wrapper::-webkit-scrollbar-track { background: transparent; }
+    .scroll-wrapper::-webkit-scrollbar-thumb { background-color: #3f3f46; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+    .scroll-wrapper::-webkit-scrollbar-thumb:hover { background-color: #52525b; background-clip: content-box; }
+    .header { margin-bottom: 2rem; border-bottom: 1px solid #27272a; padding-bottom: 1.5rem; }
+    .header h1 { font-size: 1.75rem; font-weight: 700; color: #f4f4f5; letter-spacing: -0.02em; }
+    .header .subtitle { color: #a1a1aa; margin-top: 0.25rem; font-size: 0.875rem; }
+    .header .meta { display: flex; gap: 1.5rem; margin-top: 0.75rem; font-size: 0.8rem; color: #71717a; }
+    .section { margin-bottom: 2rem; }
+    .section h2 { font-size: 1.1rem; font-weight: 600; color: #f4f4f5; margin-bottom: 0.75rem; letter-spacing: -0.01em; }
+    .section h3 { font-size: 0.95rem; font-weight: 600; color: #d4d4d8; margin-bottom: 0.5rem; margin-top: 1rem; }
+    .section p { color: #a1a1aa; font-size: 0.85rem; line-height: 1.6; margin-bottom: 1rem; }
+    .endpoint { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+    .method { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .method.get { background: #1a3a2a; color: #4ade80; }
+    .method.post { background: #1e2a4a; color: #60a5fa; }
+    .method.put { background: #2a2a1a; color: #facc15; }
+    .method.delete { background: #3a1a1a; color: #f87171; }
+    .path { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85rem; color: #e4e4e7; }
+    .path span { color: #71717a; }
+    .desc { color: #a1a1aa; font-size: 0.85rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; font-size: 0.8rem; }
+    th { text-align: left; padding: 0.5rem 0.75rem; color: #a1a1aa; font-weight: 600; border-bottom: 1px solid #27272a; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em; }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #1a1a1d; color: #d4d4d8; }
+    td:first-child { font-family: 'SF Mono', 'Fira Code', monospace; color: #c084fc; }
+    td .tag { display: inline-block; font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: 3px; background: #1e1e21; color: #a1a1aa; font-family: system-ui; }
+    .code-block { background: #0a0a0b; border: 1px solid #27272a; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; overflow-x: auto; }
+    .code-block pre { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; color: #d4d4d8; line-height: 1.6; white-space: pre; }
+    .code-block .comment { color: #71717a; }
+    .code-block .key { color: #c084fc; }
+    .code-block .string { color: #4ade80; }
+    .code-block .number { color: #facc15; }
+    .code-block .bool { color: #60a5fa; }
+    .code-block .method-hl { color: #f87171; }
+    .status-bar { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0; margin-bottom: 0.5rem; border-bottom: 1px solid #27272a; }
+    .status-bar .label { color: #71717a; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #27272a; display: flex; justify-content: space-between; font-size: 0.75rem; color: #52525b; }
+  </style>
+</head>
+<body>
+  <div class="scroll-wrapper">
+    <div class="header">
+      <h1>PDF Generator API</h1>
+    <div class="subtitle">RESTful API for programmatic PDF document generation — v2.1.0</div>
+    <div class="meta">
+      <span>Base URL: https://api.pdfgen.dev/v2</span>
+      <span>Auth: Bearer Token</span>
+      <span>Format: JSON</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Generate PDF</h2>
+    <p>Creates a PDF document from HTML content or a template ID. Returns a presigned download URL.</p>
+
+    <div class="endpoint">
+      <span class="method post">POST</span>
+      <span class="path">/documents</span>
+    </div>
+
+    <h3>Request Body</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Parameter</th>
+          <th>Type</th>
+          <th>Required</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>template_id</td>
+          <td>string <span class="tag">uuid</span></td>
+          <td>conditional*</td>
+          <td>ID of a pre-registered template</td>
+        </tr>
+        <tr>
+          <td>html</td>
+          <td>string</td>
+          <td>conditional*</td>
+          <td>Raw HTML content to render</td>
+        </tr>
+        <tr>
+          <td>options.page_size</td>
+          <td>string</td>
+          <td>optional</td>
+          <td>A4, Letter, or custom (default: A4)</td>
+        </tr>
+        <tr>
+          <td>options.margin</td>
+          <td>number</td>
+          <td>optional</td>
+          <td>Margin in mm (default: 20)</td>
+        </tr>
+        <tr>
+          <td>options.orientation</td>
+          <td>string</td>
+          <td>optional</td>
+          <td>portrait or landscape</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size:0.8rem;color:#71717a;">* Either template_id or html is required.</p>
+
+    <h3>Example Request</h3>
+    <div class="code-block">
+      <pre><span class="method-hl">POST</span> https://api.pdfgen.dev/v2/documents
+<span class="key">Authorization</span>: Bearer sk_live_abc123def456
+
+{<span class="comment">
+  "Use a pre-registered template":</span>
+  <span class="key">"template_id"</span>: <span class="string">"tmpl_9a8b7c6d"</span>,<span class="comment">
+  "Or inline HTML":</span>
+  <span class="key">"html"</span>: <span class="string">"<h1>Hello</h1><p>World</p>"</span>,
+  <span class="key">"options"</span>: {
+    <span class="key">"page_size"</span>: <span class="string">"A4"</span>,
+    <span class="key">"margin"</span>: <span class="number">20</span>,
+    <span class="key">"orientation"</span>: <span class="string">"portrait"</span>
+  },
+  <span class="key">"metadata"</span>: {
+    <span class="key">"title"</span>: <span class="string">"Invoice #1024"</span>,
+    <span class="key">"tags"</span>: [<span class="string">"invoice"</span>, <span class="string">"production"</span>]
+  }
+}</pre>
+    </div>
+
+    <h3>Example Response</h3>
+    <div class="code-block">
+      <pre>{
+  <span class="key">"id"</span>: <span class="string">"doc_e3f2a1b0"</span>,
+  <span class="key">"status"</span>: <span class="string">"completed"</span>,
+  <span class="key">"download_url"</span>: <span class="string">"https://storage.pdfgen.dev/d/e3f2a1b0.pdf?X-Amz-Signature=..."</span>,
+  <span class="key">"expires_in"</span>: <span class="number">3600</span>,
+  <span class="key">"pages"</span>: <span class="number">4</span>,
+  <span class="key">"size_bytes"</span>: <span class="number">128_420</span>,
+  <span class="key">"created_at"</span>: <span class="string">"2026-03-15T10:30:00Z"</span>
+}</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Manage Templates</h2>
+
+    <div class="endpoint">
+      <span class="method get">GET</span>
+      <span class="path">/templates</span>
+      <span class="desc">List all templates with pagination</span>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Query Param</th><th>Type</th><th>Default</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>page</td><td>integer</td><td>1</td><td>Page number</td></tr>
+        <tr><td>per_page</td><td>integer</td><td>20</td><td>Items per page (max 100)</td></tr>
+        <tr><td>search</td><td>string</td><td>—</td><td>Filter by name</td></tr>
+      </tbody>
+    </table>
+
+    <div class="endpoint">
+      <span class="method put">PUT</span>
+      <span class="path">/templates/:id</span>
+      <span class="desc">Update a template's HTML or options</span>
+    </div>
+
+    <div class="endpoint">
+      <span class="method delete">DELETE</span>
+      <span class="path">/templates/:id</span>
+      <span class="desc">Remove a template permanently</span>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <span class="label">Status</span>
+    <span style="color:#4ade80;font-size:0.85rem;">● All systems operational</span>
+  </div>
+
+  <div class="footer">
+    <span>PDF Generator API — v2.1.0</span>
+    <span>Generated 2026-07-29</span>
+  </div>
+  </div>
+</body>
+</html>
