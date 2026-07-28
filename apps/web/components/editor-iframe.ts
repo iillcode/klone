@@ -120,10 +120,12 @@ function addToSelection(el){
   el.style.outlineOffset='2px';
 }
 
-function elementFromPoint(x,y){
-  var el=document.elementFromPoint(x,y);
-  if(!el||!isClickable(el))return null;
-  return el;
+function deepestClickableFromPoint(x,y){
+  var els=document.elementsFromPoint(x,y);
+  for(var i=els.length-1;i>=0;i--){
+    if(isClickable(els[i]))return els[i];
+  }
+  return null;
 }
 
 function deleteSelected(){
@@ -197,7 +199,7 @@ document.addEventListener('mousedown',function(e){
 
 document.addEventListener('mousemove',function(e){
   if(!isDragging)return;
-  var el=elementFromPoint(e.clientX,e.clientY);
+  var el=deepestClickableFromPoint(e.clientX,e.clientY);
   if(el){
     addToSelection(el);
     clearHover();
