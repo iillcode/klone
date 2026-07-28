@@ -59,13 +59,13 @@ export function Sidebar({
 
   if (overlay) {
     return (
-      <div className="fixed left-0 top-0 h-screen z-30">
+      <div className="fixed left-0 top-0 h-screen z-30 pointer-events-none">
         <div
-          className="absolute left-0 top-0 w-2 h-full z-40"
+          className="absolute left-0 top-0 w-2 h-full z-40 pointer-events-auto"
           onMouseEnter={() => setSidebarHover(true)}
         />
         <div
-          className={`w-[280px] h-screen bg-sidebar border-r border-sidebar-border transition-transform duration-200 ease-in-out ${
+          className={`w-[280px] pointer-events-auto h-screen bg-sidebar border-r border-sidebar-border transition-transform duration-200 ease-in-out ${
             sidebarHover ? 'translate-x-0' : '-translate-x-full'
           }`}
           onMouseLeave={() => setSidebarHover(false)}
