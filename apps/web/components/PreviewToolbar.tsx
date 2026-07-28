@@ -66,7 +66,7 @@ export interface ElementInfo {
 }
 
 interface PreviewToolbarProps {
-  selectedElement: ElementInfo | null;
+  selectedElements: ElementInfo[];
   onApplyStyle: (property: string, value: string) => void;
   onDelete?: () => void;
   onEdit?: () => void;
@@ -92,22 +92,30 @@ function cssPx(val: string): number {
 }
 
 export function PreviewToolbar({
-  selectedElement,
+  selectedElements,
   onApplyStyle,
   onDelete,
   onEdit,
   onDownload,
   onCopy,
 }: PreviewToolbarProps) {
-  const s = selectedElement?.styles;
+  const first = selectedElements[0];
+  const s = first?.styles;
+  const count = selectedElements.length;
 
   return (
     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-sidebar border border-sidebar-border select-none">
-      {selectedElement && s ? (
+      {count > 0 && s ? (
         <>
           <span className="px-1.5 py-0.5 rounded bg-[#27272a] text-[#a1a1aa] text-[11px] font-mono leading-none">
-            &lt;{selectedElement.tag}&gt;
+            &lt;{first.tag}&gt;
           </span>
+
+          {count > 1 && (
+            <span className="px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 text-[11px] font-mono leading-none">
+              &times;{count}
+            </span>
+          )}
 
           <div className="w-px h-5 bg-[#27272a]" />
 
