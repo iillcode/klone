@@ -279,15 +279,15 @@ export interface ElementInfo {
 }
 
 export interface HtmlPreviewHandle {
-  applyStyle: (property: string, value: string) => void;
+  applyStyleMulti: (property: string, value: string) => void;
   undo: () => void;
   redo: () => void;
-  deleteElement: () => void;
+  deleteMulti: () => void;
 }
 
 interface HtmlPreviewProps {
   html?: string;
-  onElementSelect?: (info: ElementInfo | null) => void;
+  onElementSelect?: (elements: ElementInfo[] | null) => void;
   onStyleUpdated?: (property: string, value: string) => void;
 }
 
@@ -299,7 +299,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
     const iframeRef = useRef<HTMLIFrameElement>(null);
 
     useImperativeHandle(ref, () => ({
-      applyStyle: (property: string, value: string) => {
+      applyStyleMulti: (property: string, value: string) => {
         iframeRef.current?.contentWindow?.postMessage(
           { type: 'apply-style', property, value },
           '*'
@@ -311,7 +311,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       redo: () => {
         iframeRef.current?.contentWindow?.postMessage({ type: 'redo' }, '*');
       },
-      deleteElement: () => {
+      deleteMulti: () => {
         iframeRef.current?.contentWindow?.postMessage({ type: 'delete-element' }, '*');
       },
     }));
@@ -319,7 +319,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
     useEffect(() => {
       const handler = (e: MessageEvent) => {
         if (e.data && e.data.type === 'element-selected') {
-          onElementSelect?.(e.data as ElementInfo);
+          onElementSelect?.(e.data.elements);
         }
         if (e.data && e.data.type === 'style-updated') {
           onStyleUpdated?.(e.data.property, e.data.value);
