@@ -4,6 +4,8 @@ export function getEditorScript(): string {
 var selectedEls=[];
 var hoveredEl=null;
 var isDragging=false;
+var dragMoved=false;
+var justDragged=false;
 var dragStartX=0;
 var dragStartY=0;
 var batchId=0;
@@ -25,6 +27,13 @@ function highlightSelected(){
   }
 }
 
+function addToSelection(el){
+  if(selectedEls.indexOf(el)>=0)return;
+  selectedEls.push(el);
+  el.style.outline='2px solid #8b5cf6';
+  el.style.outlineOffset='2px';
+}
+
 function isClickable(el){
   if(!el||!el.tagName)return false;
   var tag=el.tagName.toLowerCase();
@@ -41,19 +50,13 @@ function getClickableElements(){
   return result;
 }
 
-function findDeepestElements(els){
-  var result=[];
+function deepestClickableFromPoint(x,y){
+  var els=document.elementsFromPoint(x,y);
+  if(!els)return null;
   for(var i=0;i<els.length;i++){
-    var isParent=false;
-    for(var j=0;j<els.length;j++){
-      if(i!==j&&els[i].contains(els[j])){
-        isParent=true;
-        break;
-      }
-    }
-    if(!isParent)result.push(els[i]);
+    if(isClickable(els[i]))return els[i];
   }
-  return result;
+  return null;
 }
 
 function setHover(el){
@@ -81,6 +84,60 @@ function parseRgbToHex(s){
   var g=parseInt(m[1]).toString(16).padStart(2,'0');
   var b=parseInt(m[2]).toString(16).padStart(2,'0');
   return'#'+r+g+b;
+}
+// color-like properties that need hex conversion; everything else sends raw value
+function isColorProperty(p){return p==='color'||p==='backgroundColor';}
+
+function formatStyleValue(property,computedValue){
+  if(isColorProperty(property))return parseRgbToHex(computedValue);
+  return computedValue;
+}
+function performUndo(){
+  if(undoStack.length===0)return;
+  var lastBatch=undoStack[undoStack.length-1].batchId;
+  var entries=[];
+  while(undoStack.length>0&&undoStack[undoStack.length-1].batchId===lastBatch){
+    entries.push(undoStack.pop());
+  }
+  for(var i=0;i<entries.length;i++){
+    var entry=entries[i];
+    if(entry.property==='__delete__'){
+      if(entry.nextSibling&&entry.nextSibling.parentNode){
+        entry.nextSibling.parentNode.insertBefore(entry.element,entry.nextSibling);
+      }else if(entry.parentNode){
+        entry.parentNode.appendChild(entry.element);
+      }
+    }else{
+      var currentValue=entry.element.style[entry.property];
+      redoStack.push({element:entry.element,property:entry.property,oldValue:currentValue,batchId:lastBatch});
+      entry.element.style[entry.property]=entry.oldValue;
+    }
+  }
+  if(entries.length>0&&entries[0].property!=='__delete__'){
+    var s2=getComputedStyle(entries[0].element);
+    window.parent.postMessage({type:'style-updated',property:entries[0].property,value:formatStyleValue(entries[0].property,s2[entries[0].property])},'*');
+  }
+  // Send full element snapshot so parent toolbar stays in sync
+  if(selectedEls.length>0){fireSelected();}
+}
+
+function performRedo(){
+  if(redoStack.length===0)return;
+  var lastBatch=redoStack[redoStack.length-1].batchId;
+  var entries=[];
+  while(redoStack.length>0&&redoStack[redoStack.length-1].batchId===lastBatch){
+    entries.push(redoStack.pop());
+  }
+  for(var i=0;i<entries.length;i++){
+    var entry=entries[i];
+    var currentValue=entry.element.style[entry.property];
+    undoStack.push({element:entry.element,property:entry.property,oldValue:currentValue,batchId:lastBatch});
+    entry.element.style[entry.property]=entry.oldValue;
+  }
+  var s3=getComputedStyle(entries[0].element);
+  window.parent.postMessage({type:'style-updated',property:entries[0].property,value:formatStyleValue(entries[0].property,s3[entries[0].property])},'*');
+  // Send full element snapshot so parent toolbar stays in sync
+  if(selectedEls.length>0){fireSelected();}
 }
 
 function fireSelected(){
@@ -113,21 +170,6 @@ function fireSelected(){
   window.parent.postMessage({type:'element-selected',elements:infos},'*');
 }
 
-function addToSelection(el){
-  if(selectedEls.indexOf(el)>=0)return;
-  selectedEls.push(el);
-  el.style.outline='2px solid #8b5cf6';
-  el.style.outlineOffset='2px';
-}
-
-function deepestClickableFromPoint(x,y){
-  var els=document.elementsFromPoint(x,y);
-  for(var i=els.length-1;i>=0;i--){
-    if(isClickable(els[i]))return els[i];
-  }
-  return null;
-}
-
 function deleteSelected(){
   if(selectedEls.length===0)return;
   batchId++;
@@ -158,6 +200,7 @@ document.addEventListener('mouseout',function(e){
 
 document.addEventListener('click',function(e){
   if(isDragging)return;
+  if(justDragged){justDragged=false;return;}
   e.stopPropagation();
   var el=e.target;
   if(!isClickable(el))return;
@@ -191,7 +234,8 @@ document.addEventListener('click',function(e){
 document.addEventListener('mousedown',function(e){
   if(e.button!==0)return;
   if(e.ctrlKey||e.metaKey)return;
-  e.preventDefault();
+  justDragged=false;
+  dragMoved=false;
   dragStartX=e.clientX;
   dragStartY=e.clientY;
   isDragging=true;
@@ -202,6 +246,13 @@ document.addEventListener('mousedown',function(e){
 
 document.addEventListener('mousemove',function(e){
   if(!isDragging)return;
+  if(!dragMoved){
+    var dx=e.clientX-dragStartX;
+    var dy=e.clientY-dragStartY;
+    if(Math.abs(dx)<5&&Math.abs(dy)<5)return;
+    dragMoved=true;
+    deselect();
+  }
   var el=deepestClickableFromPoint(e.clientX,e.clientY);
   if(el){
     addToSelection(el);
@@ -215,10 +266,13 @@ document.addEventListener('mouseup',function(e){
   document.body.style.cursor='';
   document.body.style.userSelect='';
   document.body.style.webkitUserSelect='';
-  if(selectedEls.length>0){
-    fireSelected();
-  }else{
-    window.parent.postMessage({type:'selection-cleared'},'*');
+  if(dragMoved){
+    justDragged=true;
+    if(selectedEls.length>0){
+      fireSelected();
+    }else{
+      window.parent.postMessage({type:'selection-cleared'},'*');
+    }
   }
 });
 
@@ -238,6 +292,7 @@ document.addEventListener('keydown',function(e){
     e.preventDefault();
     deleteSelected();
   }
+
 });
 
 window.addEventListener('message',function(e){
@@ -255,55 +310,18 @@ window.addEventListener('message',function(e){
     }
     redoStack=[];
     var s=getComputedStyle(selectedEls[selectedEls.length-1]);
-    window.parent.postMessage({type:'style-updated',property:data.property,value:parseRgbToHex(s[data.property])},'*');
+    window.parent.postMessage({type:'style-updated',property:data.property,value:formatStyleValue(data.property,s[data.property])},'*');
   }
 
   if(data.type==='delete-element'){
     deleteSelected();
   }
 
-  if(data.type==='undo'){
-    if(undoStack.length===0)return;
-    var lastBatch=undoStack[undoStack.length-1].batchId;
-    var entries=[];
-    while(undoStack.length>0&&undoStack[undoStack.length-1].batchId===lastBatch){
-      entries.push(undoStack.pop());
-    }
-    for(var i=0;i<entries.length;i++){
-      var entry=entries[i];
-      if(entry.property==='__delete__'){
-        if(entry.nextSibling&&entry.nextSibling.parentNode){
-          entry.nextSibling.parentNode.insertBefore(entry.element,entry.nextSibling);
-        }else if(entry.parentNode){
-          entry.parentNode.appendChild(entry.element);
-        }
-      }else{
-        var currentValue=entry.element.style[entry.property];
-        redoStack.push({element:entry.element,property:entry.property,oldValue:currentValue,batchId:lastBatch});
-        entry.element.style[entry.property]=entry.oldValue;
-      }
-    }
-    if(entries.length>0&&entries[0].property!=='__delete__'){
-      var s2=getComputedStyle(entries[0].element);
-      window.parent.postMessage({type:'style-updated',property:entries[0].property,value:parseRgbToHex(s2[entries[0].property])},'*');
-    }
-  }
-
-  if(data.type==='redo'){
-    if(redoStack.length===0)return;
-    var lastBatch2=redoStack[redoStack.length-1].batchId;
-    var entries2=[];
-    while(redoStack.length>0&&redoStack[redoStack.length-1].batchId===lastBatch2){
-      entries2.push(redoStack.pop());
-    }
-    for(var i=0;i<entries2.length;i++){
-      var entry2=entries2[i];
-      var currentValue2=entry2.element.style[entry2.property];
-      undoStack.push({element:entry2.element,property:entry2.property,oldValue:currentValue2,batchId:lastBatch2});
-      entry2.element.style[entry2.property]=entry2.oldValue;
-    }
-    var s3=getComputedStyle(entries2[0].element);
-    window.parent.postMessage({type:'style-updated',property:entries2[0].property,value:parseRgbToHex(s3[entries2[0].property])},'*');
+  if(data.type==='undo'){performUndo();}
+  if(data.type==='redo'){performRedo();}
+  if(data.type==='deselect'){
+    deselect();
+    window.parent.postMessage({type:'selection-cleared'},'*');
   }
 });
 

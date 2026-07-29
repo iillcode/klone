@@ -1,8 +1,14 @@
-'use client';
+"use client";
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
-import { useTheme } from './theme-provider';
-import { getEditorScript } from './editor-iframe';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
+import { useTheme } from "./theme-provider";
+import { getEditorScript } from "./editor-iframe";
 
 interface Colors {
   body: string;
@@ -28,7 +34,12 @@ interface Colors {
   methodHl: string;
   footer: string;
   statusBorder: string;
-  method: { get: { bg: string; fg: string }; post: { bg: string; fg: string }; put: { bg: string; fg: string }; del: { bg: string; fg: string } };
+  method: {
+    get: { bg: string; fg: string };
+    post: { bg: string; fg: string };
+    put: { bg: string; fg: string };
+    del: { bg: string; fg: string };
+  };
   path: string;
   desc: string;
   scrollThumb: string;
@@ -36,34 +47,74 @@ interface Colors {
 }
 
 const dark: Colors = {
-  body: '#e4e4e7', h1: '#f4f4f5', h2: '#f4f4f5', h3: '#d4d4d8',
-  muted: '#a1a1aa', subtle: '#71717a', border: '#27272a',
-  tableTh: '#a1a1aa', tableTd: '#d4d4d8', tdCode: '#c084fc',
-  tagBg: '#1e1e21', tagFg: '#a1a1aa',
-  codeBg: '#0a0a0b', codeBorder: '#27272a', codeFg: '#d4d4d8',
-  comment: '#71717a', key: '#c084fc', str: '#4ade80', num: '#facc15', bool: '#60a5fa', methodHl: '#f87171',
-  footer: '#52525b', statusBorder: '#27272a', path: '#e4e4e7', desc: '#a1a1aa', scrollThumb: '#3f3f46', scrollThumbHover: '#52525b',
+  body: "#e4e4e7",
+  h1: "#f4f4f5",
+  h2: "#f4f4f5",
+  h3: "#d4d4d8",
+  muted: "#a1a1aa",
+  subtle: "#71717a",
+  border: "#27272a",
+  tableTh: "#a1a1aa",
+  tableTd: "#d4d4d8",
+  tdCode: "#c084fc",
+  tagBg: "#1e1e21",
+  tagFg: "#a1a1aa",
+  codeBg: "#0a0a0b",
+  codeBorder: "#27272a",
+  codeFg: "#d4d4d8",
+  comment: "#71717a",
+  key: "#c084fc",
+  str: "#4ade80",
+  num: "#facc15",
+  bool: "#60a5fa",
+  methodHl: "#f87171",
+  footer: "#52525b",
+  statusBorder: "#27272a",
+  path: "#e4e4e7",
+  desc: "#a1a1aa",
+  scrollThumb: "#3f3f46",
+  scrollThumbHover: "#52525b",
   method: {
-    get: { bg: '#1a3a2a', fg: '#4ade80' },
-    post: { bg: '#1e2a4a', fg: '#60a5fa' },
-    put: { bg: '#2a2a1a', fg: '#facc15' },
-    del: { bg: '#3a1a1a', fg: '#f87171' },
+    get: { bg: "#1a3a2a", fg: "#4ade80" },
+    post: { bg: "#1e2a4a", fg: "#60a5fa" },
+    put: { bg: "#2a2a1a", fg: "#facc15" },
+    del: { bg: "#3a1a1a", fg: "#f87171" },
   },
 };
 
 const light: Colors = {
-  body: '#18181b', h1: '#111111', h2: '#111111', h3: '#27272a',
-  muted: '#52525b', subtle: '#71717a', border: '#e4e4e7',
-  tableTh: '#52525b', tableTd: '#27272a', tdCode: '#7c3aed',
-  tagBg: '#f4f4f5', tagFg: '#52525b',
-  codeBg: '#fafafa', codeBorder: '#e4e4e7', codeFg: '#18181b',
-  comment: '#9ca3af', key: '#7c3aed', str: '#16a34a', num: '#ca8a04', bool: '#2563eb', methodHl: '#dc2626',
-  footer: '#a1a1aa', statusBorder: '#e4e4e7', path: '#18181b', desc: '#52525b', scrollThumb: '#d4d4d8', scrollThumbHover: '#a1a1aa',
+  body: "#18181b",
+  h1: "#111111",
+  h2: "#111111",
+  h3: "#27272a",
+  muted: "#52525b",
+  subtle: "#71717a",
+  border: "#e4e4e7",
+  tableTh: "#52525b",
+  tableTd: "#27272a",
+  tdCode: "#7c3aed",
+  tagBg: "#f4f4f5",
+  tagFg: "#52525b",
+  codeBg: "#fafafa",
+  codeBorder: "#e4e4e7",
+  codeFg: "#18181b",
+  comment: "#9ca3af",
+  key: "#7c3aed",
+  str: "#16a34a",
+  num: "#ca8a04",
+  bool: "#2563eb",
+  methodHl: "#dc2626",
+  footer: "#a1a1aa",
+  statusBorder: "#e4e4e7",
+  path: "#18181b",
+  desc: "#52525b",
+  scrollThumb: "#d4d4d8",
+  scrollThumbHover: "#a1a1aa",
   method: {
-    get: { bg: '#dcfce7', fg: '#166534' },
-    post: { bg: '#dbeafe', fg: '#1e40af' },
-    put: { bg: '#fef9c3', fg: '#854d0e' },
-    del: { bg: '#fee2e2', fg: '#991b1b' },
+    get: { bg: "#dcfce7", fg: "#166534" },
+    post: { bg: "#dbeafe", fg: "#1e40af" },
+    put: { bg: "#fef9c3", fg: "#854d0e" },
+    del: { bg: "#fee2e2", fg: "#991b1b" },
   },
 };
 
@@ -78,7 +129,7 @@ function buildHtml(c: Colors): string {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { overflow: hidden; height: 100%; }
     body { font-family: system-ui, -apple-system, sans-serif; background: transparent; color: ${c.body}; line-height: 1.5; }
-    .scroll-wrapper { height: 100%; overflow-y: auto; padding: 2.5rem; scrollbar-width: thin; scrollbar-color: ${c.scrollThumb} transparent; }
+    .scroll-wrapper { height: 100%; overflow-y: auto; padding: 2.5rem; max-width: 794px; margin: 0 auto; scrollbar-width: thin; scrollbar-color: ${c.scrollThumb} transparent; }
     .scroll-wrapper::-webkit-scrollbar { width: 10px; }
     .scroll-wrapper::-webkit-scrollbar-track { background: transparent; }
     .scroll-wrapper::-webkit-scrollbar-thumb { background-color: ${c.scrollThumb}; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
@@ -269,7 +320,7 @@ ${getEditorScript()}
 }
 
 function injectEditorScript(html: string): string {
-  return html.replace('</body>', getEditorScript() + '</body>');
+  return html.replace("</body>", getEditorScript() + "</body>");
 }
 
 export interface ElementInfo {
@@ -283,6 +334,7 @@ export interface HtmlPreviewHandle {
   undo: () => void;
   redo: () => void;
   deleteMulti: () => void;
+  deselect: () => void;
 }
 
 interface HtmlPreviewProps {
@@ -294,42 +346,51 @@ interface HtmlPreviewProps {
 export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
   function HtmlPreview({ html, onElementSelect, onStyleUpdated }, ref) {
     const { theme } = useTheme();
-    const isDark = theme === 'dark';
+    const isDark = theme === "dark";
     const defaultHtml = buildHtml(isDark ? dark : light);
     const iframeRef = useRef<HTMLIFrameElement>(null);
 
     useImperativeHandle(ref, () => ({
       applyStyleMulti: (property: string, value: string) => {
         iframeRef.current?.contentWindow?.postMessage(
-          { type: 'apply-style', property, value },
-          '*'
+          { type: "apply-style", property, value },
+          "*",
         );
       },
       undo: () => {
-        iframeRef.current?.contentWindow?.postMessage({ type: 'undo' }, '*');
+        iframeRef.current?.contentWindow?.postMessage({ type: "undo" }, "*");
       },
       redo: () => {
-        iframeRef.current?.contentWindow?.postMessage({ type: 'redo' }, '*');
+        iframeRef.current?.contentWindow?.postMessage({ type: "redo" }, "*");
       },
       deleteMulti: () => {
-        iframeRef.current?.contentWindow?.postMessage({ type: 'delete-element' }, '*');
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "delete-element" },
+          "*",
+        );
+      },
+      deselect: () => {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "deselect" },
+          "*",
+        );
       },
     }));
 
     useEffect(() => {
       const handler = (e: MessageEvent) => {
-        if (e.data && e.data.type === 'element-selected') {
+        if (e.data && e.data.type === "element-selected") {
           onElementSelect?.(e.data.elements);
         }
-        if (e.data && e.data.type === 'style-updated') {
+        if (e.data && e.data.type === "style-updated") {
           onStyleUpdated?.(e.data.property, e.data.value);
         }
-        if (e.data && e.data.type === 'selection-cleared') {
+        if (e.data && e.data.type === "selection-cleared") {
           onElementSelect?.(null);
         }
       };
-      window.addEventListener('message', handler);
-      return () => window.removeEventListener('message', handler);
+      window.addEventListener("message", handler);
+      return () => window.removeEventListener("message", handler);
     }, [onElementSelect, onStyleUpdated]);
 
     const srcDoc = html ? injectEditorScript(html) : defaultHtml;
@@ -343,5 +404,5 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         sandbox="allow-scripts"
       />
     );
-  }
+  },
 );

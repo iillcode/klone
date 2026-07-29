@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "klone-mcp" generated at 2026-07-28T21:49:23.506Z.

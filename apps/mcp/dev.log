@@ -60,3 +60,12 @@ env.SUPABASE_JWT_SECRET ("(hidden)")                                      Enviro
 [wrangler:info] POST /mcp 401 Unauthorized (1421ms)
 [wrangler:info] POST /mcp 200 OK (376ms)
 [wrangler:info] POST /mcp 401 Unauthorized (97ms)
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mBuild failed with 1 error:[0m
+
+  [31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "C:\\Users\\HP\\Desktop\\Projects\\MVP\\klone\\apps\\mcp\\.wrangler\\tmp\\bundle-YwluHR\\middleware-loader.entry.ts"[0m
+  
+  
+
+
+
+C:\Users\HP\Desktop\Projects\MVP\klone\apps\mcp>

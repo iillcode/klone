@@ -1,0 +1,211 @@
+"use client";
+
+import type { SVGProps } from "react";
+
+/* ─── Tool icons ─── */
+
+function CursorIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" {...props}>
+      <path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.48 0 .72-.58.38-.92L6.35 2.85a.5.5 0 0 0-.85.36z" />
+    </svg>
+  );
+}
+
+function ShareIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      className="w-3.5 h-3.5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+      {...props}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"
+      />
+    </svg>
+  );
+}
+
+function UndoIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      className="w-3.5 h-3.5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      {...props}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
+      />
+    </svg>
+  );
+}
+
+function RedoIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      className="w-3.5 h-3.5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      {...props}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3"
+      />
+    </svg>
+  );
+}
+
+function PlayIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" {...props}>
+      <path d="M8 5.14v14l11-7-11-7z" />
+    </svg>
+  );
+}
+
+function MenuIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      {...props}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+      />
+    </svg>
+  );
+}
+
+/* ─── Main component ─── */
+
+interface FigmaBottomToolbarProps {
+  inspectMode?: boolean;
+  onToggleInspect?: () => void;
+  title?: string;
+  leftSidebarOpen?: boolean;
+  onToggleLeftSidebar?: () => void;
+  onPresent?: () => void;
+  onShare?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+}
+
+export function FigmaBottomToolbar({
+  inspectMode = false,
+  onToggleInspect,
+  title = "Untitled",
+  leftSidebarOpen = false,
+  onToggleLeftSidebar,
+  onPresent,
+  onShare,
+  onUndo,
+  onRedo,
+}: FigmaBottomToolbarProps) {
+  return (
+    <>
+      {/* ── Top bar: file name + actions ── */}
+      <div className="h-11 flex items-center justify-between px-4 bg-[#1e1e1e] border-b border-[#2d2d2d]/60">
+        {/* Left: hamburger + file info */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            {/* Left nav toggle (just icon) */}
+            <button
+              onClick={onToggleLeftSidebar}
+              title={
+                leftSidebarOpen ? "Close layers panel" : "Open layers panel"
+              }
+              className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
+                leftSidebarOpen
+                  ? "bg-[#2d2d30] text-[#e4e4e7]"
+                  : "text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2d2d30]"
+              }`}
+            >
+              <MenuIcon />
+            </button>
+            <div className="w-6 h-6 rounded bg-[#0d9d58] flex items-center justify-center">
+              <span className="text-white font-bold text-[10px]">F</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] font-medium text-[#e4e4e7]">
+                {title}
+              </span>
+              <span className="text-[10px] text-[#71717a]">Drafts</span>
+              <span className="px-1.5 py-0.5 rounded bg-[#2d2d30] text-[9px] font-medium text-[#a1a1aa]">
+                Free
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: inspect toggle + undo/redo + present + share */}
+        <div className="flex items-center gap-1">
+          {/* Inspect mode toggle (Move/V tool) */}
+          <button
+            onClick={onToggleInspect}
+            title={inspectMode ? "Disable inspect (V)" : "Enable inspect (V)"}
+            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
+              inspectMode
+                ? "bg-[#18a0fb] text-white shadow-[0_0_6px_rgba(24,160,251,0.3)]"
+                : "text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2d2d30]"
+            }`}
+          >
+            <CursorIcon className="w-3.5 h-3.5" />
+          </button>
+          <div className="w-px h-4 bg-[#2d2d30] mx-1" />
+          <button
+            onClick={onUndo}
+            className="w-7 h-7 flex items-center justify-center rounded-md text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2d2d30] transition-colors"
+            title="Undo (⌘Z)"
+          >
+            <UndoIcon />
+          </button>
+          <button
+            onClick={onRedo}
+            className="w-7 h-7 flex items-center justify-center rounded-md text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2d2d30] transition-colors"
+            title="Redo (⌘⇧Z)"
+          >
+            <RedoIcon />
+          </button>
+          <div className="w-px h-4 bg-[#2d2d30] mx-1" />
+          <button
+            onClick={onPresent}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2d2d30] transition-colors"
+          >
+            <PlayIcon className="w-3.5 h-3.5" />
+            <span>Present</span>
+            <span className="text-[9px] text-[#52525b] font-mono ml-0.5">
+              ⌘⌥↵
+            </span>
+          </button>
+          <button
+            onClick={onShare}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#18a0fb] hover:bg-[#0c8ce9] text-white text-[11px] font-medium transition-colors"
+          >
+            <ShareIcon className="w-3.5 h-3.5" />
+            <span>Share</span>
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
