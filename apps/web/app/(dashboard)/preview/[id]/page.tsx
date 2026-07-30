@@ -16,6 +16,7 @@ export default function PreviewPage() {
   const [selectedElements, setSelectedElements] = useState<ElementInfo[]>([]);
   const [inspectMode, setInspectMode] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const previewRef = useRef<HtmlPreviewHandle>(null);
   const keyboardCaptureRef = useRef<HTMLInputElement>(null);
 
@@ -94,6 +95,17 @@ export default function PreviewPage() {
 
   const handleRedo = useCallback(() => {
     previewRef.current?.redo();
+  }, []);
+
+  const handleShare = useCallback(async () => {
+    setDownloading(true);
+    try {
+      await previewRef.current?.exportPdf();
+    } finally {
+      // Keep spinner for a minimum time so it doesn't flash
+      await new Promise((r) => setTimeout(r, 1000));
+      setDownloading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -176,6 +188,8 @@ export default function PreviewPage() {
         }}
         onUndo={handleUndo}
         onRedo={handleRedo}
+        onShare={handleShare}
+        downloading={downloading}
       />
 
       {/* ── Content area: sidebars + canvas ── */}

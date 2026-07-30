@@ -12,7 +12,7 @@ function CursorIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-function ShareIcon(props: SVGProps<SVGSVGElement>) {
+function DownloadIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
       className="w-3.5 h-3.5"
@@ -25,7 +25,7 @@ function ShareIcon(props: SVGProps<SVGSVGElement>) {
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
-        d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"
+        d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
       />
     </svg>
   );
@@ -108,6 +108,7 @@ interface FigmaBottomToolbarProps {
   onShare?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
+  downloading?: boolean;
 }
 
 export function FigmaBottomToolbar({
@@ -120,6 +121,7 @@ export function FigmaBottomToolbar({
   onShare,
   onUndo,
   onRedo,
+  downloading = false,
 }: FigmaBottomToolbarProps) {
   return (
     <>
@@ -199,10 +201,33 @@ export function FigmaBottomToolbar({
           </button>
           <button
             onClick={onShare}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#18a0fb] hover:bg-[#0c8ce9] text-white text-[11px] font-medium transition-colors"
+            disabled={downloading}
+            className="flex items-center gap-1.5 px-3 py-1.5 min-w-[110px] justify-center rounded-md bg-[#18a0fb] hover:bg-[#0c8ce9] text-white text-[11px] font-medium transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <ShareIcon className="w-3.5 h-3.5" />
-            <span>Share</span>
+            {downloading ? (
+              <svg
+                className="w-3.5 h-3.5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+            ) : (
+              <DownloadIcon className="w-3.5 h-3.5" />
+            )}
+            <span>{downloading ? "Downloading…" : "Download"}</span>
           </button>
         </div>
       </div>

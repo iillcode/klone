@@ -335,6 +335,7 @@ export interface HtmlPreviewHandle {
   redo: () => void;
   deleteMulti: () => void;
   deselect: () => void;
+  exportPdf: () => Promise<void>;
 }
 
 interface HtmlPreviewProps {
@@ -379,6 +380,78 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
           "*",
         );
       },
+      exportPdf: async () => {
+        try {
+          const iframe = iframeRef.current;
+          if (!iframe) {
+            console.error("[exportPdf] No iframe ref");
+            return;
+          }
+          const doc = iframe.contentDocument;
+          if (!doc) {
+            console.error("[exportPdf] No contentDocument — check sandbox");
+            return;
+          }
+
+          // Dynamic import — only loaded when user clicks Download
+          const html2pdf = (await import("html2pdf.js")).default;
+
+          // Get the scroll-wrapper content (the actual document body)
+          const source = doc.querySelector(".scroll-wrapper") || doc.body;
+
+          // Clone it and clean up editor artifacts
+          const container = source.cloneNode(true) as HTMLElement;
+          container
+            .querySelectorAll("#el-overlay, #hover-overlay")
+            .forEach((el) => el.remove());
+          container.querySelectorAll("script").forEach((el) => el.remove());
+
+          // Collect all styles from the source document and inject inline
+          const styles = Array.from(doc.querySelectorAll("style"))
+            .map((s) => s.textContent)
+            .join("\n");
+          const styleEl = document.createElement("style");
+          styleEl.textContent = styles;
+          container.prepend(styleEl);
+
+          // Render to PDF and trigger download
+          await html2pdf()
+            .set({
+              margin: 0,
+              filename: "document.pdf",
+              image: { type: "jpeg", quality: 0.98 },
+              html2canvas: { scale: 2, useCORS: true },
+              jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+            })
+            .from(container)
+            .save();
+        } catch (err) {
+          console.error("[exportPdf] Failed:", err);
+          // Fallback: open print dialog for Save as PDF
+          try {
+            const iframe = iframeRef.current;
+            const doc = iframe?.contentDocument;
+            if (!doc) return;
+            const source = doc.querySelector(".scroll-wrapper") || doc.body;
+            const container = source.cloneNode(true) as HTMLElement;
+            container
+              .querySelectorAll("#el-overlay, #hover-overlay, script")
+              .forEach((el) => el.remove());
+            const styles = Array.from(doc.querySelectorAll("style"))
+              .map((s) => s.textContent)
+              .join("\n");
+            const win = window.open("", "_blank");
+            if (!win) return;
+            win.document.write(
+              `<!DOCTYPE html><html><head><style>${styles}</style></head><body style="overflow:visible;height:auto;">${container.innerHTML}</body></html>`,
+            );
+            win.document.close();
+            win.onload = () => setTimeout(() => win.print(), 500);
+          } catch (fallbackErr) {
+            console.error("[exportPdf] Fallback also failed:", fallbackErr);
+          }
+        }
+      },
     }));
 
     useEffect(() => {
@@ -420,7 +493,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         srcDoc={srcDoc}
         className="w-full h-full border-0 bg-transparent"
         title="Preview"
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-same-origin"
       />
     );
   },
