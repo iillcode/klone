@@ -4,21 +4,40 @@ import { useState, type SVGProps } from "react";
 
 /* ─── Icons ─── */
 
-function ChevronIcon(props: SVGProps<SVGSVGElement>) {
+/* Grid icon – closed state (outlined) */
+function GridClosedIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
-      className="w-2.5 h-2.5 shrink-0"
+      className="w-3 h-3 shrink-0"
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
-      strokeWidth={2.5}
+      strokeWidth={1.6}
       {...props}
     >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M8.25 4.5l7.5 7.5-7.5 7.5"
-      />
+      <rect x="4" y="4" width="7" height="7" rx="1" />
+      <rect x="13" y="4" width="7" height="7" rx="1" />
+      <rect x="4" y="13" width="7" height="7" rx="1" />
+      <rect x="13" y="13" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+
+/* Grid icon – open state (filled) */
+function GridOpenIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      className="w-3 h-3 shrink-0"
+      fill="currentColor"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      {...props}
+    >
+      <rect x="4" y="4" width="7" height="7" rx="1" />
+      <rect x="13" y="4" width="7" height="7" rx="1" />
+      <rect x="4" y="13" width="7" height="7" rx="1" />
+      <rect x="13" y="13" width="7" height="7" rx="1" />
     </svg>
   );
 }
@@ -60,6 +79,8 @@ function FilterIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+/* ─── Layer type icons ─── */
 
 function FrameIcon({ className }: { className?: string }) {
   return (
@@ -147,6 +168,23 @@ function ImageIcon({ className }: { className?: string }) {
   );
 }
 
+function getLayerIcon(type: LayerItem["type"]) {
+  switch (type) {
+    case "frame":
+      return <FrameIcon className="w-3.5 h-3.5 text-[#a1a1aa]" />;
+    case "rectangle":
+      return <RectIcon className="w-3.5 h-3.5 text-[#a1a1aa]" />;
+    case "text":
+      return <TextIcon className="w-3.5 h-3.5 text-[#a1a1aa]" />;
+    case "group":
+      return <GroupIcon className="w-3.5 h-3.5 text-[#a1a1aa]" />;
+    case "image":
+      return <ImageIcon className="w-3.5 h-3.5 text-[#a1a1aa]" />;
+    default:
+      return <RectIcon className="w-3.5 h-3.5 text-[#52525b]" />;
+  }
+}
+
 /* ─── Layer tree item ─── */
 
 interface LayerItem {
@@ -163,23 +201,6 @@ interface LayerItem {
     | "other";
   children?: LayerItem[];
   expanded?: boolean;
-}
-
-function getLayerIcon(type: LayerItem["type"]) {
-  switch (type) {
-    case "frame":
-      return <FrameIcon className="w-3.5 h-3.5 text-[#a1a1aa]" />;
-    case "rectangle":
-      return <RectIcon className="w-3.5 h-3.5 text-[#a1a1aa]" />;
-    case "text":
-      return <TextIcon className="w-3.5 h-3.5 text-[#a1a1aa]" />;
-    case "group":
-      return <GroupIcon className="w-3.5 h-3.5 text-[#a1a1aa]" />;
-    case "image":
-      return <ImageIcon className="w-3.5 h-3.5 text-[#a1a1aa]" />;
-    default:
-      return <RectIcon className="w-3.5 h-3.5 text-[#52525b]" />;
-  }
 }
 
 function LayerRow({
@@ -200,46 +221,23 @@ function LayerRow({
   return (
     <div>
       <div
-        onClick={() => onSelect(item.id)}
+        onClick={() => {
+          onSelect(item.id);
+          if (hasChildren) setExpanded(!expanded);
+        }}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") onSelect(item.id);
+          if (e.key === "Enter" || e.key === " ") {
+            onSelect(item.id);
+            if (hasChildren) setExpanded(!expanded);
+          }
         }}
         className={`flex items-center w-full h-[26px] text-[11px] hover:bg-[#27272a] transition-colors group cursor-pointer ${
           isSelected ? "bg-[#2d2d30] text-white" : "text-[#a1a1aa]"
         }`}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
       >
-        {/* Expand/collapse chevron */}
-        <span className="w-4 h-4 flex items-center justify-center shrink-0">
-          {hasChildren ? (
-            <span
-              role="button"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation();
-                setExpanded(!expanded);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.stopPropagation();
-                  setExpanded(!expanded);
-                }
-              }}
-              className="w-4 h-4 flex items-center justify-center hover:bg-[#3f3f46] rounded cursor-pointer"
-            >
-              <ChevronIcon
-                className={`w-2.5 h-2.5 transition-transform ${
-                  expanded ? "rotate-90" : ""
-                }`}
-              />
-            </span>
-          ) : (
-            <span className="w-2.5" />
-          )}
-        </span>
-
         {/* Layer type icon */}
         <span className="w-5 h-5 flex items-center justify-center shrink-0 ml-0.5">
           {getLayerIcon(item.type)}
@@ -351,9 +349,11 @@ export function FigmaLayersSidebar({
             }}
             className="flex items-center gap-1.5 cursor-pointer hover:text-[#d4d4d8] transition-colors"
           >
-            <ChevronIcon
-              className={`w-2.5 h-2.5 transition-transform ${layersExpanded ? "rotate-90" : ""}`}
-            />
+            {layersExpanded ? (
+              <GridOpenIcon className="w-3 h-3" />
+            ) : (
+              <GridClosedIcon className="w-3 h-3" />
+            )}
             <span>Layers</span>
           </div>
           <button className="w-5 h-5 flex items-center justify-center rounded hover:bg-[#3f3f46] text-[#71717a] hover:text-[#a1a1aa]">

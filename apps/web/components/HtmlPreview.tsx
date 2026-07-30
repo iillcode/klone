@@ -381,75 +381,122 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         );
       },
       exportPdf: async () => {
+        const iframe = iframeRef.current;
+        if (!iframe || !iframe.contentWindow) {
+          console.error("[exportPdf] No iframe ref or contentWindow");
+          return;
+        }
+
         try {
-          const iframe = iframeRef.current;
-          if (!iframe) {
-            console.error("[exportPdf] No iframe ref");
-            return;
-          }
           const doc = iframe.contentDocument;
           if (!doc) {
             console.error("[exportPdf] No contentDocument — check sandbox");
             return;
           }
 
-          // Dynamic import — only loaded when user clicks Download
-          const html2pdf = (await import("html2pdf.js")).default;
+          const contentWindow = iframe.contentWindow;
 
-          // Get the scroll-wrapper content (the actual document body)
-          const source = doc.querySelector(".scroll-wrapper") || doc.body;
+          // Clone the full document to preserve ALL inline styles from editor
+          const clone = doc.documentElement.cloneNode(true) as HTMLElement;
 
-          // Clone it and clean up editor artifacts
-          const container = source.cloneNode(true) as HTMLElement;
-          container
+          // Remove editor overlays from the clone
+          clone
             .querySelectorAll("#el-overlay, #hover-overlay")
             .forEach((el) => el.remove());
-          container.querySelectorAll("script").forEach((el) => el.remove());
+          clone.querySelectorAll("script").forEach((el) => el.remove());
+          clone
+            .querySelectorAll("[data-editor-capture]")
+            .forEach((el) => el.remove());
 
-          // Collect all styles from the source document and inject inline
-          const styles = Array.from(doc.querySelectorAll("style"))
-            .map((s) => s.textContent)
-            .join("\n");
-          const styleEl = document.createElement("style");
-          styleEl.textContent = styles;
-          container.prepend(styleEl);
+          // Keep the document's own CSS intact. The editor writes its changes as
+          // inline styles, which cloneNode preserves. Serializing computed styles
+          // here would freeze a partial, iframe-sized layout and can override CSS
+          // features that were never included in the export property list.
 
-          // Render to PDF and trigger download
-          await html2pdf()
-            .set({
-              margin: 0,
-              filename: "document.pdf",
-              image: { type: "jpeg", quality: 0.98 },
-              html2canvas: { scale: 2, useCORS: true },
-              jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-            })
-            .from(container)
-            .save();
-        } catch (err) {
-          console.error("[exportPdf] Failed:", err);
-          // Fallback: open print dialog for Save as PDF
-          try {
-            const iframe = iframeRef.current;
-            const doc = iframe?.contentDocument;
-            if (!doc) return;
-            const source = doc.querySelector(".scroll-wrapper") || doc.body;
-            const container = source.cloneNode(true) as HTMLElement;
-            container
-              .querySelectorAll("#el-overlay, #hover-overlay, script")
-              .forEach((el) => el.remove());
-            const styles = Array.from(doc.querySelectorAll("style"))
-              .map((s) => s.textContent)
-              .join("\n");
-            const win = window.open("", "_blank");
-            if (!win) return;
-            win.document.write(
-              `<!DOCTYPE html><html><head><style>${styles}</style></head><body style="overflow:visible;height:auto;">${container.innerHTML}</body></html>`,
-            );
-            win.document.close();
-            win.onload = () => setTimeout(() => win.print(), 500);
-          } catch (fallbackErr) {
-            console.error("[exportPdf] Fallback also failed:", fallbackErr);
+          // --- Strip clipping styles so Puppeteer renders the full document ---
+          // The default HTML has overflow:hidden + height:100% on html/body and
+          // height:100%; overflow-y:auto on .scroll-wrapper — these clip content
+          // when Puppeteer renders the page. Remove them for PDF output.
+          const htmlEl = clone.querySelector("html") as HTMLElement | null;
+          const bodyEl = clone.querySelector("body") as HTMLElement | null;
+          const scrollEl = clone.querySelector(
+            ".scroll-wrapper",
+          ) as HTMLElement | null;
+
+          // A transparent body would otherwise be rendered on the PDF viewer's
+          // default page colour. Use Klone's canvas colour only when the authored
+          // body has no computed background colour.
+          const bodyBackground = contentWindow
+            .getComputedStyle(doc.body)
+            .backgroundColor;
+          const hasBodyBackground =
+            bodyBackground !== "transparent" &&
+            bodyBackground !== "rgba(0, 0, 0, 0)";
+
+          if (htmlEl) {
+            htmlEl.style.overflow = "visible";
+            htmlEl.style.height = "auto";
           }
+          if (bodyEl) {
+            bodyEl.style.overflow = "visible";
+            bodyEl.style.height = "auto";
+            // Ensure body fills the full page width and centers the
+            // scroll-wrapper (which uses margin:0 auto) — without this
+            // syncComputedStyles may bake in the iframe's pixel width
+            // (e.g. 1198px) which breaks centering in the PDF viewport.
+            if (!hasBodyBackground) {
+              bodyEl.style.backgroundColor = "rgb(30, 30, 30)";
+            }
+          }
+          if (scrollEl) {
+            // Only remove scroll-clipping — keep ALL original styles
+            // (padding, max-width, margin:auto) so the PDF looks identical
+            scrollEl.style.overflow = "visible";
+            scrollEl.style.height = "auto";
+            scrollEl.style.maxHeight = "none";
+          }
+
+          // Serialize the full HTML document
+          const fullHtml = "<!DOCTYPE html>\n" + clone.outerHTML;
+
+          // Call the Puppeteer PDF API
+          const response = await fetch("/api/pdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              html: fullHtml,
+              options: {
+                format: "a4",
+                landscape: false,
+                printBackground: true,
+                scale: 1,
+              },
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`PDF API error: ${response.status}`);
+          }
+
+          // Download the PDF blob directly — no new tab
+          const arrayBuffer = await response.arrayBuffer();
+          const blob = new Blob([arrayBuffer], { type: "application/pdf" });
+          const blobUrl = URL.createObjectURL(blob);
+
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = "document.pdf";
+          a.style.display = "none";
+          document.body.appendChild(a);
+          a.click();
+
+          // Cleanup after download starts
+          setTimeout(() => {
+            a.remove();
+            URL.revokeObjectURL(blobUrl);
+          }, 200);
+        } catch (err) {
+          console.error("[exportPdf] PDF generation failed:", err);
         }
       },
     }));
