@@ -339,12 +339,16 @@ export interface HtmlPreviewHandle {
 
 interface HtmlPreviewProps {
   html?: string;
+  inspectMode?: boolean;
   onElementSelect?: (elements: ElementInfo[] | null) => void;
   onStyleUpdated?: (property: string, value: string) => void;
 }
 
 export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
-  function HtmlPreview({ html, onElementSelect, onStyleUpdated }, ref) {
+  function HtmlPreview(
+    { html, inspectMode = false, onElementSelect, onStyleUpdated },
+    ref,
+  ) {
     const { theme } = useTheme();
     const isDark = theme === "dark";
     const defaultHtml = buildHtml(isDark ? dark : light);
@@ -392,6 +396,21 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       window.addEventListener("message", handler);
       return () => window.removeEventListener("message", handler);
     }, [onElementSelect, onStyleUpdated]);
+
+    // Forward inspect mode to the iframe so it can gate hover/selection behavior
+    useEffect(() => {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "inspect-mode", enabled: inspectMode },
+        "*",
+      );
+      // When inspect mode turns off, clear any active selection in the iframe
+      if (!inspectMode) {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "deselect" },
+          "*",
+        );
+      }
+    }, [inspectMode]);
 
     const srcDoc = html ? injectEditorScript(html) : defaultHtml;
 

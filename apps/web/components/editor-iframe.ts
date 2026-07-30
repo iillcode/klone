@@ -11,6 +11,7 @@ var dragStartY=0;
 var batchId=0;
 var undoStack=[];
 var redoStack=[];
+var inspectEnabled=false;
 
 function deselect(){
   for(var i=0;i<selectedEls.length;i++){
@@ -183,14 +184,14 @@ function deleteSelected(){
 }
 
 document.addEventListener('mouseover',function(e){
-  if(isDragging)return;
+  if(!inspectEnabled||isDragging)return;
   var el=e.target;
   if(!el||!el.tagName)return;
   setHover(el);
 });
 
 document.addEventListener('mouseout',function(e){
-  if(isDragging)return;
+  if(!inspectEnabled||isDragging)return;
   var el=e.target;
   if(!el)return;
   if(hoveredEl===el){
@@ -199,7 +200,7 @@ document.addEventListener('mouseout',function(e){
 });
 
 document.addEventListener('click',function(e){
-  if(isDragging)return;
+  if(!inspectEnabled||isDragging)return;
   if(justDragged){justDragged=false;return;}
   e.stopPropagation();
   var el=e.target;
@@ -232,6 +233,7 @@ document.addEventListener('click',function(e){
 });
 
 document.addEventListener('mousedown',function(e){
+  if(!inspectEnabled)return;
   if(e.button!==0)return;
   if(e.ctrlKey||e.metaKey)return;
   justDragged=false;
@@ -277,6 +279,7 @@ document.addEventListener('mouseup',function(e){
 });
 
 document.addEventListener('keydown',function(e){
+  if(!inspectEnabled)return;
   if((e.ctrlKey||e.metaKey)&&e.key==='a'){
     e.preventDefault();
     deselect();
@@ -322,6 +325,13 @@ window.addEventListener('message',function(e){
   if(data.type==='deselect'){
     deselect();
     window.parent.postMessage({type:'selection-cleared'},'*');
+  }
+  if(data.type==='inspect-mode'){
+    inspectEnabled=data.enabled;
+    if(!inspectEnabled){
+      deselect();
+      window.parent.postMessage({type:'selection-cleared'},'*');
+    }
   }
 });
 

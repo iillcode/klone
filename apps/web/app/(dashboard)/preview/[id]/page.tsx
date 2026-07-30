@@ -209,6 +209,7 @@ export default function PreviewPage() {
               />
               <HtmlPreview
                 ref={previewRef}
+                inspectMode={inspectMode}
                 onElementSelect={handleElementSelect}
                 onStyleUpdated={handleStyleUpdated}
               />

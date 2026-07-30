@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type SVGProps } from "react";
+import { useState, useCallback, useRef, useEffect, type SVGProps } from "react";
 import type { ElementInfo } from "@/components/HtmlPreview";
 import { parseRgbToHex, cssPx } from "@/components/style-utils";
 
@@ -40,44 +40,6 @@ function PlusIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-function UndoIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      className="w-3.5 h-3.5"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      {...props}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
-      />
-    </svg>
-  );
-}
-
-function RedoIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      className="w-3.5 h-3.5"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      {...props}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3"
-      />
-    </svg>
-  );
-}
-
 function TrashIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -97,73 +59,417 @@ function TrashIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-/* ─── Alignment icons (Figma-style 6-box grid) ─── */
+/* ─── Visual Number Input ─── */
 
-function AlignGrid({ onAlign }: { onAlign: (h: string, v: string) => void }) {
+function VisualNumberInput({
+  value,
+  onChange,
+  suffix = "",
+  min,
+  max,
+  compact = false,
+  className = "",
+}: {
+  value: string | number;
+  onChange: (val: string) => void;
+  suffix?: string;
+  min?: number;
+  max?: number;
+  compact?: boolean;
+  className?: string;
+}) {
+  const strValue = String(value ?? "");
+  const [local, setLocal] = useState(strValue);
+  const composing = useRef(false);
+  const lastCommitted = useRef(strValue);
+
+  // Sync from parent only when the user isn't typing
+  useEffect(() => {
+    if (!composing.current && value !== undefined) {
+      const v = String(value);
+      if (v !== local) {
+        setLocal(v);
+        lastCommitted.current = v;
+      }
+    }
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setLocal(v);
+    // Only commit valid numbers to avoid pushing garbage upstream
+    if (v === "" || v === "-" || /^\d*\.?\d*$/.test(v)) {
+      onChange(v || "0");
+      lastCommitted.current = v || "0";
+    }
+  };
+
+  const handleBlur = () => {
+    // Commit final value on blur (handles edge cases like partial edits)
+    const v = local || "0";
+    if (v !== lastCommitted.current) {
+      onChange(v);
+      lastCommitted.current = v;
+    }
+  };
+
   return (
-    <div className="grid grid-cols-3 gap-0.5 w-fit">
-      {/* Top row */}
-      <button
-        onClick={() => onAlign("left", "top")}
-        className="w-6 h-6 rounded flex items-center justify-center text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#2d2d30] transition-colors"
-        title="Align top left"
-      >
-        <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
-          <rect x="0" y="0" width="4" height="12" rx="0.5" />
-          <rect x="0" y="0" width="12" height="4" rx="0.5" />
-        </svg>
-      </button>
-      <button
-        onClick={() => onAlign("center", "top")}
-        className="w-6 h-6 rounded flex items-center justify-center text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#2d2d30] transition-colors"
-        title="Align top center"
-      >
-        <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
-          <rect x="4" y="0" width="4" height="12" rx="0.5" />
-          <rect x="0" y="0" width="12" height="4" rx="0.5" />
-        </svg>
-      </button>
-      <button
-        onClick={() => onAlign("right", "top")}
-        className="w-6 h-6 rounded flex items-center justify-center text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#2d2d30] transition-colors"
-        title="Align top right"
-      >
-        <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
-          <rect x="8" y="0" width="4" height="12" rx="0.5" />
-          <rect x="0" y="0" width="12" height="4" rx="0.5" />
-        </svg>
-      </button>
-      {/* Bottom row */}
-      <button
-        onClick={() => onAlign("left", "bottom")}
-        className="w-6 h-6 rounded flex items-center justify-center text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#2d2d30] transition-colors"
-        title="Align bottom left"
-      >
-        <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
-          <rect x="0" y="0" width="4" height="12" rx="0.5" />
-          <rect x="0" y="8" width="12" height="4" rx="0.5" />
-        </svg>
-      </button>
-      <button
-        onClick={() => onAlign("center", "bottom")}
-        className="w-6 h-6 rounded flex items-center justify-center text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#2d2d30] transition-colors"
-        title="Align bottom center"
-      >
-        <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
-          <rect x="4" y="0" width="4" height="12" rx="0.5" />
-          <rect x="0" y="8" width="12" height="4" rx="0.5" />
-        </svg>
-      </button>
-      <button
-        onClick={() => onAlign("right", "bottom")}
-        className="w-6 h-6 rounded flex items-center justify-center text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#2d2d30] transition-colors"
-        title="Align bottom right"
-      >
-        <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
-          <rect x="8" y="0" width="4" height="12" rx="0.5" />
-          <rect x="0" y="8" width="12" height="4" rx="0.5" />
-        </svg>
-      </button>
+    <div className={`flex items-center gap-0.5 ${className}`}>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={local}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        onCompositionStart={() => {
+          composing.current = true;
+        }}
+        onCompositionEnd={(e) => {
+          composing.current = false;
+          const v = (e.target as HTMLInputElement).value || "0";
+          onChange(v);
+          lastCommitted.current = v;
+        }}
+        className={`min-w-0 rounded bg-[#2d2d30] border border-[#3f3f46] text-[#e4e4e7] text-[11px] text-center font-mono focus:border-[#18a0fb] focus:outline-none transition-colors ${
+          compact ? "w-10 px-1 py-1" : "w-full px-2 py-1"
+        }`}
+      />
+      {suffix && (
+        <span className="text-[10px] text-[#52525b] font-mono w-4 shrink-0">
+          {suffix}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ─── Visual Padding Control (Figma-style cross layout) ─── */
+
+function PaddingIcon() {
+  return (
+    <svg
+      className="w-8 h-8 text-[#52525b]"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.2}
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <rect x="7" y="7" width="10" height="10" rx="1" strokeDasharray="2 2" />
+      <path
+        strokeLinecap="round"
+        d="M12 3v2M12 19v2M3 12h2M19 12h2"
+        strokeWidth={1.5}
+      />
+    </svg>
+  );
+}
+
+function VisualPaddingControl({
+  paddingTop,
+  paddingRight,
+  paddingBottom,
+  paddingLeft,
+  onPaddingChange,
+}: {
+  paddingTop: string;
+  paddingRight: string;
+  paddingBottom: string;
+  paddingLeft: string;
+  onPaddingChange: (property: string, value: string) => void;
+}) {
+  const [linked, setLinked] = useState(true);
+
+  const pt = cssPx(paddingTop);
+  const pr = cssPx(paddingRight);
+  const pb = cssPx(paddingBottom);
+  const pl = cssPx(paddingLeft);
+
+  const handleChange = (side: string, val: string) => {
+    const numVal = parseFloat(val) || 0;
+    const propMap: Record<string, string> = {
+      top: "paddingTop",
+      right: "paddingRight",
+      bottom: "paddingBottom",
+      left: "paddingLeft",
+    };
+    if (linked) {
+      onPaddingChange("padding", numVal + "px");
+    } else {
+      onPaddingChange(propMap[side], numVal + "px");
+    }
+  };
+
+  const allEqual = pt === pr && pr === pb && pb === pl;
+  const centerValue = allEqual ? pt : null;
+
+  return (
+    <div className="w-full flex flex-col items-center">
+      {/* Top — T label above input */}
+      <div className="flex flex-col items-center gap-0.5 mb-1">
+        <span className="text-[9px] text-[#71717a] font-mono w-3 text-center shrink-0">
+          T
+        </span>
+        <VisualNumberInput
+          value={pt}
+          onChange={(v) => handleChange("top", v)}
+          compact
+        />
+      </div>
+
+      {/* Middle row: L input — center icon — R input */}
+      <div className="flex items-center gap-2 w-full">
+        {/* Left — L label before input */}
+        <div className="flex-1 flex items-center justify-end gap-1">
+          <span className="text-[9px] text-[#71717a] font-mono w-3 text-center shrink-0">
+            L
+          </span>
+          <VisualNumberInput
+            value={pl}
+            onChange={(v) => handleChange("left", v)}
+            compact
+          />
+        </div>
+
+        {/* Center icon — fixed size, stays centered */}
+        <div className="relative flex flex-col items-center justify-center shrink-0">
+          <div className="relative flex items-center justify-center">
+            <PaddingIcon />
+            <button
+              onClick={() => setLinked(!linked)}
+              className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded transition-colors ${
+                linked
+                  ? "text-[#18a0fb]"
+                  : "text-[#52525b] hover:text-[#a1a1aa]"
+              }`}
+              title={linked ? "Unlink padding values" : "Link padding values"}
+            >
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                {linked ? (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                  />
+                ) : (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                )}
+              </svg>
+            </button>
+          </div>
+          {linked && centerValue !== null && (
+            <span className="text-[9px] text-[#52525b] font-mono mt-0.5">
+              {centerValue}px
+            </span>
+          )}
+        </div>
+
+        {/* Right — input then R label */}
+        <div className="flex-1 flex items-center justify-start gap-1">
+          <VisualNumberInput
+            value={pr}
+            onChange={(v) => handleChange("right", v)}
+            compact
+          />
+          <span className="text-[9px] text-[#71717a] font-mono w-3 text-center shrink-0">
+            R
+          </span>
+        </div>
+      </div>
+
+      {/* Bottom — input then B label below */}
+      <div className="flex flex-col items-center gap-0.5 mt-1">
+        <VisualNumberInput
+          value={pb}
+          onChange={(v) => handleChange("bottom", v)}
+          compact
+        />
+        <span className="text-[9px] text-[#71717a] font-mono w-3 text-center shrink-0">
+          B
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Visual Slider Input (for W/H) ─── */
+
+function VisualSliderInput({
+  label,
+  value,
+  max = 800,
+  onChange,
+}: {
+  label: string;
+  value: string | number;
+  max?: number;
+  onChange: (val: string) => void;
+}) {
+  const numValue = typeof value === "string" ? parseFloat(value) || 0 : value;
+  const pct = Math.min(100, Math.max(0, (numValue / max) * 100));
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-[#71717a] font-mono w-4 text-center">
+        {label}
+      </span>
+      <div className="flex-1 flex items-center gap-1.5">
+        {/* Visual bar track */}
+        <div className="flex-1 h-2 rounded-full bg-[#2d2d30] overflow-hidden cursor-pointer relative">
+          <div
+            className="h-full rounded-full bg-[#18a0fb] transition-[width] duration-100 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        {/* Number input with steppers */}
+        <VisualNumberInput
+          value={String(numValue)}
+          onChange={onChange}
+          suffix=""
+          min={0}
+          compact
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ─── Visual Color Picker ─── */
+
+const PRESET_COLORS = [
+  "#000000",
+  "#ffffff",
+  "#f87171",
+  "#fb923c",
+  "#facc15",
+  "#4ade80",
+  "#34d399",
+  "#22d3ee",
+  "#60a5fa",
+  "#818cf8",
+  "#a78bfa",
+  "#c084fc",
+  "#f472b6",
+  "#fb7185",
+  "#78716c",
+  "#a1a1aa",
+  "#52525b",
+  "#27272a",
+];
+
+function VisualColorPicker({
+  color,
+  opacity = 100,
+  onChange,
+  onOpacityChange,
+}: {
+  color: string;
+  opacity?: number;
+  onChange: (color: string) => void;
+  onOpacityChange?: (opacity: number) => void;
+}) {
+  const [hexInput, setHexInput] = useState(color.toUpperCase());
+  const colorPickerRef = useRef<HTMLInputElement>(null);
+
+  // Sync hex input when color changes externally
+  useEffect(() => {
+    setHexInput(color.toUpperCase());
+  }, [color]);
+
+  return (
+    <div className="space-y-2">
+      {/* Color swatch + hex + opacity row */}
+      <div className="flex items-center gap-2">
+        {/* Color swatch (click to open native picker) */}
+        <button
+          onClick={() => colorPickerRef.current?.click()}
+          className="relative w-8 h-8 rounded border border-[#3f3f46] overflow-hidden shrink-0 cursor-pointer"
+          title="Click to change color"
+        >
+          <div className="w-full h-full" style={{ backgroundColor: color }} />
+          <input
+            ref={colorPickerRef}
+            type="color"
+            value={color}
+            onChange={(e) => {
+              onChange(e.target.value);
+              setHexInput(e.target.value.toUpperCase());
+            }}
+            className="absolute inset-0 opacity-0 cursor-pointer w-0 h-0"
+          />
+        </button>
+
+        {/* Hex input */}
+        <div className="flex-1">
+          <input
+            type="text"
+            value={hexInput}
+            onChange={(e) => {
+              const val = e.target.value;
+              setHexInput(val);
+              if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                onChange(val);
+              }
+            }}
+            onBlur={() => {
+              // Reset to actual color on blur if invalid
+              if (!/^#[0-9a-fA-F]{6}$/.test(hexInput)) {
+                setHexInput(color.toUpperCase());
+              }
+            }}
+            className="w-full px-2 py-1 rounded bg-[#2d2d30] border border-[#3f3f46] text-[#e4e4e7] text-[11px] font-mono uppercase focus:border-[#18a0fb] focus:outline-none transition-colors"
+          />
+        </div>
+
+        {/* Opacity */}
+        {onOpacityChange && (
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              value={opacity}
+              onChange={(e) =>
+                onOpacityChange(
+                  Math.min(100, Math.max(0, Number(e.target.value))),
+                )
+              }
+              min={0}
+              max={100}
+              className="w-12 px-1.5 py-1 rounded bg-[#2d2d30] border border-[#3f3f46] text-[#e4e4e7] text-[11px] text-center font-mono [appearance:textfield] [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden focus:border-[#18a0fb] focus:outline-none transition-colors"
+            />
+            <span className="text-[9px] text-[#52525b] font-mono">%</span>
+          </div>
+        )}
+      </div>
+
+      {/* Preset color palette */}
+      <div className="flex flex-wrap gap-1">
+        {PRESET_COLORS.map((c) => (
+          <button
+            key={c}
+            onClick={() => {
+              onChange(c);
+              setHexInput(c.toUpperCase());
+            }}
+            className={`w-5 h-5 rounded-full border transition-all ${
+              c.toUpperCase() === color.toUpperCase()
+                ? "border-[#18a0fb] ring-1 ring-[#18a0fb] scale-110"
+                : "border-[#3f3f46] hover:border-[#71717a]"
+            }`}
+            style={{ backgroundColor: c }}
+            title={c}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -215,51 +521,6 @@ function Section({
         )}
       </div>
       {open && <div className="px-3 pb-3 space-y-2">{children}</div>}
-    </div>
-  );
-}
-
-/* ─── Two-column input (for W/H, X/Y, etc.) ─── */
-
-function TwoColInput({
-  leftLabel,
-  leftValue,
-  onLeftChange,
-  rightLabel,
-  rightValue,
-  onRightChange,
-}: {
-  leftLabel: string;
-  leftValue: string | number;
-  onLeftChange: (val: string) => void;
-  rightLabel: string;
-  rightValue: string | number;
-  onRightChange: (val: string) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className="flex-1 flex items-center gap-1">
-        <span className="w-4 text-[10px] text-[#71717a] font-mono text-center">
-          {leftLabel}
-        </span>
-        <input
-          type="number"
-          value={leftValue}
-          onChange={(e) => onLeftChange(e.target.value)}
-          className="w-full min-w-0 px-2 py-1 rounded bg-[#2d2d30] border border-[#3f3f46] text-[#e4e4e7] text-[11px] text-center font-mono [appearance:textfield] [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden focus:border-[#18a0fb] focus:outline-none transition-colors"
-        />
-      </div>
-      <div className="flex-1 flex items-center gap-1">
-        <span className="w-4 text-[10px] text-[#71717a] font-mono text-center">
-          {rightLabel}
-        </span>
-        <input
-          type="number"
-          value={rightValue}
-          onChange={(e) => onRightChange(e.target.value)}
-          className="w-full min-w-0 px-2 py-1 rounded bg-[#2d2d30] border border-[#3f3f46] text-[#e4e4e7] text-[11px] text-center font-mono [appearance:textfield] [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden focus:border-[#18a0fb] focus:outline-none transition-colors"
-        />
-      </div>
     </div>
   );
 }
@@ -345,255 +606,118 @@ export function PropertiesSidebar({
           <>
             {/* ── Position section ── */}
             <Section label="Position">
-              {/* Alignment grid */}
-              <AlignGrid
-                onAlign={(h, v) => {
-                  /* alignment logic placeholder */
-                }}
+              {/* Visual padding control */}
+              <VisualPaddingControl
+                paddingTop={s.paddingTop || "0"}
+                paddingRight={s.paddingRight || "0"}
+                paddingBottom={s.paddingBottom || "0"}
+                paddingLeft={s.paddingLeft || "0"}
+                onPaddingChange={(prop, val) => onApplyStyle(prop, val)}
               />
 
-              {/* X / Y position */}
-              <TwoColInput
-                leftLabel="X"
-                leftValue={cssPx(s.left) || 0}
-                onLeftChange={(v) => onApplyStyle("left", v + "px")}
-                rightLabel="Y"
-                rightValue={cssPx(s.top) || 0}
-                onRightChange={(v) => onApplyStyle("top", v + "px")}
-              />
-
-              {/* Rotation + flip */}
+              {/* Rotation */}
               <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-1">
-                  <span className="w-5 flex items-center justify-center">
-                    <svg
-                      className="w-3.5 h-3.5 text-[#52525b]"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.6}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"
-                      />
-                    </svg>
-                  </span>
-                  <input
-                    type="number"
-                    value={cssPx(s.rotate) || 0}
-                    onChange={(e) =>
-                      onApplyStyle("rotate", e.target.value + "deg")
-                    }
-                    className="flex-1 min-w-0 px-2 py-1 rounded bg-[#2d2d30] border border-[#3f3f46] text-[#e4e4e7] text-[11px] text-center font-mono [appearance:textfield] [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden focus:border-[#18a0fb] focus:outline-none transition-colors"
-                  />
-                  <span className="text-[10px] text-[#52525b] font-mono">
-                    °
-                  </span>
-                </div>
-                {/* Flip buttons */}
-                <div className="flex items-center gap-0.5">
-                  <button
-                    className="w-6 h-6 rounded flex items-center justify-center text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#2d2d30] transition-colors"
-                    title="Flip horizontal"
+                <span className="w-5 flex items-center justify-center">
+                  <svg
+                    className="w-3.5 h-3.5 text-[#52525b]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.6}
                   >
-                    <svg
-                      className="w-3.5 h-3.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.6}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    className="w-6 h-6 rounded flex items-center justify-center text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#2d2d30] transition-colors"
-                    title="Flip vertical"
-                  >
-                    <svg
-                      className="w-3.5 h-3.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.6}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182"
-                      />
-                    </svg>
-                  </button>
-                </div>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"
+                    />
+                  </svg>
+                </span>
+                <VisualNumberInput
+                  value={cssPx(s.rotate) || 0}
+                  onChange={(v) => onApplyStyle("rotate", v + "deg")}
+                  suffix="°"
+                />
               </div>
             </Section>
 
             {/* ── Layout section ── */}
             <Section label="Layout">
-              <TwoColInput
-                leftLabel="W"
-                leftValue={cssPx(s.width) || ""}
-                onLeftChange={(v) => onApplyStyle("width", v + "px")}
-                rightLabel="H"
-                rightValue={cssPx(s.height) || ""}
-                onRightChange={(v) => onApplyStyle("height", v + "px")}
+              <VisualSliderInput
+                label="W"
+                value={cssPx(s.width) || 0}
+                onChange={(v) => onApplyStyle("width", v + "px")}
+              />
+              <VisualSliderInput
+                label="H"
+                value={cssPx(s.height) || 0}
+                onChange={(v) => onApplyStyle("height", v + "px")}
               />
             </Section>
 
             {/* ── Appearance section ── */}
             <Section label="Appearance">
               <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-1">
-                  <span className="text-[10px] text-[#71717a] font-mono w-12">
-                    Opacity
-                  </span>
-                  <input
-                    type="number"
-                    value={
-                      s.opacity ? Math.round(parseFloat(s.opacity) * 100) : 100
-                    }
-                    onChange={(e) =>
-                      onApplyStyle(
-                        "opacity",
-                        String(
-                          Math.min(100, Math.max(0, Number(e.target.value))) /
-                            100,
-                        ),
-                      )
-                    }
-                    min={0}
-                    max={100}
-                    className="flex-1 min-w-0 px-2 py-1 rounded bg-[#2d2d30] border border-[#3f3f46] text-[#e4e4e7] text-[11px] text-center font-mono [appearance:textfield] [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden focus:border-[#18a0fb] focus:outline-none transition-colors"
-                  />
-                  <span className="text-[10px] text-[#52525b] font-mono">
-                    %
-                  </span>
-                </div>
+                <span className="text-[10px] text-[#71717a] font-mono w-12 shrink-0">
+                  Opacity
+                </span>
+                <VisualNumberInput
+                  value={
+                    s.opacity ? Math.round(parseFloat(s.opacity) * 100) : 100
+                  }
+                  onChange={(v) =>
+                    onApplyStyle(
+                      "opacity",
+                      String(Math.min(100, Math.max(0, Number(v))) / 100),
+                    )
+                  }
+                  suffix="%"
+                  min={0}
+                  max={100}
+                />
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-1">
-                  <span className="text-[10px] text-[#71717a] font-mono w-12">
-                    Radius
-                  </span>
-                  <input
-                    type="number"
-                    value={cssPx(s.borderRadius) || 0}
-                    onChange={(e) =>
-                      onApplyStyle("borderRadius", e.target.value + "px")
-                    }
-                    min={0}
-                    className="flex-1 min-w-0 px-2 py-1 rounded bg-[#2d2d30] border border-[#3f3f46] text-[#e4e4e7] text-[11px] text-center font-mono [appearance:textfield] [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden focus:border-[#18a0fb] focus:outline-none transition-colors"
-                  />
-                  <span className="text-[10px] text-[#52525b] font-mono">
-                    px
-                  </span>
-                </div>
+                <span className="text-[10px] text-[#71717a] font-mono w-12 shrink-0">
+                  Radius
+                </span>
+                <VisualNumberInput
+                  value={cssPx(s.borderRadius) || 0}
+                  onChange={(v) => onApplyStyle("borderRadius", v + "px")}
+                  suffix="px"
+                  min={0}
+                />
               </div>
             </Section>
 
             {/* ── Fill section ── */}
             <Section label="Fill" onAdd={() => {}}>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={parseRgbToHex(s.backgroundColor)}
-                  onChange={(e) =>
-                    onApplyStyle("backgroundColor", e.target.value)
-                  }
-                  className="w-6 h-6 rounded cursor-pointer border border-[#3f3f46] p-0 [&::-webkit-color-swatch-wrapper]:p-0.5 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-0"
-                />
-                <span className="text-[11px] font-mono text-[#a1a1aa]">
-                  {parseRgbToHex(s.backgroundColor).toUpperCase()}
-                </span>
-                <span className="text-[10px] text-[#52525b] font-mono ml-auto">
-                  100%
-                </span>
-                <button className="w-5 h-5 flex items-center justify-center rounded hover:bg-[#2d2d30] text-[#52525b] hover:text-[#a1a1aa] transition-colors">
-                  <svg
-                    className="w-3 h-3"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"
-                    />
-                  </svg>
-                </button>
-              </div>
+              <VisualColorPicker
+                color={parseRgbToHex(s.backgroundColor)}
+                opacity={
+                  s.opacity ? Math.round(parseFloat(s.opacity) * 100) : 100
+                }
+                onChange={(c) => onApplyStyle("backgroundColor", c)}
+                onOpacityChange={(o) =>
+                  onApplyStyle("opacity", String(o / 100))
+                }
+              />
             </Section>
 
             {/* ── Stroke section ── */}
             <Section label="Stroke" onAdd={() => {}}>
+              <VisualColorPicker
+                color={s.borderColor ? parseRgbToHex(s.borderColor) : "#a39e9e"}
+                onChange={(c) => onApplyStyle("borderColor", c)}
+              />
               <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={
-                    s.borderColor ? parseRgbToHex(s.borderColor) : "#a39e9e"
-                  }
-                  onChange={(e) => onApplyStyle("borderColor", e.target.value)}
-                  className="w-6 h-6 rounded cursor-pointer border border-[#3f3f46] p-0 [&::-webkit-color-swatch-wrapper]:p-0.5 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-0"
+                <span className="text-[10px] text-[#71717a] font-mono w-14 shrink-0">
+                  Weight
+                </span>
+                <VisualNumberInput
+                  value={cssPx(s.borderWidth) || 1}
+                  onChange={(v) => onApplyStyle("borderWidth", v + "px")}
+                  suffix="px"
+                  min={0}
                 />
-                <span className="text-[11px] font-mono text-[#a1a1aa]">
-                  {s.borderColor
-                    ? parseRgbToHex(s.borderColor).toUpperCase()
-                    : "#A39E9E"}
-                </span>
-                <span className="text-[10px] text-[#52525b] font-mono ml-auto">
-                  100%
-                </span>
-                <button className="w-5 h-5 flex items-center justify-center rounded hover:bg-[#2d2d30] text-[#52525b] hover:text-[#a1a1aa] transition-colors">
-                  <svg
-                    className="w-3 h-3"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-1">
-                  <span className="text-[10px] text-[#71717a] font-mono w-14">
-                    Position
-                  </span>
-                  <select className="flex-1 px-2 py-1 rounded bg-[#2d2d30] border border-[#3f3f46] text-[#e4e4e7] text-[11px] font-mono focus:border-[#18a0fb] focus:outline-none transition-colors appearance-none">
-                    <option>Inside</option>
-                    <option>Center</option>
-                    <option>Outside</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-1">
-                  <span className="text-[10px] text-[#71717a] font-mono w-14">
-                    Weight
-                  </span>
-                  <input
-                    type="number"
-                    value={cssPx(s.borderWidth) || 1}
-                    onChange={(e) =>
-                      onApplyStyle("borderWidth", e.target.value + "px")
-                    }
-                    min={0}
-                    className="flex-1 min-w-0 px-2 py-1 rounded bg-[#2d2d30] border border-[#3f3f46] text-[#e4e4e7] text-[11px] text-center font-mono [appearance:textfield] [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden focus:border-[#18a0fb] focus:outline-none transition-colors"
-                  />
-                </div>
               </div>
             </Section>
 
