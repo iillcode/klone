@@ -14,10 +14,10 @@ async function fetchJWKS(jwksUrl: string) {
 }
 
 async function getKeyFromJWKS(jwksUrl: string, token: string) {
-  const header = JSON.parse(atob(token.split(".")[0]));
+  const header = JSON.parse(atob(token.split(".")[0]!));
   const keys = await fetchJWKS(jwksUrl);
   const jwk = keys.find(
-    (k: any) => k.kid === header.kid && k.alg === header.alg
+    (k: any) => k.kid === header.kid && k.alg === header.alg,
   );
   if (!jwk) throw new Error("No matching key found in JWKS");
   return importJWK(jwk, jwk.alg);
@@ -25,7 +25,7 @@ async function getKeyFromJWKS(jwksUrl: string, token: string) {
 
 export async function validateJWT(
   token: string,
-  jwksUrl: string
+  jwksUrl: string,
 ): Promise<AuthUser | null> {
   try {
     const key = await getKeyFromJWKS(jwksUrl, token);

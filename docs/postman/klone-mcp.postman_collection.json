@@ -1,0 +1,460 @@
+{
+  "info": {
+    "name": "klone-mcp",
+    "description": "Visual implementation MCP server (Cloudflare Worker).\n\nFlow:\n1. Run \"1. Auth - Get Token\" once (or let the collection auto-refresh it).\n2. Call any tool. Every request auto-attaches the Bearer token via collection pre-request script.\n3. create_visual_implementation saves the id into the {{implementation_id}} variable for get/update/delete requests.\n\nServer: local wrangler dev on port 8789.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "mcp_url",
+      "value": "http://127.0.0.1:8789/mcp"
+    },
+    {
+      "key": "supabase_url",
+      "value": "https://drwchrxljcokigkecbow.supabase.co"
+    },
+    {
+      "key": "anon_key",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyd2NocnhsamNva2lna2VjYm93Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxOTExMTgsImV4cCI6MjA5ODc2NzExOH0.SGp2SIZeXZLPeAe90vJrL6yzWIrRPidCD1SsmUPhhtE"
+    },
+    {
+      "key": "email",
+      "value": "mcp-test@klone.dev"
+    },
+    {
+      "key": "password",
+      "value": "McpTest123!"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "token_expires_at",
+      "value": "0"
+    },
+    {
+      "key": "implementation_id",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Auto-refresh the Supabase access token when missing or about to expire.",
+          "// Skips the auth request itself.",
+          "if (pm.request.url.toString().indexOf('grant_type=password') !== -1) {",
+          "  return;",
+          "}",
+          "",
+          "const token = pm.collectionVariables.get('access_token');",
+          "const expiresAt = Number(pm.collectionVariables.get('token_expires_at') || 0);",
+          "const now = Date.now();",
+          "",
+          "if (!token || now >= expiresAt - 60000) {",
+          "  const url = pm.collectionVariables.get('supabase_url') + '/auth/v1/token?grant_type=password';",
+          "  const body = {",
+          "    email: pm.collectionVariables.get('email'),",
+          "    password: pm.collectionVariables.get('password')",
+          "  };",
+          "  pm.sendRequest({",
+          "    url: url,",
+          "    method: 'POST',",
+          "    header: {",
+          "      'apikey': pm.collectionVariables.get('anon_key'),",
+          "      'Content-Type': 'application/json'",
+          "    },",
+          "    body: { mode: 'raw', raw: JSON.stringify(body) }",
+          "  }, function (err, res) {",
+          "    if (err) { console.log('Token refresh failed: ' + err); return; }",
+          "    const data = res.json();",
+          "    if (data.access_token) {",
+          "      pm.collectionVariables.set('access_token', data.access_token);",
+          "      pm.collectionVariables.set('token_expires_at', String(now + data.expires_in * 1000));",
+          "      console.log('Token refreshed');",
+          "    } else {",
+          "      console.log('Token refresh failed: ' + JSON.stringify(data));",
+          "    }",
+          "  });",
+          "}"
+        ],
+        "type": "text/javascript"
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "exec": [
+          "// Log any JSON-RPC errors; validate the response shape.",
+          "try {",
+          "  const body = pm.response.json();",
+          "  if (body && body.error) {",
+          "    console.log('JSON-RPC error: ' + JSON.stringify(body.error));",
+          "    pm.test('No JSON-RPC error', function () { pm.expect(body.error).to.be.undefined; });",
+          "  }",
+          "} catch (e) {}"
+        ],
+        "type": "text/javascript"
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "1. Auth - Get Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.access_token) {",
+                  "  pm.collectionVariables.set('access_token', data.access_token);",
+                  "  pm.collectionVariables.set('token_expires_at', String(Date.now() + data.expires_in * 1000));",
+                  "  pm.test('Got access token', function () { pm.expect(data.access_token).to.not.be.empty; });",
+                  "} else {",
+                  "  pm.test('Auth failed', function () { pm.expect.fail('No access_token in response: ' + JSON.stringify(data)); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{supabase_url}}/auth/v1/token?grant_type=password",
+              "host": ["{{supabase_url}}"],
+              "path": ["auth", "v1", "token"],
+              "query": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                }
+              ]
+            },
+            "description": "Fetches a Supabase access token for the test user and stores it in the {{access_token}} variable. Also stores expiry in {{token_expires_at}}."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Protocol",
+      "item": [
+        {
+          "name": "2. initialize",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"initialize\",\n  \"params\": {\n    \"protocolVersion\": \"2025-06-18\",\n    \"capabilities\": {},\n    \"clientInfo\": { \"name\": \"postman\", \"version\": \"1.0\" }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{mcp_url}}",
+              "host": ["{{mcp_url}}"]
+            },
+            "description": "Handshake. Returns serverInfo (klone-mcp 1.0.0) and protocol version."
+          },
+          "response": []
+        },
+        {
+          "name": "3. tools/list",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 2,\n  \"method\": \"tools/list\"\n}"
+            },
+            "url": {
+              "raw": "{{mcp_url}}",
+              "host": ["{{mcp_url}}"]
+            },
+            "description": "Lists all 9 registered tools with their schemas."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Component Library",
+      "item": [
+        {
+          "name": "4. list_component_categories",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 3,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"list_component_categories\",\n    \"arguments\": {}\n  }\n}"
+            },
+            "url": {
+              "raw": "{{mcp_url}}",
+              "host": ["{{mcp_url}}"]
+            },
+            "description": "Returns the 10 component categories with component counts."
+          },
+          "response": []
+        },
+        {
+          "name": "5. list_components",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 4,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"list_components\",\n    \"arguments\": {\n      \"query\": \"pricing\",\n      \"limit\": 10\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{mcp_url}}",
+              "host": ["{{mcp_url}}"]
+            },
+            "description": "Metadata only. Try changing the \"query\" filter (e.g. \"pricing\", \"nav\", \"form\") or use \"category\" instead."
+          },
+          "response": []
+        },
+        {
+          "name": "6. get_component",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 5,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"get_component\",\n    \"arguments\": {\n      \"component_id\": \"hero-center\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{mcp_url}}",
+              "host": ["{{mcp_url}}"]
+            },
+            "description": "Full design (HTML code) of one component. Change component_id to: btn-basic, card-basic, badge-status, navbar-simple, hero-center, form-contact, pricing-tiers, testimonial-card, stats-band, footer-simple."
+          },
+          "response": []
+        },
+        {
+          "name": "7. get_component_kit",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 6,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"get_component_kit\",\n    \"arguments\": {\n      \"purpose\": \"a landing page with hero, pricing and testimonials\",\n      \"max_components\": 3\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{mcp_url}}",
+              "host": ["{{mcp_url}}"]
+            },
+            "description": "MAIN ENTRY POINT. Auto-matches components to the purpose, returns their designs + assembly instructions. Or pass component_ids explicitly instead of auto-matching."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Visual Implementations (CRUD)",
+      "item": [
+        {
+          "name": "8. create_visual_implementation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Capture the created implementation id into {{implementation_id}} for get/update/delete.",
+                  "try {",
+                  "  const r = pm.response.json();",
+                  "  const text = r.result.content[0].text;",
+                  "  const impl = JSON.parse(text);",
+                  "  if (impl.implementation && impl.implementation.id) {",
+                  "    pm.collectionVariables.set('implementation_id', impl.implementation.id);",
+                  "    console.log('Saved implementation_id: ' + impl.implementation.id);",
+                  "  }",
+                  "} catch (e) { console.log('Could not parse id: ' + e); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 7,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"create_visual_implementation\",\n    \"arguments\": {\n      \"title\": \"SaaS Landing Page\",\n      \"description\": \"Built from the component kit\",\n      \"html_code\": \"<!DOCTYPE html><html><body><h1>Hello</h1><p>Kit demo</p></body></html>\",\n      \"source_component_ids\": [\"hero-center\", \"pricing-tiers\"],\n      \"prompt_used\": \"a landing page with hero, pricing and testimonials\",\n      \"metadata\": { \"source\": \"postman\" }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{mcp_url}}",
+              "host": ["{{mcp_url}}"]
+            },
+            "description": "Saves a design under your account (user_id from the JWT). Captures the new id into {{implementation_id}}."
+          },
+          "response": []
+        },
+        {
+          "name": "9. list_visual_implementations",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 8,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"list_visual_implementations\",\n    \"arguments\": {}\n  }\n}"
+            },
+            "url": {
+              "raw": "{{mcp_url}}",
+              "host": ["{{mcp_url}}"]
+            },
+            "description": "Lists your saved implementations, newest first."
+          },
+          "response": []
+        },
+        {
+          "name": "10. get_visual_implementation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 9,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"get_visual_implementation\",\n    \"arguments\": {\n      \"id\": \"{{implementation_id}}\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{mcp_url}}",
+              "host": ["{{mcp_url}}"]
+            },
+            "description": "Fetch one implementation by id. Uses the {{implementation_id}} captured by the create request."
+          },
+          "response": []
+        },
+        {
+          "name": "11. update_visual_implementation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 10,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"update_visual_implementation\",\n    \"arguments\": {\n      \"id\": \"{{implementation_id}}\",\n      \"title\": \"SaaS Landing Page v2\",\n      \"metadata\": { \"tone\": \"professional\" }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{mcp_url}}",
+              "host": ["{{mcp_url}}"]
+            },
+            "description": "Updates only the provided fields (title, description, html_code, css_code, source_component_ids, prompt_used, metadata)."
+          },
+          "response": []
+        },
+        {
+          "name": "12. delete_visual_implementation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 11,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"delete_visual_implementation\",\n    \"arguments\": {\n      \"id\": \"{{implementation_id}}\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{mcp_url}}",
+              "host": ["{{mcp_url}}"]
+            },
+            "description": "Deletes the implementation owned by you."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

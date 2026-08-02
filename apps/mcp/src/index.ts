@@ -10,22 +10,26 @@ export interface Env {
 }
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext,
+  ): Promise<Response> {
     const token = extractToken(request);
 
     if (!token) {
       return new Response(
         JSON.stringify({ error: "Missing Authorization header" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
+        { status: 401, headers: { "Content-Type": "application/json" } },
       );
-    } 
+    }
 
     const user = await validateJWT(token, env.SUPABASE_JWKS_URL);
 
     if (!user) {
       return new Response(
         JSON.stringify({ error: "Invalid or expired token" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
+        { status: 401, headers: { "Content-Type": "application/json" } },
       );
     }
 
@@ -34,9 +38,11 @@ export default {
       version: "1.0.0",
     });
 
-    registerTools(server, env, user.sub);
+    registerTools(server, env, user.sub, token);
 
-    const handler = createMcpHandler(server);
+    // enableJsonResponse: respond with plain JSON instead of SSE streams,
+    // which keeps API-testing tools (Postman/curl) and MCP clients happy.
+    const handler = createMcpHandler(server, { enableJsonResponse: true });
     return handler(request, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
