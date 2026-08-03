@@ -7,7 +7,7 @@ export function getEditorScript(): string {
   // will show an older version. Hard-refresh the page to reload it.
   if(window.__kloneEditorInjected)return; // never double-bind listeners
   window.__kloneEditorInjected=true;
-  console.log('[editor] script v14');
+  console.log('[editor] script v17');
 var selectedEls=[];
 var hoveredEl=null;
 var isDragging=false;
@@ -41,6 +41,20 @@ var marqueePrevSel=[];
 var lastChangeEl=null;
 var lastChangeProp='';
 var lastChangeTime=0;
+var guidesLayer=null;
+var moveTargets=[];
+var pendingMX=0;
+var pendingMY=0;
+var pendingShift=false;
+var dragFrameScheduled=false;
+var dragBounds=null;
+var dragBaseRect=null;
+var dragBasePos=[0,0];
+var moveRects=[];
+var lastGuidesKey=null;
+var dragDirX=0;
+var dragDirY=0;
+var nudgeGuideTimer=null;
 
 function deselect(){
   for(var i=0;i<selectedEls.length;i++){
@@ -52,6 +66,7 @@ function deselect(){
   marqueePrevSel=[];
   if(selBoxEl)selBoxEl.style.display='none';
   hideMarquee();
+  hideGuides();
 }
 
 function highlightSelected(){
@@ -326,6 +341,220 @@ function hideMarquee(){
   if(marqueeEl)marqueeEl.style.display='none';
 }
 
+/* ── Alignment guides + snapping (Figma/Canva-style) ── */
+var SNAP_DIST=3;
+var GUIDE_COLOR='#ff4d6d';
+
+function createGuidesLayer(){
+  if(guidesLayer)return;
+  guidesLayer=document.createElement('div');
+  guidesLayer.setAttribute('data-editor-ui','guides');
+  guidesLayer.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:99997;overflow:hidden;';
+  document.body.appendChild(guidesLayer);
+}
+function hideGuides(){
+  if(nudgeGuideTimer){clearTimeout(nudgeGuideTimer);nudgeGuideTimer=null;}
+  if(guidesLayer)guidesLayer.innerHTML='';
+}
+// Arrow-key nudging has no mouseup to clear the guide overlay, so the
+// guides auto-hide shortly after the last nudge (any hide/drag/deselect
+// clears the timer too).
+function scheduleHideGuides(ms){
+  if(nudgeGuideTimer)clearTimeout(nudgeGuideTimer);
+  nudgeGuideTimer=setTimeout(hideGuides,ms||1200);
+}
+function rectOf(el){
+  var r=el.getBoundingClientRect();
+  return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height};
+}
+function shiftRect(r,dx,dy){
+  return {left:r.left+dx,top:r.top+dy,right:r.right+dx,bottom:r.bottom+dy,width:r.width,height:r.height};
+}
+function unionRect(els){
+  var r=null;
+  for(var i=0;i<els.length;i++){
+    var rr=els[i].getBoundingClientRect();
+    if(!r){r={left:rr.left,top:rr.top,right:rr.right,bottom:rr.bottom};continue;}
+    r.left=Math.min(r.left,rr.left);
+    r.top=Math.min(r.top,rr.top);
+    r.right=Math.max(r.right,rr.right);
+    r.bottom=Math.max(r.bottom,rr.bottom);
+  }
+  if(!r)return null;
+  r.width=r.right-r.left;
+  r.height=r.bottom-r.top;
+  return r;
+}
+function getContainerRect(){
+  var wrap=document.querySelector('.scroll-wrapper');
+  var box=wrap||document.body;
+  if(!box)return null;
+  var r=box.getBoundingClientRect();
+  return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height};
+}
+// Everything a dragged element can align to: the page container (for
+// center/edge guides) + every other element (excluding the dragged group
+// and its ancestors/descendants).
+function getAlignTargets(){
+  var drags=selectedEls;
+  var targets=[];
+  var c=getContainerRect();
+  if(c)targets.push({isContainer:true,rect:c});
+  var all=document.querySelectorAll('*');
+  for(var i=0;i<all.length;i++){
+    var el=all[i];
+    if(!isClickable(el))continue;
+    if(isContainer(el))continue;
+    var related=false;
+    for(var j=0;j<drags.length;j++){
+      if(drags[j]===el||drags[j].contains(el)||el.contains(drags[j])){related=true;break;}
+    }
+    if(related)continue;
+    var r=rectOf(el);
+    if(r.width===0||r.height===0)continue;
+    targets.push({isContainer:false,rect:r});
+  }
+  return targets;
+}
+// Smallest edge-alignment delta (left/center/right vs top/center/bottom)
+// between two boxes, or null when nothing is within the snap threshold.
+// Direction-aware: only deltas pointing ALONG the drag (dragDir) are
+// candidates - a line already crossed by the cursor is behind it and must
+// not re-grab, which is what made dragging feel "stuck" past a guide.
+function bestAlignDelta(a,b,axis,dragDir){
+  var ae,be;
+  if(axis==='x'){ae=[a.left,a.left+a.width/2,a.right];be=[b.left,b.left+b.width/2,b.right];}
+  else{ae=[a.top,a.top+a.height/2,a.bottom];be=[b.top,b.top+b.height/2,b.bottom];}
+  var best=null;
+  for(var i=0;i<3;i++){
+    for(var j=0;j<3;j++){
+      var d=be[j]-ae[i];
+      if(Math.abs(d)>SNAP_DIST)continue;
+      // Skip alignments the cursor is moving AWAY from. d===0 (already on
+      // the line) still holds; backward deltas (-dragDir) are ignored.
+      if(dragDir!==0&&d!==0&&Math.sign(d)===-dragDir)continue;
+      if(best===null||Math.abs(d)<Math.abs(best))best=d;
+    }
+  }
+  return best;
+}
+function computeSnap(dragR,targets,dirX,dirY){
+  var snapX=0,snapY=0,bestX=null,bestY=null;
+  for(var t=0;t<targets.length;t++){
+    var r=targets[t].rect;
+    var dx=bestAlignDelta(dragR,r,'x',dirX);
+    if(dx!==null&&(bestX===null||Math.abs(dx)<Math.abs(bestX)))bestX=dx;
+    var dy=bestAlignDelta(dragR,r,'y',dirY);
+    if(dy!==null&&(bestY===null||Math.abs(dy)<Math.abs(bestY)))bestY=dy;
+  }
+  if(bestX!==null)snapX=bestX;
+  if(bestY!==null)snapY=bestY;
+  return {snapX:snapX,snapY:snapY};
+}
+// Every pair of edges that line up EXACTLY after snapping (used to draw
+// the guide lines so they always match the snapped position).
+function matchingLines(a,b,axis,isContainer){
+  var out=[];
+  var ae,be;
+  if(axis==='x'){
+    ae=[a.left,a.left+a.width/2,a.right];
+    be=[b.left,b.left+b.width/2,b.right];
+  }else{
+    ae=[a.top,a.top+a.height/2,a.bottom];
+    be=[b.top,b.top+b.height/2,b.bottom];
+  }
+  for(var i=0;i<3;i++){
+    for(var j=0;j<3;j++){
+      if(Math.abs(be[j]-ae[i])<0.5){
+        var span,gap,gapMid;
+        if(axis==='x'){
+          span={from:Math.min(a.top,b.top),to:Math.max(a.bottom,b.bottom)};
+          if(a.right<b.left){gap=b.left-a.right;gapMid=(a.right+b.left)/2;}
+          else if(b.right<a.left){gap=a.left-b.right;gapMid=(b.right+a.left)/2;}
+          else{gap=0;gapMid=(a.left+b.right)/2;}
+        }else{
+          span={from:Math.min(a.left,b.left),to:Math.max(a.right,b.right)};
+          if(a.bottom<b.top){gap=b.top-a.bottom;gapMid=(a.bottom+b.top)/2;}
+          else if(b.bottom<a.top){gap=a.top-b.bottom;gapMid=(b.bottom+a.top)/2;}
+          else{gap=0;gapMid=(a.top+b.bottom)/2;}
+        }
+        out.push({pos:be[j],span:span,gap:gap,gapMid:gapMid,isContainer:isContainer,box:b});
+      }
+    }
+  }
+  return out;
+}
+function addGuideLine(vertical,pos,from,to){
+  var d=document.createElement('div');
+  d.setAttribute('data-editor-ui','guide');
+  if(vertical){
+    d.style.cssText='position:fixed;width:1px;background:'+GUIDE_COLOR+';pointer-events:none;';
+    d.style.left=Math.round(pos)+'px';
+    d.style.top=Math.round(from)+'px';
+    d.style.height=Math.max(1,Math.round(to-from))+'px';
+  }else{
+    d.style.cssText='position:fixed;height:1px;background:'+GUIDE_COLOR+';pointer-events:none;';
+    d.style.top=Math.round(pos)+'px';
+    d.style.left=Math.round(from)+'px';
+    d.style.width=Math.max(1,Math.round(to-from))+'px';
+  }
+  guidesLayer.appendChild(d);
+}
+function addGuideDot(x,y){
+  var d=document.createElement('div');
+  d.setAttribute('data-editor-ui','guide');
+  d.style.cssText='position:fixed;width:5px;height:5px;border-radius:50%;background:'+GUIDE_COLOR+';pointer-events:none;margin-left:-2px;margin-top:-2px;';
+  d.style.left=Math.round(x)+'px';
+  d.style.top=Math.round(y)+'px';
+  guidesLayer.appendChild(d);
+}
+function addGuideLabel(x,y,text){
+  var d=document.createElement('div');
+  d.setAttribute('data-editor-ui','guide');
+  d.textContent=text;
+  d.style.cssText='position:fixed;background:rgba(255,77,109,0.92);color:#fff;font:600 10px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:2px 4px;border-radius:3px;pointer-events:none;white-space:nowrap;transform:translate(-50%,-50%);';
+  d.style.left=Math.round(x)+'px';
+  d.style.top=Math.round(y)+'px';
+  guidesLayer.appendChild(d);
+}
+// Draw all guide lines + end dots + distance labels for the dragged box.
+function renderGuides(dragR,targets){
+  if(!guidesLayer)createGuidesLayer();
+  guidesLayer.innerHTML='';
+  var lines=[];
+  for(var t=0;t<targets.length;t++){
+    var r=targets[t].rect;
+    var xl=matchingLines(dragR,r,'x',targets[t].isContainer);
+    for(var i=0;i<xl.length;i++)xl[i].vertical=true;
+    var yl=matchingLines(dragR,r,'y',targets[t].isContainer);
+    for(var j=0;j<yl.length;j++)yl[j].vertical=false;
+    lines=lines.concat(xl,yl);
+  }
+  for(var k=0;k<lines.length;k++){
+    var ln=lines[k];
+    if(ln.vertical){
+      // Container center = full-length indicator; elements = span + dots
+      var from=ln.isContainer?ln.box.top:ln.span.from;
+      var to=ln.isContainer?ln.box.bottom:ln.span.to;
+      addGuideLine(true,ln.pos,from,to);
+      if(!ln.isContainer){
+        addGuideDot(ln.pos,from);
+        addGuideDot(ln.pos,to);
+      }
+      if(ln.gap>0)addGuideLabel(ln.gapMid,(from+to)/2,ln.gap+'px');
+    }else{
+      var fromH=ln.isContainer?ln.box.left:ln.span.from;
+      var toH=ln.isContainer?ln.box.right:ln.span.to;
+      addGuideLine(false,ln.pos,fromH,toH);
+      if(!ln.isContainer){
+        addGuideDot(fromH,ln.pos);
+        addGuideDot(toH,ln.pos);
+      }
+      if(ln.gap>0)addGuideLabel((fromH+toH)/2,ln.gapMid,ln.gap+'px');
+    }
+  }
+}
+
 // All selectable elements whose box intersects the marquee rectangle.
 // The page container (.scroll-wrapper/html/body) is NEVER marquee-selected:
 // it spans the whole document, so it would intersect every drag box.
@@ -534,6 +763,7 @@ document.addEventListener('dblclick',function(e){
 document.addEventListener('mousedown',function(e){
   if(!inspectEnabled)return;
   if(e.button!==0)return;
+  hideGuides();
   justDragged=false;
   dragMoved=false;
   lastDragX=null;
@@ -568,18 +798,37 @@ document.addEventListener('mousedown',function(e){
       fireSelected();
     }
     isMoving=true;
+    // Snapshot everything the dragged group can align to (other elements
+    // + the page container). Targets are static during the drag, so they
+    // are captured once instead of re-queried on every mousemove.
+    moveTargets=getAlignTargets();
+    // Cache everything the move needs so per-frame work never touches
+    // layout: container bounds, the union box, the base transform and each
+    // element's rect are all captured here (they are static mid-drag).
+    dragBounds=getMoveBounds();
+    dragBaseRect=unionRect(selectedEls);
+    dragBasePos=getTranslate(selectedEls[0]);
+    lastGuidesKey=null;
+    dragDirX=0;
+    dragDirY=0;
+    // Track the cursor from the exact grab point so the element follows
+    // the mouse with zero dead-zone lag once the threshold is crossed.
+    lastDragX=dragStartX;
+    lastDragY=dragStartY;
     // Kill native text selection / native drag BEFORE it can start, so
     // only the element moves (not the text inside it).
     e.preventDefault();
     moveDeltas=[];
+    moveRects=[];
     for(var i=0;i<selectedEls.length;i++){
       // moveDeltas entry: [oldTransform, finalX, finalY]
       // oldTransform is kept for undo; finalX/finalY track the element's
       // position at drag end so mouseup knows whether anything moved.
-      // Movement itself is applied incrementally in mousemove (see below),
-      // re-reading the CURRENT transform on every event so a drag always
-      // continues from where the element IS - never from its origin.
+      // Movement is applied once per animation frame in dragFrame(),
+      // re-reading the CURRENT transform so a drag always continues from
+      // where the element IS - never from its origin.
       moveDeltas.push([selectedEls[i].style.transform||'',0,0]);
+      moveRects.push(rectOf(selectedEls[i]));
     }
   }
   document.body.style.cursor=isMoving?'move':'crosshair';
@@ -588,6 +837,83 @@ document.addEventListener('mousedown',function(e){
   document.documentElement.style.userSelect='none';
   document.documentElement.style.webkitUserSelect='none';
 });
+
+// Runs once per animation frame while an element is being dragged. All
+// layout data was cached at mousedown (dragBounds, dragBaseRect,
+// moveRects), so each frame only does cheap style reads and one transform
+// write per element - no forced layout, no guide DOM churn while a snap
+// holds the element still.
+function dragFrame(){
+  dragFrameScheduled=false;
+  if(!isMoving||!isDragging)return;
+  // Apply ONLY the cursor delta since the last APPLIED frame, on top of
+  // the element's CURRENT transform (re-read every frame). Each drag
+  // therefore continues from where the element actually is - it never
+  // snaps back to its origin when re-dragged.
+  var ddx=(lastDragX===null)?0:(pendingMX-lastDragX);
+  var ddy=(lastDragY===null)?0:(pendingMY-lastDragY);
+  lastDragX=pendingMX;
+  lastDragY=pendingMY;
+  // Track the current drag direction (sign of the last non-zero cursor
+  // delta) so snapping only pulls toward lines the cursor is approaching.
+  if(ddx!==0)dragDirX=ddx>0?1:-1;
+  if(ddy!==0)dragDirY=ddy>0?1:-1;
+  // Raw next positions (clamped to the container) before any snapping.
+  var rawNx=[],rawNy=[];
+  for(var i=0;i<selectedEls.length;i++){
+    var el=selectedEls[i];
+    var curT2=getTranslate(el);
+    var nx=curT2[0]+ddx;
+    // Horizontal clamp against the CACHED container bounds, derived from
+    // the element's CURRENT rect (cached rect shifted by how far the drag
+    // has moved since the grab). Never touches layout during the drag, and
+    // pins AT the boundary instead of compounding an offset when the
+    // element is already at the edge.
+    if(!isContainer(el)&&dragBounds&&moveRects[i]){
+      var relX=nx-curT2[0];
+      var rr=moveRects[i];
+      var shift=curT2[0]-dragBasePos[0];
+      var curLeft=rr.left+shift;
+      var curRight=rr.right+shift;
+      if(curLeft+relX<dragBounds.left)nx=curT2[0]+(dragBounds.left-curLeft);
+      if(curRight+relX>dragBounds.right)nx=curT2[0]+(dragBounds.right-curRight);
+    }
+    rawNx.push(nx);
+    rawNy.push(curT2[1]+ddy);
+  }
+  // Alignment snap (Figma/Canva-style). Holding Shift disables it for
+  // fine-tuned placement.
+  var appliedDx=0,appliedDy=0;
+  if(!pendingShift&&selectedEls.length>0&&dragBaseRect){
+    var proj=shiftRect(dragBaseRect,rawNx[0]-dragBasePos[0],rawNy[0]-dragBasePos[1]);
+    var snap=computeSnap(proj,moveTargets,dragDirX,dragDirY);
+    appliedDx=snap.snapX;
+    appliedDy=snap.snapY;
+  }
+  for(var i=0;i<selectedEls.length;i++){
+    var nx=rawNx[i]+appliedDx;
+    var ny=rawNy[i]+appliedDy;
+    var m=moveDeltas[i];
+    m[1]=nx;
+    m[2]=ny;
+    selectedEls[i].style.transform='translate('+nx+'px,'+ny+'px)';
+  }
+  // Keep the selection box glued to the element while it moves.
+  updateSelectionBox();
+  // Only touch the guide DOM when the snapped view actually changes. While
+  // a guide holds the element still, the guides are identical frame to
+  // frame, so nothing is re-created; when moving freely there is nothing
+  // to draw at all.
+  var gkey=(appliedDx||appliedDy)?(rawNx[0]+appliedDx)+','+(rawNy[0]+appliedDy):'';
+  if(gkey!==lastGuidesKey){
+    lastGuidesKey=gkey;
+    if(gkey===''){
+      hideGuides();
+    }else{
+      renderGuides(shiftRect(dragBaseRect,rawNx[0]-dragBasePos[0]+appliedDx,rawNy[0]-dragBasePos[1]+appliedDy),moveTargets);
+    }
+  }
+}
 
 document.addEventListener('mousemove',function(e){
   if(isResizing){
@@ -616,7 +942,7 @@ document.addEventListener('mousemove',function(e){
   if(!dragMoved){
     var dx=e.clientX-dragStartX;
     var dy=e.clientY-dragStartY;
-    if(Math.abs(dx)<5&&Math.abs(dy)<5)return;
+    if(Math.abs(dx)<3&&Math.abs(dy)<3)return;
     dragMoved=true;
     if(!isMoving){
       if(marqueeAdditive){
@@ -628,28 +954,18 @@ document.addEventListener('mousemove',function(e){
     }
   }
   if(isMoving){
-    // Incremental movement: apply ONLY the cursor delta since the previous
-    // mousemove ON TOP of the element's CURRENT transform (re-read every
-    // event). This makes each drag - first, second, third... - continue
-    // from where the element actually is, so it never snaps back to its
-    // original position when re-dragged.
-    var ddx=(lastDragX===null)?0:(e.clientX-lastDragX);
-    var ddy=(lastDragY===null)?0:(e.clientY-lastDragY);
-    lastDragX=e.clientX;
-    lastDragY=e.clientY;
-    for(var i=0;i<selectedEls.length;i++){
-      var curT2=getTranslate(selectedEls[i]);
-      // Clamp horizontally so elements can never be dragged out of the
-      // container - the container width must not expand.
-      var nx=clampTranslateX(selectedEls[i],curT2[0]+ddx);
-      var ny=curT2[1]+ddy;
-      var m=moveDeltas[i];
-      m[1]=nx;
-      m[2]=ny;
-      selectedEls[i].style.transform='translate('+nx+'px,'+ny+'px)';
+    // Coalesce the drag: mousemove can fire far faster than the display
+    // can refresh, so only record the latest pointer here and do all the
+    // work once per animation frame in dragFrame(). The element always
+    // tracks the cursor exactly (delta from the last APPLIED position)
+    // with no heavy DOM/layout work more often than once per frame.
+    pendingMX=e.clientX;
+    pendingMY=e.clientY;
+    pendingShift=e.shiftKey;
+    if(!dragFrameScheduled){
+      dragFrameScheduled=true;
+      requestAnimationFrame(dragFrame);
     }
-    // Keep the selection box glued to the element while it moves.
-    updateSelectionBox();
     e.preventDefault();
     return;
   }
@@ -689,6 +1005,7 @@ document.addEventListener('mousemove',function(e){
 document.addEventListener('mouseup',function(e){
   if(isResizing){
     hideMarquee();
+    hideGuides();
     isResizing=false;
     document.body.style.cursor='';
     document.body.style.userSelect='';
@@ -709,7 +1026,17 @@ document.addEventListener('mouseup',function(e){
     return;
   }
   if(!isDragging)return;
+  // If a move frame is still queued, run it against the release point so
+  // the element lands exactly where the cursor is (not one frame behind).
+  if(dragFrameScheduled){
+    pendingMX=e.clientX;
+    pendingMY=e.clientY;
+    pendingShift=e.shiftKey;
+    dragFrame();
+  }
   hideMarquee();
+  hideGuides();
+  lastGuidesKey=null;
   isDragging=false;
   document.body.style.cursor='';
   document.body.style.userSelect='';
@@ -773,6 +1100,7 @@ document.addEventListener('dragstart',function(e){
 
 createSelectionBox();
 createMarquee();
+createGuidesLayer();
 window.addEventListener('resize',function(){updateSelectionBox();});
 window.addEventListener('scroll',function(){updateSelectionBox();},true);
 
@@ -846,17 +1174,45 @@ window.addEventListener('message',function(e){
 
   if(data.type==='move-by'){
     if(selectedEls.length===0)return;
+    var mdx=Number(data.dx)||0;
+    var mdy=Number(data.dy)||0;
     batchId++;
+    // Snapshot alignment targets + the selection's union box for this nudge
+    // (static during a single key press), then apply the SAME direction-
+    // aware alignment snap + guides as mouse dragging so arrow keys show
+    // the indicators and snap to lines too.
+    var targets=getAlignTargets();
+    var baseRect=unionRect(selectedEls);
+    var p0=getTranslate(selectedEls[0]);
+    var rawNx=[],rawNy=[];
     for(var i=0;i<selectedEls.length;i++){
       var el2=selectedEls[i];
       var t=getTranslate(el2);
       undoStack.push({element:el2,property:'transform',oldValue:el2.style.transform||'',batchId:batchId});
       // Clamp so nudging (arrow keys) never pushes the element outside
       // the container - the container width must not expand.
-      var nx2=clampTranslateX(el2,t[0]+(data.dx||0));
-      el2.style.transform='translate('+nx2+'px,'+(t[1]+(data.dy||0))+'px)';
+      rawNx.push(clampTranslateX(el2,t[0]+mdx));
+      rawNy.push(t[1]+mdy);
+    }
+    var dirX=mdx>0?1:(mdx<0?-1:0);
+    var dirY=mdy>0?1:(mdy<0?-1:0);
+    var proj=shiftRect(baseRect,rawNx[0]-p0[0],rawNy[0]-p0[1]);
+    var snap=computeSnap(proj,targets,dirX,dirY);
+    // Nudging only snaps on the axis being nudged, so a vertical arrow
+    // never makes the element drift horizontally (and vice versa).
+    var adx=mdx!==0?snap.snapX:0;
+    var ady=mdy!==0?snap.snapY:0;
+    for(var i=0;i<selectedEls.length;i++){
+      var el2=selectedEls[i];
+      el2.style.transform='translate('+(rawNx[i]+adx)+'px,'+(rawNy[i]+ady)+'px)';
     }
     redoStack=[];
+    if(adx||ady){
+      renderGuides(shiftRect(proj,adx,ady),targets);
+      scheduleHideGuides(1200);
+    }else{
+      hideGuides();
+    }
     fireSelected();
   }
 
