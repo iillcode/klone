@@ -6,6 +6,7 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from "react";
 import { useTheme } from "./theme-provider";
 import { getEditorScript } from "./editor-iframe";
@@ -335,7 +336,17 @@ export interface HtmlPreviewHandle {
   redo: () => void;
   deleteMulti: () => void;
   deselect: () => void;
+  moveBy: (dx: number, dy: number) => void;
+  cancelTextEdit: () => void;
   exportPdf: () => Promise<void>;
+}
+
+interface TextEditState {
+  reqId: number;
+  text: string;
+  tag: string;
+  rect: { left: number; top: number; width: number; height: number };
+  styles: Record<string, string>;
 }
 
 interface HtmlPreviewProps {
@@ -343,17 +354,81 @@ interface HtmlPreviewProps {
   inspectMode?: boolean;
   onElementSelect?: (elements: ElementInfo[] | null) => void;
   onStyleUpdated?: (property: string, value: string) => void;
+  onEditModeChange?: (editing: boolean) => void;
 }
 
 export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
   function HtmlPreview(
-    { html, inspectMode = false, onElementSelect, onStyleUpdated },
+    {
+      html,
+      inspectMode = false,
+      onElementSelect,
+      onStyleUpdated,
+      onEditModeChange,
+    },
     ref,
   ) {
     const { theme } = useTheme();
     const isDark = theme === "dark";
     const defaultHtml = buildHtml(isDark ? dark : light);
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const [editState, setEditState] = useState<TextEditState | null>(null);
+    const [draft, setDraft] = useState("");
+
+    // ── Text edit overlay: the editor lives HERE (parent document), so
+    // focus is stable and the sandboxed iframe never fights for it. The
+    // iframe only reports the element rect + computed styles and applies
+    // the result via set-text / cancel-edit messages. ──
+    const draftRef = useRef("");
+
+    const commitTextEdit = useCallback(() => {
+      setEditState((prev) => {
+        if (prev) {
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "set-text", reqId: prev.reqId, text: draftRef.current },
+            "*",
+          );
+        }
+        return null;
+      });
+      onEditModeChange?.(false);
+    }, [onEditModeChange]);
+
+    const cancelTextEdit = useCallback(() => {
+      setEditState((prev) => {
+        if (prev) {
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "cancel-edit", reqId: prev.reqId },
+            "*",
+          );
+        }
+        return null;
+      });
+      onEditModeChange?.(false);
+    }, [onEditModeChange]);
+
+    const handleEditKeyDown = useCallback(
+      (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          cancelTextEdit();
+        } else if (
+          e.key === "Enter" &&
+          !e.shiftKey &&
+          editState?.tag !== "pre" &&
+          editState?.tag !== "code"
+        ) {
+          // Enter saves except in code blocks (multi-line content).
+          e.preventDefault();
+          commitTextEdit();
+        } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          e.preventDefault();
+          commitTextEdit();
+        }
+      },
+      [editState?.tag, commitTextEdit, cancelTextEdit],
+    );
 
     useImperativeHandle(ref, () => ({
       applyStyleMulti: (property: string, value: string) => {
@@ -380,6 +455,15 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
           "*",
         );
       },
+      moveBy: (dx: number, dy: number) => {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "move-by", dx, dy },
+          "*",
+        );
+      },
+      cancelTextEdit: () => {
+        cancelTextEdit();
+      },
       exportPdf: async () => {
         const iframe = iframeRef.current;
         if (!iframe || !iframe.contentWindow) {
@@ -388,6 +472,9 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         }
 
         try {
+          // Let any pending editor messages (e.g. set-text restoring element
+          // visibility) flush to the iframe before snapshotting the DOM.
+          await new Promise((r) => setTimeout(r, 50));
           const doc = iframe.contentDocument;
           if (!doc) {
             console.error("[exportPdf] No contentDocument — check sandbox");
@@ -401,7 +488,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
 
           // Remove editor overlays from the clone
           clone
-            .querySelectorAll("#el-overlay, #hover-overlay")
+            .querySelectorAll("#el-overlay, #hover-overlay, [data-editor-ui]")
             .forEach((el) => el.remove());
           clone.querySelectorAll("script").forEach((el) => el.remove());
           clone
@@ -426,9 +513,9 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
           // A transparent body would otherwise be rendered on the PDF viewer's
           // default page colour. Use Klone's canvas colour only when the authored
           // body has no computed background colour.
-          const bodyBackground = contentWindow
-            .getComputedStyle(doc.body)
-            .backgroundColor;
+          const bodyBackground = contentWindow.getComputedStyle(
+            doc.body,
+          ).backgroundColor;
           const hasBodyBackground =
             bodyBackground !== "transparent" &&
             bodyBackground !== "rgba(0, 0, 0, 0)";
@@ -512,10 +599,35 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         if (e.data && e.data.type === "selection-cleared") {
           onElementSelect?.(null);
         }
+        if (e.data && e.data.type === "edit-text-request") {
+          setDraft(e.data.text ?? "");
+          setEditState({
+            reqId: e.data.reqId,
+            text: e.data.text ?? "",
+            tag: e.data.tag,
+            rect: e.data.rect,
+            styles: e.data.styles,
+          });
+          onEditModeChange?.(true);
+        }
       };
       window.addEventListener("message", handler);
       return () => window.removeEventListener("message", handler);
-    }, [onElementSelect, onStyleUpdated]);
+    }, [onElementSelect, onStyleUpdated, onEditModeChange]);
+
+    // Keep draftRef in sync so commitTextEdit (stale-closure safe) reads
+    // the latest typed value.
+    useEffect(() => {
+      draftRef.current = draft;
+    }, [draft]);
+
+    // Auto-focus + select all when the overlay opens
+    useEffect(() => {
+      if (editState) {
+        textareaRef.current?.focus();
+        textareaRef.current?.select();
+      }
+    }, [editState]);
 
     // Forward inspect mode to the iframe so it can gate hover/selection behavior
     useEffect(() => {
@@ -524,24 +636,71 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         "*",
       );
       // When inspect mode turns off, clear any active selection in the iframe
+      // and close the text edit overlay.
       if (!inspectMode) {
         iframeRef.current?.contentWindow?.postMessage(
           { type: "deselect" },
           "*",
         );
+        if (editState) {
+          setEditState(null);
+          onEditModeChange?.(false);
+        }
       }
-    }, [inspectMode]);
+    }, [inspectMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const srcDoc = html ? injectEditorScript(html) : defaultHtml;
+    const bg = editState?.styles.backgroundColor ?? "";
+    const hasBg = bg && bg !== "transparent" && bg !== "rgba(0, 0, 0, 0)";
 
     return (
-      <iframe
-        ref={iframeRef}
-        srcDoc={srcDoc}
-        className="w-full h-full border-0 bg-transparent"
-        title="Preview"
-        sandbox="allow-scripts allow-same-origin"
-      />
+      <div className="relative w-full h-full">
+        <iframe
+          ref={iframeRef}
+          srcDoc={srcDoc}
+          className="w-full h-full border-0 bg-transparent"
+          title="Preview"
+          sandbox="allow-scripts allow-same-origin"
+        />
+        {editState && (
+          <div
+            className="absolute z-10"
+            style={{
+              left: editState.rect.left,
+              top: editState.rect.top,
+              width: editState.rect.width,
+              height: editState.rect.height,
+            }}
+          >
+            <textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleEditKeyDown}
+              onBlur={commitTextEdit}
+              spellCheck={false}
+              className="w-full h-full resize-none outline-none rounded-none border-0 shadow-none"
+              style={{
+                boxSizing: "border-box",
+                fontFamily: editState.styles.fontFamily,
+                fontSize: editState.styles.fontSize,
+                fontWeight: editState.styles.fontWeight,
+                lineHeight: editState.styles.lineHeight,
+                color: editState.styles.color,
+                textAlign: editState.styles
+                  .textAlign as React.CSSProperties["textAlign"],
+                paddingTop: editState.styles.paddingTop,
+                paddingRight: editState.styles.paddingRight,
+                paddingBottom: editState.styles.paddingBottom,
+                paddingLeft: editState.styles.paddingLeft,
+                backgroundColor: hasBg ? bg : "transparent",
+                overflow: "hidden",
+                whiteSpace: "pre-wrap",
+              }}
+            />
+          </div>
+        )}
+      </div>
     );
   },
 );

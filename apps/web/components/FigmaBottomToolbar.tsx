@@ -31,44 +31,6 @@ function DownloadIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-function UndoIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      className="w-3.5 h-3.5"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      {...props}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
-      />
-    </svg>
-  );
-}
-
-function RedoIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      className="w-3.5 h-3.5"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      {...props}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3"
-      />
-    </svg>
-  );
-}
-
 function PlayIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" {...props}>
@@ -106,8 +68,6 @@ interface FigmaBottomToolbarProps {
   onToggleLeftSidebar?: () => void;
   onPresent?: () => void;
   onShare?: () => void;
-  onUndo?: () => void;
-  onRedo?: () => void;
   downloading?: boolean;
 }
 
@@ -119,8 +79,6 @@ export function FigmaBottomToolbar({
   onToggleLeftSidebar,
   onPresent,
   onShare,
-  onUndo,
-  onRedo,
   downloading = false,
 }: FigmaBottomToolbarProps) {
   return (
@@ -172,21 +130,6 @@ export function FigmaBottomToolbar({
             }`}
           >
             <CursorIcon className="w-3.5 h-3.5" />
-          </button>
-          <div className="w-px h-4 bg-[#2d2d30] mx-1" />
-          <button
-            onClick={onUndo}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2d2d30] transition-colors"
-            title="Undo (⌘Z)"
-          >
-            <UndoIcon />
-          </button>
-          <button
-            onClick={onRedo}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2d2d30] transition-colors"
-            title="Redo (⌘⇧Z)"
-          >
-            <RedoIcon />
           </button>
           <div className="w-px h-4 bg-[#2d2d30] mx-1" />
           <button

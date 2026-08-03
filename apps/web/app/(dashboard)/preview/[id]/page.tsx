@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useParams } from "next/navigation";
 import {
   HtmlPreview,
   type HtmlPreviewHandle,
@@ -12,13 +11,16 @@ import { FigmaBottomToolbar } from "@/components/FigmaBottomToolbar";
 import { PropertiesSidebar } from "@/components/PropertiesSidebar";
 
 export default function PreviewPage() {
-  const { id } = useParams<{ id: string }>();
   const [selectedElements, setSelectedElements] = useState<ElementInfo[]>([]);
   const [inspectMode, setInspectMode] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const previewRef = useRef<HtmlPreviewHandle>(null);
   const keyboardCaptureRef = useRef<HTMLInputElement>(null);
+  // Ref mirror of isEditing so the message handler (which fires outside
+  // render) and the keydown listener always see the latest value.
+  const isEditingRef = useRef(false);
 
   // Left sidebar is open either by hamburger toggle OR by inspect mode
   const leftOpen = leftSidebarOpen || inspectMode;
@@ -35,6 +37,10 @@ export default function PreviewPage() {
         return;
       }
       setSelectedElements(elements ?? []);
+      // While editing text in the iframe, NEVER touch focus - moving it to
+      // the capture input would make the contenteditable lose focus and
+      // abort the edit.
+      if (isEditingRef.current) return;
       if (elements && elements.length > 0) {
         keyboardCaptureRef.current?.focus();
       } else {
@@ -43,6 +49,11 @@ export default function PreviewPage() {
     },
     [inspectMode],
   );
+
+  const handleEditModeChange = useCallback((editing: boolean) => {
+    isEditingRef.current = editing;
+    setIsEditing(editing);
+  }, []);
 
   // Expand shorthand properties (padding, margin) into sub-properties that the toolbar reads
   function expandStyleProps(
@@ -110,6 +121,9 @@ export default function PreviewPage() {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      // While editing text inside the iframe, let the iframe own all keys.
+      if (isEditingRef.current) return;
+
       // Escape: deselect all elements
       if (e.key === "Escape") {
         previewRef.current?.deselect();
@@ -137,6 +151,8 @@ export default function PreviewPage() {
         el?.tagName === "INPUT" ||
         el?.tagName === "TEXTAREA" ||
         el?.tagName === "SELECT";
+      const isEditorCapture =
+        el?.getAttribute("data-editor-capture") === "true";
       if (!isInput && !e.metaKey && !e.ctrlKey && !e.altKey) {
         if (e.key.toLowerCase() === "v") {
           setInspectMode((prev) => {
@@ -151,12 +167,36 @@ export default function PreviewPage() {
         }
       }
 
+      // Arrow keys: nudge selected elements (Shift = 10px, default 1px)
+      if (
+        inspectMode &&
+        selectedElements.length > 0 &&
+        (!isInput || isEditorCapture) &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey
+      ) {
+        const step = e.shiftKey ? 10 : 1;
+        if (
+          e.key === "ArrowUp" ||
+          e.key === "ArrowDown" ||
+          e.key === "ArrowLeft" ||
+          e.key === "ArrowRight"
+        ) {
+          e.preventDefault();
+          const dx =
+            e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+          const dy =
+            e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+          previewRef.current?.moveBy(dx, dy);
+          return;
+        }
+      }
+
       // Delete/Backspace: delete selected elements only when NOT focused
       // on a real form input. The hidden editor-capture input is treated
       // as part of the editor (not a real form input).
       if (e.key === "Delete" || e.key === "Backspace") {
-        const isEditorCapture =
-          el?.getAttribute("data-editor-capture") === "true";
         if (!isInput || isEditorCapture) {
           e.preventDefault();
           previewRef.current?.deleteMulti();
@@ -165,7 +205,7 @@ export default function PreviewPage() {
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [inspectMode, selectedElements.length]);
 
   return (
     <div className="flex flex-col w-full h-full bg-[#1e1e1e]">
@@ -186,8 +226,6 @@ export default function PreviewPage() {
             return next;
           });
         }}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
         onShare={handleShare}
         downloading={downloading}
       />
@@ -226,17 +264,37 @@ export default function PreviewPage() {
                 inspectMode={inspectMode}
                 onElementSelect={handleElementSelect}
                 onStyleUpdated={handleStyleUpdated}
+                onEditModeChange={handleEditModeChange}
               />
             </div>
           </div>
+
+          {/* ── Canvas editing hint (inspect mode) ── */}
+          {inspectMode && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#18181b]/90 border border-[#2d2d2d] backdrop-blur text-[11px] text-[#a1a1aa] shadow-lg whitespace-nowrap">
+                <kbd className="px-1.5 py-0.5 rounded bg-[#27272a] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">
+                  double-click
+                </kbd>
+                edit text
+                <span className="text-[#52525b]">·</span>
+                drag to move
+                <span className="text-[#52525b]">·</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-[#27272a] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">
+                  V
+                </kbd>
+                exit
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Right sidebar: Design properties ── */}
         <div
           className="overflow-hidden transition-[width] duration-200 ease-out"
-          style={{ width: rightOpen ? 256 : 0 }}
+          style={{ width: rightOpen ? 278 : 0 }}
         >
-          <div className="w-64 h-full border-l border-[#2d2d2d]">
+          <div className="w-[278px] h-full border-l border-[#2d2d2d]">
             <PropertiesSidebar
               selectedElements={selectedElements}
               onApplyStyle={handleApplyStyle}
