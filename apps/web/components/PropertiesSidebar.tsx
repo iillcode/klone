@@ -3,7 +3,17 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import type { ElementInfo } from "@/components/HtmlPreview";
-import { cssPx, parseTranslate, parseRgbToHex } from "@/components/style-utils";
+import { cssPx, parseTranslate, parseRgbToHex, gradientFirstColor } from "@/components/style-utils";
+
+/** True when a computed color value is transparent (no visible color). */
+function isTransparentColor(color: string | undefined): boolean {
+  return (
+    !color ||
+    color === "transparent" ||
+    color === "rgba(0, 0, 0, 0)" ||
+    color === "rgba(0,0,0,0)"
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════════
    Icons (faithful port of the mock)
@@ -826,7 +836,9 @@ function Section({
   );
 }
 
-/* ─── Color row (mock style: 32px field with swatch + hex) ─── */
+/* ─── Color row (mock style: 32px field with swatch + hex) ───
+   An empty `color` means transparent: the swatch shows only the checkerboard
+   and the hex input reads "transparent". */
 function ColorRow({
   label,
   color,
@@ -836,13 +848,15 @@ function ColorRow({
   color: string;
   onChange: (color: string) => void;
 }) {
-  const [hexInput, setHexInput] = useState(color.toUpperCase());
-  const pickerRef = useRef<HTMLInputElement>(null);
-
-  // Sync hex input when color changes externally
+  // Sync hex input when color changes externally (empty = transparent)
   useEffect(() => {
-    setHexInput(color.toUpperCase());
-  }, [color]);
+    setHexInput(color ? color.toUpperCase() : "");
+  }, [color]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [hexInput, setHexInput] = useState(() =>
+    color ? color.toUpperCase() : "",
+  );
+  const pickerRef = useRef<HTMLInputElement>(null);
 
   return (
     <FieldBlock label={label}>
@@ -858,15 +872,20 @@ function ColorRow({
           }}
           title={`Change ${label.toLowerCase()} color`}
         >
-          <div className="w-full h-full" style={{ backgroundColor: color }} />
+          {color ? (
+            <div className="w-full h-full" style={{ backgroundColor: color }} />
+          ) : (
+            <div className="w-full h-full border border-white/15" />
+          )}
           <input
             ref={pickerRef}
             type="color"
-            value={color}
+            value={color || "#000000"}
             onChange={(e) => {
               // Skip events that re-send the current color (the native
               // picker fires a redundant change when the dialog closes).
-              if (e.target.value.toLowerCase() === color.toLowerCase()) return;
+              if (e.target.value.toLowerCase() === (color || "").toLowerCase())
+                return;
               onChange(e.target.value);
               setHexInput(e.target.value.toUpperCase());
             }}
@@ -877,19 +896,20 @@ function ColorRow({
         <input
           type="text"
           value={hexInput}
+          placeholder="transparent"
           onChange={(e) => {
             const val = e.target.value;
             setHexInput(val);
             if (/^#[0-9a-fA-F]{6}$/.test(val)) {
               // Skip re-typing the current value - no redundant undo entries.
-              if (val.toLowerCase() === color.toLowerCase()) return;
+              if (val.toLowerCase() === (color || "").toLowerCase()) return;
               onChange(val);
             }
           }}
           onBlur={() => {
             // Reset to actual color on blur if invalid
-            if (!/^#[0-9a-fA-F]{6}$/.test(hexInput)) {
-              setHexInput(color.toUpperCase());
+            if (hexInput && !/^#[0-9a-fA-F]{6}$/.test(hexInput)) {
+              setHexInput(color ? color.toUpperCase() : "");
             }
           }}
           className="w-full min-w-0 bg-transparent text-[13px] text-[#eaeaea] font-mono uppercase focus:outline-none"
@@ -963,27 +983,46 @@ export function PropertiesSidebar({
   const alignValue =
     rawAlign === "start" ? "left" : rawAlign === "end" ? "right" : rawAlign;
 
-  // Font weight dropdown value (normalized to one of the options)
+  // Font weight dropdown value — surface the element's actual computed
+  // weight, adding it to the option list when it's not one of the presets
+  // (e.g. templates using 300, 800, etc. would otherwise collapse to 400).
   const rawWeight = s?.fontWeight;
-  const weightValue =
+  const weightPreset =
     rawWeight === "bold"
       ? "700"
       : rawWeight === "normal" || rawWeight === undefined || rawWeight === ""
         ? "400"
-        : ["400", "500", "600", "700"].includes(rawWeight)
-          ? rawWeight
-          : "400";
+        : rawWeight;
+  const weightOptions = FONT_WEIGHTS.some((w) => w.value === weightPreset)
+    ? FONT_WEIGHTS
+    : [{ value: weightPreset, label: weightPreset }, ...FONT_WEIGHTS];
+  const weightValue = weightPreset;
 
-  // Font family dropdown value (fall back to Inter when unset/unknown)
+  // Font family dropdown value — surface the element's actual computed
+  // family, adding it to the option list when it's not one of the presets.
   const currentFamily = s?.fontFamily ?? "";
-  const fontFamily = FONT_FAMILIES.some((f) => f.value === currentFamily)
-    ? currentFamily
-    : "Inter";
+  const familyIsPreset = FONT_FAMILIES.some((f) => f.value === currentFamily);
+  const fontOptions = familyIsPreset
+    ? FONT_FAMILIES
+    : [{ value: currentFamily, label: currentFamily }, ...FONT_FAMILIES];
+  const fontFamily = currentFamily;
 
   // Opacity as whole percent (100 = default)
   const opacityPct = s?.opacity
     ? Math.round(parseFloat(s.opacity) * 100)
     : 100;
+
+  // The element's VISIBLE background color. A background-image (gradient /
+  // image) paints OVER background-color, so when one is present we surface
+  // its first color stop; otherwise fall back to background-color.
+  const visibleBg =
+    gradientFirstColor(s?.backgroundImage) ?? s?.backgroundColor;
+  const bgColor = isTransparentColor(visibleBg)
+    ? ""
+    : parseRgbToHex(visibleBg);
+  const txtColor = isTransparentColor(s?.color)
+    ? ""
+    : parseRgbToHex(s?.color);
 
   return (
     <div className="w-64 shrink-0 h-full flex flex-col bg-[#1e1e1e] border-l border-[#2d2d2d] select-none overflow-hidden">
@@ -1185,12 +1224,12 @@ export function PropertiesSidebar({
             <Section title="Color">
               <ColorRow
                 label="Text"
-                color={parseRgbToHex(s.color)}
+                color={txtColor}
                 onChange={(c) => onApplyStyle("color", c)}
               />
               <ColorRow
                 label="Background"
-                color={parseRgbToHex(s.backgroundColor)}
+                color={bgColor}
                 onChange={(c) => onApplyStyle("backgroundColor", c)}
               />
             </Section>
@@ -1210,7 +1249,7 @@ export function PropertiesSidebar({
                   title="Font family"
                   value={fontFamily}
                   onChange={(v) => onApplyStyle("fontFamily", v)}
-                  options={FONT_FAMILIES}
+                  options={fontOptions}
                   fontPreview
                 />
                 <div className="flex items-center gap-1.5">
@@ -1219,7 +1258,7 @@ export function PropertiesSidebar({
                     grow
                     value={weightValue}
                     onChange={(v) => onApplyStyle("fontWeight", v)}
-                    options={FONT_WEIGHTS}
+                    options={weightOptions}
                   />
                   <NumberField
                     className="flex-1 min-w-0"

@@ -1,22 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Project } from '@/lib/types';
+import { useRouter } from 'next/navigation';
+import { Document } from '@/lib/types';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 interface SidebarProps {
-  projects: Project[];
-  onSelectProject: (project: Project) => void;
-  activeProjectId?: string;
+  documents: Document[];
   overlay?: boolean;
 }
 
-export function Sidebar({
-  projects,
-  onSelectProject,
-  activeProjectId,
-  overlay,
-}: SidebarProps) {
+export function Sidebar({ documents, overlay }: SidebarProps) {
+  const router = useRouter();
   const [sidebarHover, setSidebarHover] = useState(false);
 
   const sidebarContent = (
@@ -31,24 +26,31 @@ export function Sidebar({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 scrollbar-none">
-        <div className="space-y-1">
-          {projects.map((project) => (
-            <button
-              key={project.id}
-              onClick={() => onSelectProject(project)}
-              className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                activeProjectId === project.id
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-              }`}
-            >
-              <div className="font-medium truncate">{project.title || project.service_name}</div>
-              <div className="text-xs text-muted-foreground mt-0.5 truncate">
-                {project.service_name}
-              </div>
-            </button>
-          ))}
+        <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Documents
         </div>
+        {documents.length === 0 ? (
+          <p className="px-3 py-2 text-sm text-muted-foreground">
+            No documents yet. Pick a template to create one.
+          </p>
+        ) : (
+          <div className="space-y-1">
+            {documents.map((doc) => (
+              <button
+                key={doc.id}
+                onClick={() => router.push(`/preview/${doc.id}`)}
+                className="w-full text-left px-3 py-2 rounded-md text-sm transition-colors text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                <div className="font-medium truncate text-sidebar-foreground">
+                  {doc.title}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                  Updated {new Date(doc.updated_at).toLocaleDateString()}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="px-3 pb-3">

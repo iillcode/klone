@@ -18,6 +18,27 @@ export function cssPx(val: string): number {
   return parseInt(val) || 0;
 }
 
+/** Extract the first color stop of a CSS gradient/image value, or null when
+ * there is none (e.g. `none`, `initial`, or a plain `url(...)`). Computed
+ * background-image values serialize colors as `rgb(...)`/`rgba(...)` or hex,
+ * so matching the first color token surfaces the element's *visible*
+ * background color (a background-image paints over background-color). */
+export function gradientFirstColor(
+  backgroundImage: string | undefined,
+): string | null {
+  if (
+    !backgroundImage ||
+    backgroundImage === "none" ||
+    backgroundImage === "initial"
+  ) {
+    return null;
+  }
+  const m = backgroundImage.match(
+    /(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\))/,
+  );
+  return m ? m[0] : null;
+}
+
 /** Parse a CSS transform to its translate x/y in px. Handles
  * translate(Xpx, Ypx), matrix(...) and matrix3d(...). Returns [0, 0]
  * when there is no translation. */

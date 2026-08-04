@@ -58,6 +58,25 @@ function MenuIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+function SaveIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      className="w-3.5 h-3.5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+      {...props}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"
+      />
+    </svg>
+  );
+}
+
 /* ─── Main component ─── */
 
 interface FigmaBottomToolbarProps {
@@ -68,7 +87,10 @@ interface FigmaBottomToolbarProps {
   onToggleLeftSidebar?: () => void;
   onPresent?: () => void;
   onShare?: () => void;
+  onSave?: () => void;
   downloading?: boolean;
+  saving?: boolean;
+  dirty?: boolean;
 }
 
 export function FigmaBottomToolbar({
@@ -79,7 +101,10 @@ export function FigmaBottomToolbar({
   onToggleLeftSidebar,
   onPresent,
   onShare,
+  onSave,
   downloading = false,
+  saving = false,
+  dirty = false,
 }: FigmaBottomToolbarProps) {
   return (
     <>
@@ -109,6 +134,12 @@ export function FigmaBottomToolbar({
               <span className="text-[12px] font-medium text-[#e4e4e7]">
                 {title}
               </span>
+              {dirty && (
+                <span className="flex items-center gap-1 text-[10px] text-[#f59e0b]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
+                  Unsaved
+                </span>
+              )}
               <span className="text-[10px] text-[#71717a]">Drafts</span>
               <span className="px-1.5 py-0.5 rounded bg-[#2d2d30] text-[9px] font-medium text-[#a1a1aa]">
                 Free
@@ -141,6 +172,36 @@ export function FigmaBottomToolbar({
             <span className="text-[9px] text-[#52525b] font-mono ml-0.5">
               ⌘⌥↵
             </span>
+          </button>
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-[#e4e4e7] border border-[#2d2d30] hover:bg-[#2d2d30] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            {saving ? (
+              <svg
+                className="w-3.5 h-3.5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+            ) : (
+              <SaveIcon className="w-3.5 h-3.5" />
+            )}
+            <span>{saving ? "Saving…" : "Save"}</span>
           </button>
           <button
             onClick={onShare}

@@ -1,25 +1,13 @@
-'use client';
+import { listDocuments } from "@/lib/data/documents";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { LandingCards } from "@/components/LandingCards";
 
-import { useState } from 'react';
-import { Project } from '@/lib/types';
-import { Sidebar } from '@/components/layout/Sidebar';
-import { LandingCards } from '@/components/LandingCards';
-
-export default function Home() {
-  const [projects] = useState<Project[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState<string | undefined>();
-
-  const handleSelectProject = (project: Project) => {
-    setActiveProjectId(project.id);
-  };
+export default async function Home() {
+  const documents = await listDocuments();
 
   return (
     <div className="flex w-full h-full">
-      <Sidebar
-        projects={projects}
-        onSelectProject={handleSelectProject}
-        activeProjectId={activeProjectId}
-      />
+      <Sidebar documents={documents} />
       <LandingCards />
     </div>
   );

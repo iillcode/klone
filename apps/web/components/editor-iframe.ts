@@ -7,7 +7,7 @@ export function getEditorScript(): string {
   // will show an older version. Hard-refresh the page to reload it.
   if(window.__kloneEditorInjected)return; // never double-bind listeners
   window.__kloneEditorInjected=true;
-  console.log('[editor] script v17');
+  console.log('[editor] script v19');
 var selectedEls=[];
 var hoveredEl=null;
 var isDragging=false;
@@ -215,6 +215,7 @@ function fireSelected(){
       styles:{
         color:s.color,
         backgroundColor:s.backgroundColor,
+        backgroundImage:s.backgroundImage,
         paddingTop:s.paddingTop,
         paddingRight:s.paddingRight,
         paddingBottom:s.paddingBottom,
@@ -228,6 +229,9 @@ function fireSelected(){
         textAlign:s.textAlign,
         fontSize:s.fontSize,
         fontWeight:s.fontWeight,
+        fontFamily:s.fontFamily,
+        lineHeight:s.lineHeight,
+        letterSpacing:s.letterSpacing,
         rotate:s.rotate,
         opacity:s.opacity,
         borderRadius:s.borderRadius,
@@ -1128,6 +1132,17 @@ window.addEventListener('message',function(e){
     for(var i=0;i<selectedEls.length;i++){
       var el=selectedEls[i];
       var oldValue=el.style[data.property];
+      if(data.property==='backgroundColor'){
+        // A solid background color must REPLACE any background-image
+        // (gradient/image) that would otherwise paint over it and make
+        // the change invisible. Record it for undo alongside the color.
+        var oldBgImage=el.style.backgroundImage;
+        if(oldBgImage&&oldBgImage!=='none'&&oldBgImage!==''){
+          applied=true;
+          undoStack.push({element:el,property:'backgroundImage',oldValue:oldBgImage,batchId:batchId});
+          el.style.backgroundImage='none';
+        }
+      }
       if(oldValue===data.value)continue; // no-op change - skip entirely
       applied=true;
       undoStack.push({element:el,property:data.property,oldValue:oldValue,batchId:batchId});
