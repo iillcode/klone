@@ -6,10 +6,10 @@ import {
   HtmlPreview,
   type HtmlPreviewHandle,
   type ElementInfo,
-} from "@/components/HtmlPreview";
-import { FigmaLayersSidebar } from "@/components/FigmaLayersSidebar";
-import { FigmaBottomToolbar } from "@/components/FigmaBottomToolbar";
-import { PropertiesSidebar } from "@/components/PropertiesSidebar";
+} from "./HtmlPreview";
+import { FigmaLayersSidebar } from "./FigmaLayersSidebar";
+import { FigmaBottomToolbar } from "./FigmaBottomToolbar";
+import { PropertiesSidebar } from "./PropertiesSidebar";
 import { getTemplate } from "@/lib/data/templates";
 import {
   saveDocumentContent,

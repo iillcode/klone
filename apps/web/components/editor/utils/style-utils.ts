@@ -13,6 +13,16 @@ export function parseRgbToHex(color: string): string {
   return "#000000";
 }
 
+/** True when a computed color value is transparent (no visible color). */
+export function isTransparentColor(color: string | undefined): boolean {
+  return (
+    !color ||
+    color === "transparent" ||
+    color === "rgba(0, 0, 0, 0)" ||
+    color === "rgba(0,0,0,0)"
+  );
+}
+
 /** Parse a CSS px value string to a number */
 export function cssPx(val: string): number {
   return parseInt(val) || 0;

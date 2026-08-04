@@ -18,6 +18,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem('theme') as Theme | null;
     if (stored) {
+      // Intentional: hydrating persisted theme once on mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTheme(stored);
     } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
       setTheme('light');

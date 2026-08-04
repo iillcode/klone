@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useTheme } from "./theme-provider";
+import { useTheme } from "@/components/ui/theme-provider";
 import { getEditorScript } from "./editor-iframe";
 import { buildHtml, dark, light } from "@/lib/data/templates";
 

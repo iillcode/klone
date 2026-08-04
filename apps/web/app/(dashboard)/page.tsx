@@ -1,6 +1,6 @@
 import { listDocuments } from "@/lib/data/documents";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { LandingCards } from "@/components/LandingCards";
+import { LandingCards } from "@/components/landing/LandingCards";
 
 export default async function Home() {
   const documents = await listDocuments();

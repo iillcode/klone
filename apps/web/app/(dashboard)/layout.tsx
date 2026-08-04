@@ -1,7 +1,6 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { TopBar } from '@/components/layout/TopBar';
 
 export default function DashboardLayout({
   children,
@@ -16,7 +15,6 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-background text-foreground">
       <div className={`${marginClass} h-screen transition-all duration-200`}>
           <div className="h-screen flex flex-col overflow-hidden bg-card">
-          <TopBar />
           <main className="flex-1 min-h-0 overflow-y-auto custom-scroll">
             {children}
           </main>
