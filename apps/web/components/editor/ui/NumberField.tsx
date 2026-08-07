@@ -118,7 +118,7 @@ export function NumberField({
 
   return (
     <div
-      className={`flex items-center gap-1.5 bg-[#3a3a3a] rounded-[6px] px-2.5 h-8 min-w-0 ${className}`}
+      className={`flex items-center gap-1.5 bg-[#1e1e1e] rounded-[6px] px-2.5 h-8 min-w-0 ${className}`}
     >
       {prefix && (
         <span className="text-[12px] text-[#9b9b9b] shrink-0 select-none flex items-center">

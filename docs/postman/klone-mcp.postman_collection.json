@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "klone-mcp",
-    "description": "Visual implementation MCP server (Cloudflare Worker).\n\nFlow:\n1. Run \"1. Auth - Get Token\" once (or let the collection auto-refresh it).\n2. Call any tool. Every request auto-attaches the Bearer token via collection pre-request script.\n3. create_visual_implementation saves the id into the {{implementation_id}} variable for get/update/delete requests.\n\nServer: local wrangler dev on port 8789.",
+    "description": "PDF-document MCP server (Cloudflare Worker).\n\nFlow:\n1. Run \"1. Auth - Get Token\" once (or let the collection auto-refresh it).\n2. Call any tool. Every request auto-attaches the Bearer token via collection pre-request script.\n3. Templates: list_pdf_templates -> get_pdf_template returns the blueprint outline to author a document from.\n4. create_document saves the composed HTML under the user's account and captures the id into {{document_id}} for get/update/delete.\n\nServer: local wrangler dev on port 8789.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -11,11 +11,11 @@
     },
     {
       "key": "supabase_url",
-      "value": "https://drwchrxljcokigkecbow.supabase.co"
+      "value": "https://jdzhnwmfbfdocqncwfay.supabase.co"
     },
     {
       "key": "anon_key",
-      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyd2NocnhsamNva2lna2VjYm93Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxOTExMTgsImV4cCI6MjA5ODc2NzExOH0.SGp2SIZeXZLPeAe90vJrL6yzWIrRPidCD1SsmUPhhtE"
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impkemhud21mYmZkb2NxbmN3ZmF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwMDg2NjYsImV4cCI6MjEwMTU4NDY2Nn0.eopsD2QWQiJ7yByczGYf7rZokpl12W4kMw85u-WrkRc"
     },
     {
       "key": "email",
@@ -34,7 +34,7 @@
       "value": "0"
     },
     {
-      "key": "implementation_id",
+      "key": "document_id",
       "value": ""
     }
   ],
@@ -204,17 +204,17 @@
               "raw": "{{mcp_url}}",
               "host": ["{{mcp_url}}"]
             },
-            "description": "Lists all 9 registered tools with their schemas."
+            "description": "Lists all 7 registered tools with their schemas."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "Component Library",
+      "name": "PDF Templates",
       "item": [
         {
-          "name": "4. list_component_categories",
+          "name": "4. list_pdf_templates",
           "request": {
             "method": "POST",
             "header": [
@@ -227,18 +227,18 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 3,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"list_component_categories\",\n    \"arguments\": {}\n  }\n}"
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 3,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"list_pdf_templates\",\n    \"arguments\": {}\n  }\n}"
             },
             "url": {
               "raw": "{{mcp_url}}",
               "host": ["{{mcp_url}}"]
             },
-            "description": "Returns the 10 component categories with component counts."
+            "description": "Lists active PDF templates (metadata only). Try the \"category\" filter (e.g. Reports, Business, Technical) or a \"query\" search."
           },
           "response": []
         },
         {
-          "name": "5. list_components",
+          "name": "5. get_pdf_template",
           "request": {
             "method": "POST",
             "header": [
@@ -251,84 +251,36 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 4,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"list_components\",\n    \"arguments\": {\n      \"query\": \"pricing\",\n      \"limit\": 10\n    }\n  }\n}"
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 4,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"get_pdf_template\",\n    \"arguments\": {\n      \"slug\": \"business-report\"\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{mcp_url}}",
               "host": ["{{mcp_url}}"]
             },
-            "description": "Metadata only. Try changing the \"query\" filter (e.g. \"pricing\", \"nav\", \"form\") or use \"category\" instead."
-          },
-          "response": []
-        },
-        {
-          "name": "6. get_component",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" },
-              { "key": "Content-Type", "value": "application/json" },
-              {
-                "key": "Accept",
-                "value": "application/json, text/event-stream"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 5,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"get_component\",\n    \"arguments\": {\n      \"component_id\": \"hero-center\"\n    }\n  }\n}"
-            },
-            "url": {
-              "raw": "{{mcp_url}}",
-              "host": ["{{mcp_url}}"]
-            },
-            "description": "Full design (HTML code) of one component. Change component_id to: btn-basic, card-basic, badge-status, navbar-simple, hero-center, form-contact, pricing-tiers, testimonial-card, stats-band, footer-simple."
-          },
-          "response": []
-        },
-        {
-          "name": "7. get_component_kit",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" },
-              { "key": "Content-Type", "value": "application/json" },
-              {
-                "key": "Accept",
-                "value": "application/json, text/event-stream"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 6,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"get_component_kit\",\n    \"arguments\": {\n      \"purpose\": \"a landing page with hero, pricing and testimonials\",\n      \"max_components\": 3\n    }\n  }\n}"
-            },
-            "url": {
-              "raw": "{{mcp_url}}",
-              "host": ["{{mcp_url}}"]
-            },
-            "description": "MAIN ENTRY POINT. Auto-matches components to the purpose, returns their designs + assembly instructions. Or pass component_ids explicitly instead of auto-matching."
+            "description": "MAIN ENTRY POINT. Returns the full blueprint outline (page constraints, sections with guidance, requirements). Change slug to: blank, business-report, invoice, api-docs, letter. Or pass template_id instead."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "Visual Implementations (CRUD)",
+      "name": "Documents (CRUD)",
       "item": [
         {
-          "name": "8. create_visual_implementation",
+          "name": "6. create_document",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "// Capture the created implementation id into {{implementation_id}} for get/update/delete.",
+                  "// Capture the created document id into {{document_id}} for get/update/delete.",
                   "try {",
                   "  const r = pm.response.json();",
                   "  const text = r.result.content[0].text;",
-                  "  const impl = JSON.parse(text);",
-                  "  if (impl.implementation && impl.implementation.id) {",
-                  "    pm.collectionVariables.set('implementation_id', impl.implementation.id);",
-                  "    console.log('Saved implementation_id: ' + impl.implementation.id);",
+                  "  const parsed = JSON.parse(text);",
+                  "  if (parsed.data && parsed.data.document && parsed.data.document.id) {",
+                  "    pm.collectionVariables.set('document_id', parsed.data.document.id);",
+                  "    console.log('Saved document_id: ' + parsed.data.document.id);",
                   "  }",
                   "} catch (e) { console.log('Could not parse id: ' + e); }"
                 ],
@@ -348,18 +300,18 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 7,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"create_visual_implementation\",\n    \"arguments\": {\n      \"title\": \"SaaS Landing Page\",\n      \"description\": \"Built from the component kit\",\n      \"html_code\": \"<!DOCTYPE html><html><body><h1>Hello</h1><p>Kit demo</p></body></html>\",\n      \"source_component_ids\": [\"hero-center\", \"pricing-tiers\"],\n      \"prompt_used\": \"a landing page with hero, pricing and testimonials\",\n      \"metadata\": { \"source\": \"postman\" }\n    }\n  }\n}"
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 5,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"create_document\",\n    \"arguments\": {\n      \"title\": \"Q3 Business Report\",\n      \"description\": \"Draft authored from the business-report blueprint\",\n      \"html_code\": \"<!DOCTYPE html><html><head><style>body{font-family:ui-sans-serif,system-ui,sans-serif;max-width:794px;margin:0 auto;padding:2.5rem;color:#111827}h1{font-size:32px}h2{font-size:22px;margin-top:2rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #e5e7eb;padding:8px;text-align:left}th{background:#f9fafb}</style></head><body><h1>Q3 Business Report</h1><h2>Executive summary</h2><p>Revenue grew 18% quarter over quarter driven by enterprise expansion.</p><h2>Key findings</h2><ul><li><strong>Revenue</strong> up 18%</li><li><strong>Churn</strong> down to 2.1%</li></ul><h2>Data table</h2><table><tr><th>Metric</th><th>Q2</th><th>Q3</th></tr><tr><td>MRR</td><td>$120k</td><td>$142k</td></tr><tr><td>Active users</td><td>8,400</td><td>9,900</td></tr></table><h2>Recommendations</h2><ol><li>Double down on enterprise sales motion.</li><li>Ship the self-serve onboarding flow.</li></ol></body></html>\",\n      \"template_slug\": \"business-report\",\n      \"prompt_used\": \"a Q3 business report with executive summary, findings, a data table and recommendations\",\n      \"metadata\": { \"source\": \"postman\" }\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{mcp_url}}",
               "host": ["{{mcp_url}}"]
             },
-            "description": "Saves a design under your account (user_id from the JWT). Captures the new id into {{implementation_id}}."
+            "description": "Saves a composed HTML document under your account (user_id from the JWT), with template provenance. Captures the new id into {{document_id}}."
           },
           "response": []
         },
         {
-          "name": "9. list_visual_implementations",
+          "name": "7. list_documents",
           "request": {
             "method": "POST",
             "header": [
@@ -372,18 +324,18 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 8,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"list_visual_implementations\",\n    \"arguments\": {}\n  }\n}"
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 6,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"list_documents\",\n    \"arguments\": {}\n  }\n}"
             },
             "url": {
               "raw": "{{mcp_url}}",
               "host": ["{{mcp_url}}"]
             },
-            "description": "Lists your saved implementations, newest first."
+            "description": "Lists your documents, most recently updated first."
           },
           "response": []
         },
         {
-          "name": "10. get_visual_implementation",
+          "name": "8. get_document",
           "request": {
             "method": "POST",
             "header": [
@@ -396,18 +348,18 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 9,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"get_visual_implementation\",\n    \"arguments\": {\n      \"id\": \"{{implementation_id}}\"\n    }\n  }\n}"
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 7,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"get_document\",\n    \"arguments\": {\n      \"id\": \"{{document_id}}\"\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{mcp_url}}",
               "host": ["{{mcp_url}}"]
             },
-            "description": "Fetch one implementation by id. Uses the {{implementation_id}} captured by the create request."
+            "description": "Fetch one document by id. Uses the {{document_id}} captured by the create request."
           },
           "response": []
         },
         {
-          "name": "11. update_visual_implementation",
+          "name": "9. update_document",
           "request": {
             "method": "POST",
             "header": [
@@ -420,18 +372,18 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 10,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"update_visual_implementation\",\n    \"arguments\": {\n      \"id\": \"{{implementation_id}}\",\n      \"title\": \"SaaS Landing Page v2\",\n      \"metadata\": { \"tone\": \"professional\" }\n    }\n  }\n}"
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 8,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"update_document\",\n    \"arguments\": {\n      \"id\": \"{{document_id}}\",\n      \"title\": \"Q3 Business Report v2\",\n      \"metadata\": { \"tone\": \"professional\" }\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{mcp_url}}",
               "host": ["{{mcp_url}}"]
             },
-            "description": "Updates only the provided fields (title, description, html_code, css_code, source_component_ids, prompt_used, metadata)."
+            "description": "Updates only the provided fields (title, description, html_code, css_code, template_id, template_slug, prompt_used, metadata)."
           },
           "response": []
         },
         {
-          "name": "12. delete_visual_implementation",
+          "name": "10. delete_document",
           "request": {
             "method": "POST",
             "header": [
@@ -444,13 +396,13 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 11,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"delete_visual_implementation\",\n    \"arguments\": {\n      \"id\": \"{{implementation_id}}\"\n    }\n  }\n}"
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 9,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"delete_document\",\n    \"arguments\": {\n      \"id\": \"{{document_id}}\"\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{mcp_url}}",
               "host": ["{{mcp_url}}"]
             },
-            "description": "Deletes the implementation owned by you."
+            "description": "Deletes the document owned by you."
           },
           "response": []
         }

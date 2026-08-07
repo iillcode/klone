@@ -7,7 +7,7 @@ export function getEditorScript(): string {
   // will show an older version. Hard-refresh the page to reload it.
   if(window.__kloneEditorInjected)return; // never double-bind listeners
   window.__kloneEditorInjected=true;
-  console.log('[editor] script v19');
+  console.log('[editor] script v23');
 var selectedEls=[];
 var hoveredEl=null;
 var isDragging=false;
@@ -55,6 +55,106 @@ var lastGuidesKey=null;
 var dragDirX=0;
 var dragDirY=0;
 var nudgeGuideTimer=null;
+var splitMode=false;
+
+function getPageBreakEls(){
+  var list=document.querySelectorAll('[data-klone-page-break]');
+  var result=[];
+  for(var i=0;i<list.length;i++)result.push(list[i]);
+  return result;
+}
+
+function hasPageBreak(el){
+  return !!(el&&el.getAttribute&&el.getAttribute('data-klone-page-break')!==null);
+}
+
+var lastReportedPageBreakCount=-1;
+function reportPageBreak(changed){
+  var count=getPageBreakEls().length;
+  if(count===lastReportedPageBreakCount&&!changed)return; // nothing new to report
+  lastReportedPageBreakCount=count;
+  window.parent.postMessage({
+    type:'page-break-updated',
+    hasPageBreak:count>0,
+    count:count,
+    changed:!!changed
+  },'*');
+}
+
+function createPageBreakMarker(){
+  var marker=document.createElement('div');
+  marker.setAttribute('data-editor-ui','page-break-marker');
+  marker.style.cssText='position:fixed;left:0;height:0;border-top:2px dashed #18a0fb;pointer-events:none;z-index:99997;display:none;';
+  var label=document.createElement('span');
+  label.textContent='PDF page starts here';
+  label.style.cssText='position:absolute;top:-21px;left:12px;padding:3px 7px;border-radius:4px;background:#18a0fb;color:#fff;font:600 10px/1.2 Arial,sans-serif;letter-spacing:.01em;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.28);';
+  marker.appendChild(label);
+  document.body.appendChild(marker);
+  return marker;
+}
+
+function updatePageBreakMarkers(){
+  // Rebuild every marker from the live marked elements so deletes/undo can
+  // never leave a stale overlay behind.
+  var old=document.querySelectorAll('[data-editor-ui="page-break-marker"]');
+  for(var i=0;i<old.length;i++)old[i].remove();
+  // In preview mode (inspect/split off) the split lines are hidden - they
+  // only make sense while the user is inspecting or splitting the document.
+  if(!(inspectEnabled||splitMode))return;
+  var els=getPageBreakEls();
+  for(var j=0;j<els.length;j++){
+    var el=els[j];
+    if(!el||!el.isConnected)continue;
+    var marker=createPageBreakMarker();
+    var r=el.getBoundingClientRect();
+    marker.style.display='block';
+    // Show the line below/under the element (at its bottom edge) rather than
+    // above it, so the break reads as "next page starts under this element".
+    marker.style.top=Math.round(r.bottom)+'px';
+    marker.style.width=Math.max(document.documentElement.clientWidth,document.body.clientWidth)+'px';
+  }
+}
+
+// Toggle a split on one element (adds when absent, removes when present).
+// Multiple splitters are supported - each marked element starts a new page.
+function togglePageBreak(el,record){
+  if(!el||!isClickable(el)||isContainer(el))return;
+  var adding=!hasPageBreak(el);
+  if(record){
+    batchId++;
+    undoStack.push({property:'__page_break__',element:el,adding:adding,batchId:batchId});
+    redoStack=[];
+  }
+  if(adding)el.setAttribute('data-klone-page-break','');
+  else el.removeAttribute('data-klone-page-break');
+  updatePageBreakMarkers();
+  reportPageBreak(!!record);
+}
+
+// Remove EVERY marked split (used by the "remove all breaks" action).
+function clearPageBreaks(record){
+  var els=getPageBreakEls();
+  if(els.length===0)return;
+  if(record){
+    batchId++;
+    for(var i=0;i<els.length;i++){
+      undoStack.push({property:'__page_break__',element:els[i],adding:false,batchId:batchId});
+    }
+    redoStack=[];
+  }
+  for(var j=0;j<els.length;j++)els[j].removeAttribute('data-klone-page-break');
+  updatePageBreakMarkers();
+  reportPageBreak(!!record);
+}
+
+function setSplitMode(enabled){
+  splitMode=!!enabled;
+  clearHover();
+  document.body.style.cursor=splitMode?'crosshair':'';
+  window.parent.postMessage({type:'split-mode-changed',enabled:splitMode},'*');
+  // Splitting shows the markers; turning it off hides them again in preview.
+  updatePageBreakMarkers();
+}
 
 function deselect(){
   for(var i=0;i<selectedEls.length;i++){
@@ -88,6 +188,20 @@ function addToSelection(el){
   }
 }
 
+// The SYSTEM FRAME: a template's .scroll-wrapper page container and the
+// editor-created .klone-frame wrapper around it. The frame belongs to the
+// system — it defines the page width/centering/scrolling — so it is STICKY:
+// never selectable, hoverable, draggable, resizable or deletable.
+function isSystemFrame(el){
+  if(!el||!el.tagName)return false;
+  if(el.getAttribute&&el.getAttribute('data-klone-system-frame')!==null)return true;
+  if(el.classList){
+    if(el.classList.contains('scroll-wrapper'))return true;
+    if(el.classList.contains('klone-frame'))return true;
+  }
+  return false;
+}
+
 function isClickable(el){
   if(!el||!el.tagName)return false;
   var tag=el.tagName.toLowerCase();
@@ -95,6 +209,8 @@ function isClickable(el){
   if(tag==='html'||tag==='head'||tag==='body'||tag==='script')return false;
   if(tag==='style'||tag==='meta'||tag==='link'||tag==='title'||tag==='base'||tag==='noscript'||tag==='template')return false;
   if(el.getAttribute&&el.getAttribute('data-editor-ui'))return false;
+  // The system frame is sticky - it can never be selected.
+  if(isSystemFrame(el))return false;
   return true;
 }
 
@@ -155,6 +271,14 @@ function performUndo(){
       }else if(entry.parentNode){
         entry.parentNode.appendChild(entry.element);
       }
+    }else if(entry.property==='__page_break__'){
+      // Reverse the toggle: an added split is removed, a removed one is
+      // restored.
+      redoStack.push({property:'__page_break__',element:entry.element,adding:!entry.adding,batchId:lastBatch});
+      if(entry.adding)entry.element.removeAttribute('data-klone-page-break');
+      else entry.element.setAttribute('data-klone-page-break','');
+      updatePageBreakMarkers();
+      reportPageBreak(true);
     }else if(entry.property==='__text__'){
       var cur=entry.element.innerHTML;
       redoStack.push({element:entry.element,property:'__text__',oldValue:cur,batchId:lastBatch});
@@ -165,9 +289,13 @@ function performUndo(){
       entry.element.style[entry.property]=entry.oldValue;
     }
   }
+  // Page-break markers must mirror the live DOM after any undo (a deleted
+  // marked element being restored, a break toggled back, etc.).
+  updatePageBreakMarkers();
+  reportPageBreak(false);
   if(entries.length>0&&entries[0].property==='__text__'){
     window.parent.postMessage({type:'style-updated',property:'textContent',value:entries[0].element.textContent},'*');
-  }else if(entries.length>0&&entries[0].property!=='__delete__'){
+  }else if(entries.length>0&&entries[0].property!=='__delete__'&&entries[0].property!=='__page_break__'){
     var s2=getComputedStyle(entries[0].element);
     window.parent.postMessage({type:'style-updated',property:entries[0].property,value:formatStyleValue(entries[0].property,s2[entries[0].property])},'*');
   }
@@ -184,7 +312,13 @@ function performRedo(){
   }
   for(var i=0;i<entries.length;i++){
     var entry=entries[i];
-    if(entry.property==='__text__'){
+    if(entry.property==='__page_break__'){
+      undoStack.push({property:'__page_break__',element:entry.element,adding:!entry.adding,batchId:lastBatch});
+      if(entry.adding)entry.element.setAttribute('data-klone-page-break','');
+      else entry.element.removeAttribute('data-klone-page-break');
+      updatePageBreakMarkers();
+      reportPageBreak(true);
+    }else if(entry.property==='__text__'){
       var cur=entry.element.innerHTML;
       undoStack.push({element:entry.element,property:'__text__',oldValue:cur,batchId:lastBatch});
       entry.element.innerHTML=entry.oldValue;
@@ -194,9 +328,12 @@ function performRedo(){
       entry.element.style[entry.property]=entry.oldValue;
     }
   }
+  // Page-break markers must mirror the live DOM after any redo.
+  updatePageBreakMarkers();
+  reportPageBreak(false);
   if(entries[0].property==='__text__'){
     window.parent.postMessage({type:'style-updated',property:'textContent',value:entries[0].element.textContent},'*');
-  }else{
+  }else if(entries[0].property!=='__page_break__'){
     var s3=getComputedStyle(entries[0].element);
     window.parent.postMessage({type:'style-updated',property:entries[0].property,value:formatStyleValue(entries[0].property,s3[entries[0].property])},'*');
   }
@@ -253,6 +390,10 @@ function deleteSelected(){
   }
   selectedEls=[];
   window.parent.postMessage({type:'selection-cleared'},'*');
+  // Deleting a marked element must clear its split marker and resync the
+  // parent (deduped: only reports when the break count actually changed).
+  updatePageBreakMarkers();
+  reportPageBreak(false);
 }
 
 function getTranslate(el){
@@ -312,8 +453,41 @@ function isContainer(el){
   if(!el||!el.tagName)return false;
   var tag=el.tagName.toLowerCase();
   if(tag==='html'||tag==='head'||tag==='body')return true;
-  if(el.classList&&el.classList.contains('scroll-wrapper'))return true;
-  return false;
+  // The template's system frame (and its editor wrapper) is a locked
+  // container too - it can never be moved, resized or styled.
+  return isSystemFrame(el);
+}
+
+// Template documents are wrapped in a .scroll-wrapper page frame. That frame
+// is part of the SYSTEM, so it must never be dragged around the canvas. To
+// make it sticky we wrap it in a dedicated outer .klone-frame div (same width
+// as the frame, centered, full height) that the editor treats as a locked
+// container - the inner .scroll-wrapper keeps its authored layout, width and
+// internal scrolling exactly as before. User-authored HTML (no
+// .scroll-wrapper) is left completely untouched.
+function ensureSystemFrame(){
+  var wrap=document.querySelector('.scroll-wrapper');
+  if(!wrap)return; // not a template document - no system frame to protect
+  var parent=wrap.parentNode;
+  if(!parent)return;
+  // Already wrapped by a previous run (reloaded documents stay idempotent).
+  if(parent.nodeType===1&&parent.classList&&parent.classList.contains('klone-frame'))return;
+  var cs=getComputedStyle(wrap);
+  var w=parseFloat(cs.width);
+  var frame=document.createElement('div');
+  frame.className='klone-frame';
+  frame.setAttribute('data-klone-system-frame','');
+  // Same width as the template frame; centered and full height so the inner
+  // scroller's height:100% keeps scrolling exactly as authored.
+  frame.style.cssText='width:'+(isFinite(w)&&w>0?w+'px':'100%')+';max-width:100%;height:100%;margin:0 auto;overflow:hidden;';
+  parent.insertBefore(frame,wrap);
+  frame.appendChild(wrap);
+  // The sticky frame sits at its authored position - clear any leftover
+  // transform from documents that were dragged before this feature existed
+  // (otherwise the offset would clip content against the frame's
+  // overflow:hidden).
+  wrap.style.transform='';
+  frame.style.transform='';
 }
 
 // True when applying a width-related style to any selected element would
@@ -655,7 +829,7 @@ function updateSelectionBox(){
 }
 
 document.addEventListener('mouseover',function(e){
-  if(!inspectEnabled||isDragging)return;
+  if((!inspectEnabled&&!splitMode)||isDragging)return;
   var el=e.target;
   if(!el||!el.tagName)return;
   if(el.getAttribute&&el.getAttribute('data-editor-ui'))return;
@@ -666,7 +840,7 @@ document.addEventListener('mouseover',function(e){
 });
 
 document.addEventListener('mouseout',function(e){
-  if(!inspectEnabled||isDragging)return;
+  if((!inspectEnabled&&!splitMode)||isDragging)return;
   var el=e.target;
   if(!el)return;
   if(hoveredEl===el){
@@ -675,6 +849,21 @@ document.addEventListener('mouseout',function(e){
 });
 
 document.addEventListener('click',function(e){
+  if(splitMode){
+    e.preventDefault();
+    e.stopPropagation();
+    var splitTarget=e.target;
+    if(isClickable(splitTarget)&&!isContainer(splitTarget)){
+      // Toggle a split on the clicked element. Split mode STAYS ON so the
+      // user can add several splitters in one pass; click an already-marked
+      // element again to remove that split.
+      togglePageBreak(splitTarget,true);
+    }else{
+      // Clicked the canvas/container background - done splitting.
+      setSplitMode(false);
+    }
+    return;
+  }
   if(!inspectEnabled||isDragging)return;
   if(justDragged){justDragged=false;return;}
   e.stopPropagation();
@@ -765,6 +954,10 @@ document.addEventListener('dblclick',function(e){
 });
 
 document.addEventListener('mousedown',function(e){
+  if(splitMode){
+    e.preventDefault();
+    return;
+  }
   if(!inspectEnabled)return;
   if(e.button!==0)return;
   hideGuides();
@@ -1096,17 +1289,33 @@ document.addEventListener('keydown',function(e){
 // Never let the browser start its own text selection or HTML5 drag while
 // inspect mode is active - the editor owns all dragging.
 document.addEventListener('selectstart',function(e){
-  if(inspectEnabled)e.preventDefault();
+  if(inspectEnabled||splitMode)e.preventDefault();
 });
 document.addEventListener('dragstart',function(e){
-  if(inspectEnabled)e.preventDefault();
+  if(inspectEnabled||splitMode)e.preventDefault();
 });
 
 createSelectionBox();
 createMarquee();
 createGuidesLayer();
-window.addEventListener('resize',function(){updateSelectionBox();});
-window.addEventListener('scroll',function(){updateSelectionBox();},true);
+// Make the template's page frame sticky (wrap it in the system frame)
+// BEFORE any selection/marker logic runs.
+ensureSystemFrame();
+updatePageBreakMarkers();
+reportPageBreak(false);
+
+// ── Preview canvas colour ──
+// Always keep Klone's canvas colour on the preview <body> so a document's
+// own body background (e.g. a light email template) can never be inherited
+// into the editor preview. The document's OWN background is captured first
+// (and stored on the element) so PDF export can restore it.
+if(document.body){
+  var __kloneComputedBg=getComputedStyle(document.body).backgroundColor;
+  document.body.__kloneAuthoredBg=(__kloneComputedBg&&__kloneComputedBg!=='transparent'&&__kloneComputedBg!=='rgba(0, 0, 0, 0)')?__kloneComputedBg:'';
+  document.body.style.setProperty('background-color','#161617','important');
+}
+window.addEventListener('resize',function(){updateSelectionBox();updatePageBreakMarkers();});
+window.addEventListener('scroll',function(){updateSelectionBox();updatePageBreakMarkers();},true);
 
 window.addEventListener('message',function(e){
   var data=e.data;
@@ -1114,6 +1323,10 @@ window.addEventListener('message',function(e){
 
   if(data.type==='apply-style'){
     if(selectedEls.length===0)return;
+    // The system frame is STICKY - never apply any style to it.
+    for(var sci=0;sci<selectedEls.length;sci++){
+      if(isContainer(selectedEls[sci]))return;
+    }
     // The container's width is locked - ignore width edits on it.
     if(isWidthLocked(data.property))return;
     // The native color picker fires onChange continuously while dragging
@@ -1159,6 +1372,14 @@ window.addEventListener('message',function(e){
     deleteSelected();
   }
 
+  if(data.type==='set-split-mode'){
+    setSplitMode(data.enabled);
+  }
+
+  if(data.type==='clear-split'){
+    clearPageBreaks(true);
+  }
+
   if(data.type==='set-text'){
     if(!pendingEditEl||data.reqId!==editReqId)return;
     var el=pendingEditEl;
@@ -1189,6 +1410,10 @@ window.addEventListener('message',function(e){
 
   if(data.type==='move-by'){
     if(selectedEls.length===0)return;
+    // The system frame is sticky - never nudge it with the arrow keys.
+    for(var mbi=0;mbi<selectedEls.length;mbi++){
+      if(isContainer(selectedEls[mbi]))return;
+    }
     var mdx=Number(data.dx)||0;
     var mdy=Number(data.dy)||0;
     batchId++;
@@ -1246,6 +1471,8 @@ window.addEventListener('message',function(e){
       deselect();
       window.parent.postMessage({type:'selection-cleared'},'*');
     }
+    // Show/hide the PDF split lines with inspect mode (hidden in preview).
+    updatePageBreakMarkers();
   }
 });
 

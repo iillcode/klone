@@ -128,8 +128,8 @@ export function SelectField({
   return (
     <>
       <div
-        className={`relative h-8 bg-[#3a3a3a] rounded-[6px] transition-colors hover:bg-[#454545] ${
-          open ? "bg-[#454545]" : ""
+        className={`relative h-8 bg-[#1e1e1e] rounded-[6px] transition-colors hover:bg-[#202020] ${
+          open ? "bg-[#202020]" : ""
         } ${grow ? "flex-1 min-w-0" : "shrink-0"} ${className}`}
       >
         <button
@@ -166,7 +166,7 @@ export function SelectField({
               minWidth: pos.width,
               zIndex: 9999,
             }}
-            className="py-1 bg-[#262626] border border-[#3f3f46] rounded-[6px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+            className="py-1 bg-[#1a1a1a] border border-[#3f3f46] rounded-[6px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
           >
             {options.map((o, i) => {
               const selected = o.value === value;
@@ -182,7 +182,7 @@ export function SelectField({
                   style={fontPreview ? { fontFamily: o.value } : undefined}
                   className={`w-full flex items-center gap-1.5 pl-2 pr-2.5 h-8 text-[13px] text-left truncate transition-colors ${
                     active
-                      ? "bg-[#454545] text-white"
+                      ? "bg-[#202020] text-white"
                       : selected
                         ? "text-white"
                         : "text-[#eaeaea]"

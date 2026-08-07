@@ -1,86 +1,191 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Document } from '@/lib/types';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
+import type { Document } from '@/lib/types';
+import type { UserProfile } from '@/lib/data/users';
+import { TEMPLATE_META } from '@/lib/data/template-meta';
+import { createDocumentFromTemplate } from '@/app/actions/documents';
+import { SettingsModal } from '@/components/settings/SettingsModal';
+import {
+  ChevronRight,
+  Clock,
+  FileText,
+  Library,
+  Loader2,
+  Rocket,
+  Search,
+  Settings,
+  Zap,
+} from 'lucide-react';
+
+const itemClass =
+  'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px] font-medium text-[#a1a1aa] transition-colors hover:bg-[#1c1c1c] hover:text-[#e4e4e7] disabled:cursor-wait disabled:opacity-60';
 
 interface SidebarProps {
   documents: Document[];
-  overlay?: boolean;
+  query: string;
+  onQueryChange: (q: string) => void;
+  profile: UserProfile | null;
 }
 
-export function Sidebar({ documents, overlay }: SidebarProps) {
+/**
+ * Left sidebar (280px) matching the reference dashboard shell: header with
+ * back + title, a search box, primary nav, "start from a template" shortcuts,
+ * a Klone MCP promo card, and an account button that opens the settings modal.
+ */
+export function Sidebar({ documents, query, onQueryChange, profile }: SidebarProps) {
   const router = useRouter();
-  const [sidebarHover, setSidebarHover] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [, startTransition] = useTransition();
+  const [creating, setCreating] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const sidebarContent = (
-    <div className="flex flex-col h-full">
-      <div className="p-5">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-md bg-[#22c55e] flex items-center justify-center">
-            <span className="text-black font-bold text-sm">K</span>
-          </div>
-          <span className="text-base font-semibold text-sidebar-foreground">Klone</span>
-        </div>
-      </div>
+  const scrollTo = (id: string) => {
+    onQueryChange('');
+    requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+    });
+  };
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 scrollbar-none">
-        <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Documents
-        </div>
-        {documents.length === 0 ? (
-          <p className="px-3 py-2 text-sm text-muted-foreground">
-            No documents yet. Pick a template to create one.
-          </p>
-        ) : (
-          <div className="space-y-1">
-            {documents.map((doc) => (
-              <button
-                key={doc.id}
-                onClick={() => router.push(`/preview/${doc.id}`)}
-                className="w-full text-left px-3 py-2 rounded-md text-sm transition-colors text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              >
-                <div className="font-medium truncate text-sidebar-foreground">
-                  {doc.title}
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5 truncate">
-                  Updated {new Date(doc.updated_at).toLocaleDateString()}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+  const handleCreate = (slug: string) => {
+    setCreating(slug);
+    startTransition(async () => {
+      const result = await createDocumentFromTemplate(slug);
+      setCreating(null);
+      if ('id' in result) {
+        router.push(`/preview/${result.id}`);
+      }
+    });
+  };
 
-      <div className="px-3 pb-3">
-        <ThemeToggle />
-      </div>
-    </div>
-  );
+  // Press "/" anywhere to focus the document search — unless the user has
+  // turned off "Show keyboard hints" in Settings (persisted in localStorage).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (
+        e.key === '/' &&
+        !(e.target instanceof HTMLInputElement) &&
+        !(e.target instanceof HTMLTextAreaElement)
+      ) {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    let hints = true;
+    try {
+      hints = JSON.parse(localStorage.getItem('klone:setting:keyboard-hints') ?? 'true') !== false;
+    } catch {
+      // default to on
+    }
+    if (!hints) return;
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
-  if (overlay) {
-    return (
-      <div className="fixed left-0 top-0 h-screen z-30 pointer-events-none">
-        <div
-          className="absolute left-0 top-0 w-2 h-full z-40 pointer-events-auto"
-          onMouseEnter={() => setSidebarHover(true)}
-        />
-        <div
-          className={`w-[280px] pointer-events-auto h-screen bg-sidebar border-r border-sidebar-border transition-transform duration-200 ease-in-out ${
-            sidebarHover ? 'translate-x-0' : '-translate-x-full'
-          }`}
-          onMouseLeave={() => setSidebarHover(false)}
-        >
-          {sidebarContent}
-        </div>
-      </div>
-    );
-  }
+  const displayName = profile?.full_name || profile?.email?.split('@')[0] || 'Account';
+  const initials = displayName
+    .split(/\s+/)
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   return (
-    <div className="fixed top-0 left-0 w-[280px] h-screen flex flex-col z-20 bg-sidebar border-r border-sidebar-border">
-      {sidebarContent}
-    </div>
+    <aside className="flex h-full w-60 flex-none flex-col border-r border-[#2d2d2d] bg-[#161617]">
+      {/* Search */}
+      <label className="mx-3 mt-3 mb-2.5 flex h-9 flex-none cursor-text items-center gap-2 rounded-lg border border-[#262626] bg-[#1e1e1e] px-3 text-[#a1a1aa]">
+        <Search className="h-[15px] w-[15px]" />
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Search documents"
+          className="min-w-0 flex-1 bg-transparent text-[13px] text-[#e4e4e7] outline-none placeholder:text-[#a1a1aa]"
+        />
+        <kbd className="font-sans text-xs text-[#a1a1aa]">/</kbd>
+      </label>
+
+      {/* Nav */}
+      <nav className="flex-1 min-h-0 overflow-y-auto px-2 pb-2.5 [scrollbar-color:#3f3f46_#161617] [scrollbar-width:thin]">
+        <button className={itemClass} onClick={() => scrollTo('documents-section')}>
+          <Rocket className="h-4 w-4 text-[#a1a1aa]" />
+          Featured
+          <span className="ml-auto text-xs text-[#a1a1aa]">{documents.length}</span>
+        </button>
+        <button className={itemClass} onClick={() => scrollTo('documents-section')}>
+          <Clock className="h-4 w-4 text-[#a1a1aa]" />
+          Newest
+        </button>
+        <button className={itemClass} onClick={() => scrollTo('templates-section')}>
+          <Library className="h-4 w-4 text-[#a1a1aa]" />
+          Templates
+          <span className="ml-auto text-xs text-[#a1a1aa]">{TEMPLATE_META.length}</span>
+        </button>
+
+        <p className="px-2.5 pb-1.5 pt-3 text-[12.5px] text-[#8f8f8f]">Start from a template</p>
+        {TEMPLATE_META.map((t) => (
+          <button
+            key={t.id}
+            className={itemClass}
+            onClick={() => handleCreate(t.id)}
+            disabled={creating !== null}
+          >
+            <FileText className="h-4 w-4 text-[#a1a1aa]" />
+            {t.name}
+            <span className="ml-auto flex-none">
+              {creating === t.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#a1a1aa]" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 text-[#a1a1aa]" />
+              )}
+            </span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Klone MCP promo */}
+      <div className="mx-3 mb-3 flex-none rounded-xl border border-[#262626] bg-[#1a1a1a] p-3.5">
+        <div className="flex items-center justify-between text-[13px] font-bold text-[#e4e4e7]">
+          Klone MCP
+          <Zap className="h-4 w-4 text-[#22c55e]" />
+        </div>
+        <p className="mt-1.5 text-xs leading-5 text-[#a1a1aa]">
+          Connect any coding agent — Claude, Cursor — to author polished PDFs for you.
+        </p>
+        <button
+          onClick={() => handleCreate('blank')}
+          disabled={creating !== null}
+          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] text-[13px] font-semibold text-[#e4e4e7] transition-colors hover:border-[#3d3d3d] hover:bg-[#202020] disabled:cursor-wait disabled:opacity-60"
+        >
+          Get started
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Account */}
+      <button
+        onClick={() => setSettingsOpen(true)}
+        className="mx-3 mb-3 flex flex-none items-center gap-2.5 rounded-xl border border-[#262626] bg-[#1a1a1a] p-2.5 text-left transition-colors hover:border-[#3d3d3d] hover:bg-[#202020]"
+      >
+        <span className="grid h-8 w-8 flex-none place-items-center rounded-full bg-[#16245a] text-[11px] font-bold text-[#8fb3ff]">
+          {initials}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-semibold text-[#e4e4e7]">{displayName}</span>
+          <span className="block truncate text-[11.5px] text-[#a1a1aa]">
+            {profile?.plan === 'pro' ? 'Pro plan' : 'Hobby plan'}
+          </span>
+        </span>
+        <Settings className="h-4 w-4 flex-none text-[#a1a1aa]" />
+      </button>
+
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        profile={profile}
+        documentCount={documents.length}
+      />
+    </aside>
   );
 }

@@ -78,8 +78,8 @@ function LayerRow({
             if (hasChildren) setExpanded(!expanded);
           }
         }}
-        className={`flex items-center w-full h-[26px] text-[11px] hover:bg-[#27272a] transition-colors group cursor-pointer ${
-          isSelected ? "bg-[#2d2d30] text-white" : "text-[#a1a1aa]"
+        className={`flex items-center w-full h-[26px] text-[11px] hover:bg-[#1c1c1c] transition-colors group cursor-pointer ${
+          isSelected ? "bg-[#202020] text-white" : "text-[#a1a1aa]"
         }`}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
       >
@@ -180,7 +180,7 @@ export function FigmaLayersSidebar({
   };
 
   return (
-    <div className="w-60 shrink-0 h-full flex flex-col bg-[#1e1e1e] border-r border-[#2d2d2d] select-none overflow-hidden">
+    <div className="w-60 shrink-0 h-full flex flex-col bg-[#161617] border-r border-[#2d2d2d] select-none overflow-hidden">
       {/* ── Layers section ── */}
       <div className="flex-1 flex flex-col min-h-0">
         <div className="shrink-0 flex items-center justify-between w-full px-3 h-8 text-[11px] font-semibold text-[#a1a1aa]">
@@ -201,7 +201,7 @@ export function FigmaLayersSidebar({
             )}
             <span>Layers</span>
           </div>
-          <button className="w-5 h-5 flex items-center justify-center rounded hover:bg-[#3f3f46] text-[#71717a] hover:text-[#a1a1aa]">
+          <button className="w-5 h-5 flex items-center justify-center rounded hover:bg-[#202020] text-[#71717a] hover:text-[#a1a1aa]">
             <FilterIcon className="w-3 h-3" />
           </button>
         </div>
@@ -210,7 +210,7 @@ export function FigmaLayersSidebar({
           <div className="flex-1 overflow-y-auto custom-scroll">
             {/* Search bar */}
             <div className="px-2 pb-1.5">
-              <div className="flex items-center h-7 px-2 rounded bg-[#2d2d30] border border-[#3f3f46] focus-within:border-[#52525b] transition-colors">
+              <div className="flex items-center h-7 px-2 rounded bg-[#1e1e1e] border border-[#3f3f46] focus-within:border-[#52525b] transition-colors">
                 <SearchIcon className="w-3 h-3 text-[#71717a] shrink-0" />
                 <input
                   type="text"

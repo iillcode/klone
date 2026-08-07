@@ -11,8 +11,8 @@
     "ai": "./src/stub.ts"
   },
   "vars": {
-    "SUPABASE_URL": "https://drwchrxljcokigkecbow.supabase.co",
-    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyd2NocnhsamNva2lna2VjYm93Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxOTExMTgsImV4cCI6MjA5ODc2NzExOH0.SGp2SIZeXZLPeAe90vJrL6yzWIrRPidCD1SsmUPhhtE",
-    "SUPABASE_JWKS_URL": "https://drwchrxljcokigkecbow.supabase.co/auth/v1/.well-known/jwks.json"
+    "SUPABASE_URL": "https://jdzhnwmfbfdocqncwfay.supabase.co",
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impkemhud21mYmZkb2NxbmN3ZmF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwMDg2NjYsImV4cCI6MjEwMTU4NDY2Nn0.eopsD2QWQiJ7yByczGYf7rZokpl12W4kMw85u-WrkRc",
+    "SUPABASE_JWKS_URL": "https://jdzhnwmfbfdocqncwfay.supabase.co/auth/v1/.well-known/jwks.json"
   }
 }

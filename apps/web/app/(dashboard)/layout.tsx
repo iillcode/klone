@@ -1,25 +1,14 @@
-'use client';
-
-import { usePathname } from 'next/navigation';
-
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-  const isPreview = pathname.startsWith('/preview/');
-  const marginClass = isPreview ? 'ml-0' : 'ml-[280px]';
-
+  // The dashboard home page renders its own full shell (top bar + sidebar +
+  // scrollable content). The preview editor is a full-screen editor, so it
+  // just fills this overflow-hidden viewport.
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className={`${marginClass} h-screen transition-all duration-200`}>
-          <div className="h-screen flex flex-col overflow-hidden bg-card">
-          <main className="flex-1 min-h-0 overflow-y-auto custom-scroll">
-            {children}
-          </main>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#161617] text-[#e4e4e7]">
+      <div className="h-screen overflow-hidden">{children}</div>
     </div>
   );
 }

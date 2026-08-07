@@ -15,8 +15,45 @@ import { buildHtml, dark, light } from "@/lib/data/templates";
 /* Colors/dark/light/buildHtml live in lib/data/templates.ts (shared with the
    template library + document creation). */
 
+/** Thin, arrow-less scrollbar injected into the preview document so the
+ *  content scroller (.scroll-wrapper) stays very narrow and the up/down
+ *  scroll buttons never appear — regardless of a template's own scrollbar
+ *  CSS. Templates set the STANDARD scrollbar-width/scrollbar-color, which in
+ *  Chromium DISABLES the WebKit pseudo-elements, so those are forced back to
+ *  `auto` and the scrollbar is styled exclusively via `::-webkit-scrollbar`
+ *  for full control of the width and to hide the buttons. */
+const PREVIEW_SCROLLBAR_STYLE = `<style>
+.scroll-wrapper{scrollbar-width:auto !important;scrollbar-color:auto !important;}
+.scroll-wrapper::-webkit-scrollbar{width:1px !important;height:4px !important;}
+.scroll-wrapper::-webkit-scrollbar-track{background:transparent !important;}
+.scroll-wrapper::-webkit-scrollbar-button{display:none !important;width:0 !important;height:0 !important;}
+.scroll-wrapper::-webkit-scrollbar-corner{background:transparent !important;}
+.scroll-wrapper::-webkit-scrollbar-thumb{background-color:rgba(47, 47, 50, 0.6) !important;border-radius:99px !important;}
+.scroll-wrapper::-webkit-scrollbar-thumb:hover{background-color:rgba(113,113,122,0.85) !important;}
+</style>`;
+
 function injectEditorScript(html: string): string {
-  return html.replace("</body>", getEditorScript() + "</body>");
+  return html.replace(
+    "</body>",
+    PREVIEW_SCROLLBAR_STYLE + getEditorScript() + "</body>",
+  );
+}
+
+/** True when `el` is the very first content element of the document (no
+ *  visible content above it). A page break there would only produce a blank
+ *  first page, so it is skipped during PDF export. */
+function isFirstElementInBody(el: Element): boolean {
+  let node: Element | null = el;
+  while (node) {
+    const parent: HTMLElement | null = node.parentElement;
+    if (!parent) return false;
+    const isFirstChild = parent.children[0] === node;
+    const tag = parent.tagName.toLowerCase();
+    if (tag === "html" || tag === "body") return isFirstChild;
+    if (!isFirstChild) return false;
+    node = parent;
+  }
+  return false;
 }
 
 export interface ElementInfo {
@@ -35,6 +72,8 @@ export interface HtmlPreviewHandle {
   cancelTextEdit: () => void;
   getFullHtml: () => Promise<string | null>;
   exportPdf: () => Promise<void>;
+  /** Remove every marked page-break element. */
+  clearPageBreak: () => void;
 }
 
 interface TextEditState {
@@ -48,9 +87,16 @@ interface TextEditState {
 interface HtmlPreviewProps {
   html?: string;
   inspectMode?: boolean;
+  splitMode?: boolean;
   onElementSelect?: (elements: ElementInfo[] | null) => void;
   onStyleUpdated?: (property: string, value: string) => void;
   onEditModeChange?: (editing: boolean) => void;
+  onPageBreakChange?: (
+    hasPageBreak: boolean,
+    changed: boolean,
+    count?: number,
+  ) => void;
+  onSplitModeChange?: (enabled: boolean) => void;
 }
 
 export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
@@ -58,9 +104,12 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
     {
       html,
       inspectMode = false,
+      splitMode = false,
       onElementSelect,
       onStyleUpdated,
       onEditModeChange,
+      onPageBreakChange,
+      onSplitModeChange,
     },
     ref,
   ) {
@@ -129,7 +178,9 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
     // Serialize the current iframe document into clean, PDF-ready HTML by
     // cloning the live DOM (inline styles preserved) and stripping editor
     // overlays/scripts/clipping. Shared by exportPdf and getFullHtml.
-    const serializeCleanHtml = useCallback(async (): Promise<string | null> => {
+    const serializeCleanHtml = useCallback(async (
+      forExport = false,
+    ): Promise<string | null> => {
       const iframe = iframeRef.current;
       if (!iframe || !iframe.contentWindow) {
         console.error("[serialize] No iframe ref or contentWindow");
@@ -145,9 +196,6 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         return null;
       }
 
-      const contentWindow = iframe.contentWindow;
-
-      // Clone the full document to preserve ALL inline styles from editor
       const clone = doc.documentElement.cloneNode(true) as HTMLElement;
 
       // Remove editor overlays from the clone
@@ -158,6 +206,21 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       clone
         .querySelectorAll("[data-editor-capture]")
         .forEach((el) => el.remove());
+
+      // The editor wraps template documents in a system frame (.klone-frame,
+      // created by editor-iframe) so the page frame is sticky. That frame is
+      // editor-only chrome - unwrap it here so saved/exported HTML keeps the
+      // authored body > .scroll-wrapper structure.
+      clone
+        .querySelectorAll(".klone-frame[data-klone-system-frame]")
+        .forEach((frame) => {
+          const inner = frame.firstElementChild;
+          if (inner && inner.classList.contains("scroll-wrapper")) {
+            frame.replaceWith(inner);
+          } else {
+            frame.remove();
+          }
+        });
 
       // Keep the document's own CSS intact. The editor writes its changes as
       // inline styles, which cloneNode preserves. Serializing computed styles
@@ -174,15 +237,14 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         ".scroll-wrapper",
       ) as HTMLElement | null;
 
-      // A transparent body would otherwise be rendered on the PDF viewer's
-      // default page colour. Use Klone's canvas colour only when the authored
-      // body has no computed background colour.
-      const bodyBackground = contentWindow.getComputedStyle(
-        doc.body,
-      ).backgroundColor;
-      const hasBodyBackground =
-        bodyBackground !== "transparent" &&
-        bodyBackground !== "rgba(0, 0, 0, 0)";
+      // In the preview the body's background is ALWAYS forced to Klone's
+      // canvas colour (see editor-iframe). For the PDF we restore the
+      // document's OWN background — captured by the editor script when the
+      // preview loaded — and fall back to Klone's canvas colour only when
+      // the authored body had no background at all.
+      const authoredBodyBg = (
+        doc.body as HTMLElement & { __kloneAuthoredBg?: string }
+      ).__kloneAuthoredBg;
 
       if (htmlEl) {
         htmlEl.style.overflow = "visible";
@@ -191,13 +253,21 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       if (bodyEl) {
         bodyEl.style.overflow = "visible";
         bodyEl.style.height = "auto";
+        // Strip the forced preview canvas background so the document's own
+        // body colour is used in the PDF instead.
+        const bodyStyle = bodyEl.getAttribute("style") || "";
+        const strippedStyle = bodyStyle
+          .split(";")
+          .map((s) => s.trim())
+          .filter((s) => s && !/^background(?:-color)?\s*:/.test(s))
+          .join("; ");
+        if (strippedStyle) bodyEl.setAttribute("style", strippedStyle);
+        else bodyEl.removeAttribute("style");
         // Ensure body fills the full page width and centers the
         // scroll-wrapper (which uses margin:0 auto) — without this
         // syncComputedStyles may bake in the iframe's pixel width
         // (e.g. 1198px) which breaks centering in the PDF viewport.
-        if (!hasBodyBackground) {
-          bodyEl.style.backgroundColor = "rgb(30, 30, 30)";
-        }
+        bodyEl.style.backgroundColor = authoredBodyBg || "rgb(30, 30, 30)";
       }
       if (scrollEl) {
         // Only remove scroll-clipping — keep ALL original styles
@@ -205,6 +275,38 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         scrollEl.style.overflow = "visible";
         scrollEl.style.height = "auto";
         scrollEl.style.maxHeight = "none";
+      }
+
+      // Keep the markers when saving so the user can reopen and move them.
+      // Only the export clone turns each into a print-only CSS page break.
+      if (forExport) {
+        // querySelectorAll keeps document order, and the clone preserves it,
+        // so clone[i] corresponds to live[i] for computed-style lookups.
+        const liveSplitEls = Array.from(
+          doc.querySelectorAll("[data-klone-page-break]"),
+        );
+        const cloneSplitEls = Array.from(
+          clone.querySelectorAll("[data-klone-page-break]"),
+        );
+        cloneSplitEls.forEach((el, i) => {
+          el.removeAttribute("data-klone-page-break");
+          const live = liveSplitEls[i];
+          if (!live) return;
+          // Never break the template structure: the split is applied as a
+          // print CSS property ON the marked element itself - no element is
+          // inserted, so nesting inside ul/table/p/etc. stays valid.
+          if (isFirstElementInBody(live)) return; // would only blank page 1
+          const style = el as HTMLElement;
+          style.style.breakBefore = "page";
+          style.style.pageBreakBefore = "always";
+          // Inline elements ignore break-before in Chromium; forcing a block
+          // box (export clone only) makes the split actually happen while the
+          // authored HTML stays untouched.
+          const display = getComputedStyle(live).display;
+          if (display === "inline" || display === "inline-block") {
+            style.style.display = "block";
+          }
+        });
       }
 
       // Serialize the full HTML document
@@ -255,7 +357,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       },
       exportPdf: async () => {
         try {
-          const fullHtml = await serializeCleanHtml();
+          const fullHtml = await serializeCleanHtml(true);
           if (!fullHtml) return;
 
           // Call the Puppeteer PDF API
@@ -298,6 +400,12 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
           console.error("[exportPdf] PDF generation failed:", err);
         }
       },
+      clearPageBreak: () => {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "clear-split" },
+          "*",
+        );
+      },
     }));
 
     useEffect(() => {
@@ -322,10 +430,26 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
           });
           onEditModeChange?.(true);
         }
+        if (e.data && e.data.type === "page-break-updated") {
+          onPageBreakChange?.(
+            Boolean(e.data.hasPageBreak),
+            Boolean(e.data.changed),
+            typeof e.data.count === "number" ? e.data.count : undefined,
+          );
+        }
+        if (e.data && e.data.type === "split-mode-changed") {
+          onSplitModeChange?.(Boolean(e.data.enabled));
+        }
       };
       window.addEventListener("message", handler);
       return () => window.removeEventListener("message", handler);
-    }, [onElementSelect, onStyleUpdated, onEditModeChange]);
+    }, [
+      onElementSelect,
+      onStyleUpdated,
+      onEditModeChange,
+      onPageBreakChange,
+      onSplitModeChange,
+    ]);
 
     // Keep draftRef in sync so commitTextEdit (stale-closure safe) reads
     // the latest typed value.
@@ -361,6 +485,13 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       }
     }, [inspectMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    useEffect(() => {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "set-split-mode", enabled: splitMode },
+        "*",
+      );
+    }, [splitMode]);
+
     const srcDoc = html ? injectEditorScript(html) : defaultHtml;
     const bg = editState?.styles.backgroundColor ?? "";
     const hasBg = bg && bg !== "transparent" && bg !== "rgba(0, 0, 0, 0)";
@@ -373,6 +504,16 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
           className="w-full h-full border-0 bg-transparent"
           title="Preview"
           sandbox="allow-scripts allow-same-origin"
+          onLoad={() => {
+            iframeRef.current?.contentWindow?.postMessage(
+              { type: "inspect-mode", enabled: inspectMode },
+              "*",
+            );
+            iframeRef.current?.contentWindow?.postMessage(
+              { type: "set-split-mode", enabled: splitMode },
+              "*",
+            );
+          }}
         />
         {editState && (
           <div
