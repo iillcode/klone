@@ -1,6 +1,6 @@
-# Klone — Visual Implementation Platform
+# Klone — PDF Document Generation Platform
 
-> Turn plain task descriptions into **reviewable, visual implementations** — a coding agent (Claude, Cursor, any MCP client) fetches curated component designs through the **Klone MCP server**, composes them into a self-contained HTML document, and saves it under the user's account. The web app then previews, edits, and manages those implementations.
+> Turn plain task descriptions into **print-ready documents** — a coding agent (Claude, Cursor, any MCP client) fetches a PDF template blueprint through the **Klone MCP server**, authors a self-contained HTML document against it, and saves it under the user's account. The web app then previews, edits, and exports those documents as PDFs.
 
 ---
 
@@ -14,7 +14,7 @@
    - [Request Lifecycle](#request-lifecycle)
    - [Authentication](#authentication)
    - [Tool Reference](#tool-reference)
-   - [Component Library](#component-library)
+   - [PDF Template Library](#pdf-template-library)
 6. [Data Model](#data-model)
 7. [Security Model](#security-model)
 8. [Running Locally](#running-locally)
@@ -25,25 +25,25 @@
 
 ## What is Klone?
 
-Klone is a **visual implementation platform**. Instead of a coding agent just describing what it built, Klone lets the agent produce a *real, rendered design* that a human can open, preview, and iterate on.
+Klone is a **PDF document generation platform**. Instead of a coding agent just describing what it built, Klone lets the agent produce a *real, editable document* that a human can open, refine, and export as a PDF.
 
 The one-sentence flow:
 
 ```
-You (IDE / agent) ──ask──▶ Klone MCP ──gives──▶ component designs (HTML/CSS)
+You (IDE / agent) ──ask──▶ Klone MCP ──gives──▶ PDF template blueprint (outline + guidance)
                                                     │
-You (agent) ──compose + save──▶ Klone MCP ──writes──▶ Supabase (visual_implementations)
+You (agent) ──author + save──▶ Klone MCP ──writes──▶ Supabase (visual_implementations)
                                                     │
-You (human) ──open──▶ Web app ──reads──▶ your saved implementations ──▶ preview / edit
+You (human) ──open──▶ Web app ──reads──▶ your saved documents ──▶ preview / edit / export PDF
 ```
 
 **Three surfaces:**
 
 | Surface | Who uses it | What it does |
 |---|---|---|
-| **Klone MCP** (`apps/mcp`) | Coding agents & IDEs | Exposes 9 tools: discover component designs, fetch kits, and CRUD saved visual implementations |
+| **Klone MCP** (`apps/mcp`) | Coding agents & IDEs | Exposes 7 tools: fetch PDF template blueprints, and CRUD the user's saved HTML documents |
 | **Klone Web** (`apps/web`) | End users | Template gallery, HTML preview/editor (Figma-style canvas), PDF export |
-| **Klone Admin** (`apps/admin`) | Content managers | Manage `categories → sub_categories → components` (DB-driven, for the future dynamic library) |
+| **Klone Admin** (`apps/admin`) | Content managers | Manage `pdf_templates` (blueprint outlines) + the legacy `categories → sub_categories → components` taxonomy |
 
 ---
 
@@ -62,14 +62,17 @@ flowchart TB
         direction TB
         AUTH["JWT Auth\n(extractToken → validateJWT via JWKS)"]
         H["MCP Handler\n(JSON-RPC 2.0)"]
-        T["9 Tools\n(registerTools)"]
-        LIB["Component Library\n(10 hardcoded designs)"]
+        T["7 Tools\n(registerTools)"]
+        TPL["Template tools\n(templates.ts)"]
+        DOC["Document tools\n(documents.ts)"]
         AUTH --> H --> T
-        T --> LIB
+        T --> TPL
+        T --> DOC
     end
 
-    subgraph DB["Supabase (drwchrxljcokigkecbow)"]
-        VI[("visual_implementations\n(user-owned)")]
+    subgraph DB["Supabase (jdzhnwmfbfdocqncwfay)"]
+        VI[("visual_implementations\n(user-owned documents)")]
+        PT[("pdf_templates\n(blueprint outlines)")]
         CAT[("categories")]
         SC[("sub_categories")]
         COMP[("components")]
@@ -78,9 +81,11 @@ flowchart TB
     IDE -->|"HTTP /mcp  Bearer JWT"| AUTH
     POSTMAN -->|"HTTP /mcp  Bearer JWT"| AUTH
     MCP -->|"Supabase JS client\n(signed with user JWT)"| VI
+    MCP -->|"Supabase JS client"| PT
     ADMIN -->|"server client (RLS)"| CAT
     ADMIN -->|"server client (RLS)"| SC
     ADMIN -->|"server client (RLS)"| COMP
+    ADMIN -->|"server client (RLS)"| PT
     WEB -->|"server client (RLS)"| VI
 
     style MCP fill:#4f46e5,color:#fff
@@ -89,9 +94,11 @@ flowchart TB
 
 **Key architectural decisions:**
 
-- **One MCP server, two data sources** — component *designs* are hardcoded in the worker (fast, no DB round-trip); *implementations* are persisted per-user in Supabase. The library can later be swapped for the `components` table without changing the tool surface.
+- **Templates in the DB, documents per user** — PDF template blueprints live in `public.pdf_templates` (manageable from the admin app); the documents agents save go to `public.visual_implementations` (per-user, RLS-scoped). PDF rendering stays in the web app (`/api/pdf`) — the worker only stores HTML.
+- **Blueprint, not finished HTML** — templates are outlines (page constraints + sections + guidance) that agents follow to author a self-contained HTML document.
 - **JSON over SSE** — `createMcpHandler(server, { enableJsonResponse: true })` makes the worker reply with plain JSON-RPC responses, so it works equally well from MCP clients, curl, and Postman.
-- **User-scoped writes** — every request is authenticated with a Supabase JWT; the server signs its Supabase client with that same token so RLS enforces "users manage own implementations".
+- **Structured JSON responses** — every tool returns a consistent `{ ok, data }` / `{ ok, error }` envelope so agents can parse results uniformly.
+- **User-scoped writes** — every request is authenticated with a Supabase JWT; the server signs its Supabase client with that same token so RLS enforces "users manage own documents".
 
 ---
 
@@ -102,31 +109,36 @@ sequenceDiagram
     autonumber
     participant Agent as Coding Agent (MCP client)
     participant MCP as Klone MCP Worker
-    participant Lib as Component Library (in-memory)
+    participant TPL as PDF Templates (Supabase)
     participant SB as Supabase
 
     Agent->>MCP: initialize (JSON-RPC handshake)
     MCP-->>Agent: serverInfo { klone-mcp 1.0.0 }
 
     Agent->>MCP: tools/list
-    MCP-->>Agent: 9 tool schemas
+    MCP-->>Agent: 7 tool schemas
 
-    Agent->>MCP: get_component_kit(purpose: "landing page w/ hero, pricing, testimonials")
-    MCP->>Lib: searchComponents(purpose, max=3)
-    Lib-->>MCP: hero-center, pricing-tiers, testimonial-card (scored)
-    MCP-->>Agent: kit text (designs + assembly instructions)
+    Agent->>MCP: list_pdf_templates()
+    MCP->>TPL: SELECT active templates
+    TPL-->>MCP: metadata (slug, name, category, tags)
+    MCP-->>Agent: { ok, data: { count, templates } }
 
-    Agent->>Agent: Compose ONE self-contained HTML doc
+    Agent->>MCP: get_pdf_template(slug: "business-report")
+    MCP->>TPL: SELECT blueprint outline
+    TPL-->>MCP: { page, sections[], requirements[] }
+    MCP-->>Agent: { ok, data: { template } }
 
-    Agent->>MCP: create_visual_implementation(title, html_code, source_component_ids, ...)
+    Agent->>Agent: Author ONE self-contained HTML doc from the blueprint
+
+    Agent->>MCP: create_document(title, html_code, template_slug, ...)
     MCP->>SB: INSERT INTO visual_implementations (user_id = JWT.sub) ... RETURNING
     SB-->>MCP: row (id: 0f14f398-…)
-    MCP-->>Agent: { saved: true, implementation }
+    MCP-->>Agent: { ok, data: { saved: true, document } }
 
-    Agent->>MCP: list_visual_implementations / get / update / delete
+    Agent->>MCP: list_documents / get / update / delete
     MCP->>SB: SELECT/UPDATE/DELETE ... WHERE user_id = JWT.sub
     SB-->>MCP: scoped results
-    MCP-->>Agent: JSON result
+    MCP-->>Agent: { ok, data }
 ```
 
 ---
@@ -146,13 +158,16 @@ flowchart LR
     MCPAPP --> M1["src/index.ts — fetch handler + JWT gate"]
     MCPAPP --> M2["src/auth.ts — extractToken + validateJWT (jose + JWKS)"]
     MCPAPP --> M3["src/supabase.ts — createClient with user token"]
-    MCPAPP --> M4["src/tools.ts — registerTools (9 tools)"]
-    MCPAPP --> M5["src/component-library.ts — 10 designs + scoring"]
-    MCPAPP --> M6["wrangler.jsonc — env bindings, port 8789"]
+    MCPAPP --> M4["src/tools.ts — registerTools (7 tools)"]
+    MCPAPP --> M5["src/templates.ts — list/get_pdf_template tools"]
+    MCPAPP --> M6["src/documents.ts — document CRUD tools"]
+    MCPAPP --> M7["src/types.ts + src/respond.ts — blueprint types + JSON envelope"]
+    MCPAPP --> M8["wrangler.jsonc — env bindings, port 8789"]
 
     ADMIN --> A1["supabase/migrations/0001_init.sql — categories → sub_categories → components"]
-    ADMIN --> A2["supabase/migrations/0002_visual_implementations.sql — user-owned designs"]
-    DOCS --> P1["docs/postman/klone-mcp.postman_collection.json — 12 ready requests"]
+    ADMIN --> A2["supabase/migrations/0002_visual_implementations.sql — user-owned documents"]
+    ADMIN --> A3["supabase/migrations/0003_pdf_templates.sql — template blueprints"]
+    DOCS --> P1["docs/postman/klone-mcp.postman_collection.json — 10 ready requests"]
 
     PKGS --> UIP["packages/ui — shared shadcn-style components"]
     PKGS --> TSC["packages/typescript-config"]
@@ -217,64 +232,62 @@ flowchart LR
 
 ### Tool Reference
 
-All 9 tools, grouped by purpose:
+All 7 tools, grouped by purpose. Every tool returns the same structured-JSON envelope — `{ "ok": true, "data": … }` on success, `{ "ok": false, "error": … }` (with `isError`) on failure:
 
 | # | Tool | Args | Returns |
 |---|---|---|---|
-| 1 | `list_component_categories` | — | 10 categories with component counts |
-| 2 | `list_components` | `category?`, `query?`, `limit?` | Component metadata (no code) |
-| 3 | `get_component` | `component_id` | Full design: prompt + HTML code |
-| 4 | `get_component_kit` ⭐ | `purpose`, `component_ids?`, `max_components?` | **Main entry** — matched designs + assembly instructions |
-| 5 | `create_visual_implementation` | `title`, `html_code`, `description?`, `css_code?`, `source_component_ids?`, `prompt_used?`, `metadata?` | Saved row with id |
-| 6 | `list_visual_implementations` | `limit?`, `offset?` | User's implementations, newest first |
-| 7 | `get_visual_implementation` | `id` (uuid) | Single implementation |
-| 8 | `update_visual_implementation` | `id` + any updatable field | Updated row |
-| 9 | `delete_visual_implementation` | `id` | `{ deleted: true }` |
+| 1 | `list_pdf_templates` | `category?`, `query?`, `limit?` | Active template metadata (no blueprint) |
+| 2 | `get_pdf_template` ⭐ | `template_id?` or `slug?` | **Main entry** — full blueprint outline (page, sections, requirements) |
+| 3 | `create_document` | `title`, `html_code`, `description?`, `template_id?`, `template_slug?`, `prompt_used?`, `metadata?` | Saved document with id |
+| 4 | `list_documents` | `limit?`, `offset?` | User's documents, most recently updated first |
+| 5 | `get_document` | `id` (uuid) | Single document |
+| 6 | `update_document` | `id` + any updatable field | Updated document |
+| 7 | `delete_document` | `id` | `{ deleted: true }` |
 
 **The intended agent workflow:**
 
 ```
-1. list_component_categories     → see what exists
-2. get_component_kit(purpose)    → get relevant designs + instructions
-3. (optional) get_component      → tweak an individual design
-4. compose the HTML doc
-5. create_visual_implementation  → persist under the user
-6. list / get / update / delete  → manage saved designs
+1. list_pdf_templates            → see available blueprint outlines
+2. get_pdf_template(slug)        → get page constraints + sections + guidance
+3. author the HTML doc from the blueprint
+4. create_document(title, html_code, template_slug) → persist under the user
+5. list / get / update / delete  → manage saved documents
 ```
 
-### Component Library
+### PDF Template Library
 
-10 hardcoded designs in `src/component-library.ts`. Each entry is a **self-contained HTML snippet** (inline CSS, zero external dependencies) an agent can drop into a page and adapt.
+Templates live in `public.pdf_templates` and are managed from the admin app. Each template is a **blueprint outline** — not finished HTML — that guides the agent: page constraints, an ordered list of sections (name, description, guidance per section), and global requirements for the final document.
 
-| Category | Component id | Use for |
+```json
+{
+  "version": 1,
+  "page": { "format": "A4", "content_width": "794px", "margin": "2.5rem", "body_background": "#ffffff" },
+  "sections": [
+    {
+      "key": "executive-summary",
+      "name": "Executive summary",
+      "description": "A short overview of the report, its purpose and the key takeaway.",
+      "guidance": "Write 3-6 sentences. Use a highlighted callout box with a light background to draw attention.",
+      "required": true
+    }
+  ],
+  "requirements": [
+    "Self-contained HTML document with embedded <style>",
+    "Target content width 794px (A4), renders standalone in an iframe",
+    "No external fonts, scripts or network dependencies"
+  ]
+}
+```
+
+**Seeded starter templates** (editable/deletable in the admin app):
+
+| Slug | Category | Use for |
 |---|---|---|
-| Buttons | `btn-basic` | CTAs, submit, primary/secondary/outline/ghost |
-| Cards | `card-basic` | Features, articles, gallery items |
-| Badges | `badge-status` | Status pills, labels, version tags |
-| Navigation | `navbar-simple` | Top navigation with links + CTA |
-| Hero | `hero-center` | Opening section of a landing page |
-| Forms | `form-contact` | Contact/lead capture forms |
-| Pricing | `pricing-tiers` | 3-tier pricing with "Popular" plan |
-| Testimonials | `testimonial-card` | Social proof quotes |
-| Stats | `stats-band` | Metric counters band |
-| Footer | `footer-simple` | Site footer with columns |
-
-**Auto-matching (scored search)** — `searchComponents(purpose, max)`:
-
-```mermaid
-flowchart TD
-    P["purpose text, e.g. 'landing page with hero and pricing'"] --> TOK["tokenize\nlowercase, strip punctuation,\ndrop stopwords (the, and, for…)"]
-    TOK --> SCORE["score each component"]
-    SCORE --> W1["name/category: weight 3"]
-    SCORE --> W2["tags: weight 2"]
-    SCORE --> W3["description: weight 1.5"]
-    SCORE --> W4["prompt: weight 1"]
-    W1 & W2 & W3 & W4 --> SORT["sort by score, take top max"]
-    SORT --> CHECK{any matched?}
-    CHECK -- Yes --> OUT["return scored components"]
-    CHECK -- No --> FB["fallback: navbar-simple,\nhero-center, card-basic, form-contact"]
-    FB --> OUT
-```
+| `blank` | General | Anything — the agent structures the document from scratch |
+| `business-report` | Reports | Cover, executive summary, findings, data table, recommendations |
+| `invoice` | Business | Header, from/to blocks, line items, totals, payment terms |
+| `api-docs` | Technical | Overview, auth, endpoints table, request example, error codes |
+| `letter` | Business | Sender, date, recipient, salutation, body, signature |
 
 ---
 
@@ -283,6 +296,7 @@ flowchart TD
 ```mermaid
 erDiagram
     auth_users ||--o{ visual_implementations : "owns (cascade)"
+    pdf_templates ||--o{ visual_implementations : "template (set null)"
     visual_implementations {
         uuid id PK "gen_random_uuid()"
         uuid user_id FK "auth.users.id"
@@ -290,9 +304,24 @@ erDiagram
         text description
         text html_code "required"
         text css_code
-        text[] source_component_ids "library ids used"
+        text[] source_component_ids "deprecated — unused"
+        uuid template_id FK "pdf_templates.id, set null"
+        text template_slug "denormalized"
         text prompt_used
         jsonb metadata
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    pdf_templates {
+        uuid id PK "gen_random_uuid()"
+        text slug UK
+        text name
+        text description
+        text category
+        jsonb blueprint "sections + guidance outline"
+        text[] tags
+        boolean is_active
         timestamptz created_at
         timestamptz updated_at
     }
@@ -327,8 +356,8 @@ erDiagram
 
 | Data | Location | Notes |
 |---|---|---|
-| Component designs | Hardcoded in `apps/mcp/src/component-library.ts` | Will move to `components` table later |
-| Saved implementations | `public.visual_implementations` (Supabase) | ✅ migrated & applied |
+| PDF template blueprints | `public.pdf_templates` (Supabase) | Migration `0003_pdf_templates.sql` |
+| Saved documents | `public.visual_implementations` (Supabase) | Migrations `0002` + `0003` (template columns) |
 | Admin content taxonomy | `categories → sub_categories → components` | Migration `0001_init.sql` exists |
 
 ---
@@ -340,6 +369,7 @@ erDiagram
 - **RLS is the enforcement point** for the database:
   - `visual_implementations`: `using (user_id = auth.uid()) with check (user_id = auth.uid())` — users can only read/update/delete **their own** rows, even if they forge queries.
   - `categories` / `sub_categories` / `components`: any authenticated user (admin app) has full access.
+  - `pdf_templates`: any authenticated user (agents + admin app) has full access.
 - **The worker never stores the user's password or long-lived secrets** — only the anon key and JWKS URL are baked into env vars.
 
 ```mermaid
@@ -380,7 +410,7 @@ Environment (`apps/mcp/wrangler.jsonc` + `.env.local`):
 
 | Var | Value |
 |---|---|
-| `SUPABASE_URL` | `https://drwchrxljcokigkecbow.supabase.co` |
+| `SUPABASE_URL` | `https://jdzhnwmfbfdocqncwfay.supabase.co` |
 | `SUPABASE_ANON_KEY` | anon JWT |
 | `SUPABASE_JWKS_URL` | `…/auth/v1/.well-known/jwks.json` |
 
@@ -402,14 +432,14 @@ A ready-made collection is at [`docs/postman/klone-mcp.postman_collection.json`]
 **How it works out of the box:**
 
 - A **pre-request script** auto-refreshes the Supabase JWT when missing/expired (uses the test user `mcp-test@klone.dev`).
-- Request **8 (create)** captures the returned id into `{{implementation_id}}`, so requests 10–12 auto-fill it.
+- Request **6 (create_document)** captures the returned id into `{{document_id}}`, so requests 8–10 auto-fill it.
 - Base URL is `{{mcp_url}}` → `http://127.0.0.1:8789/mcp`.
 
 **Manual equivalent (curl):**
 
 ```bash
 # get token
-curl -s -X POST "https://drwchrxljcokigkecbow.supabase.co/auth/v1/token?grant_type=password" \
+curl -s -X POST "https://jdzhnwmfbfdocqncwfay.supabase.co/auth/v1/token?grant_type=password" \
   -H "apikey: $ANON_KEY" -H "Content-Type: application/json" \
   -d '{"email":"mcp-test@klone.dev","password":"McpTest123!"}'
 
@@ -418,7 +448,7 @@ curl -s -X POST http://127.0.0.1:8789/mcp \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_component_kit","arguments":{"purpose":"a landing page","max_components":2}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_pdf_template","arguments":{"slug":"business-report"}}}'
 ```
 
 > **Note:** on Windows PowerShell, `·`, `✓`, `★` may render as mojibake (`Â·`, `â`) in the console — that's a display artifact only; MCP clients receive correct UTF-8.
@@ -445,10 +475,10 @@ supabase db push --db-url "$DATABASE_URL"
 
 ## Roadmap / Next Steps
 
-- [x] MCP server with 9 tools (component discovery + implementation CRUD)
-- [x] Hardcoded component library (10 designs)
+- [x] MCP server with 7 tools (PDF template blueprints + document CRUD)
+- [x] `pdf_templates` table + blueprint outlines + RLS (migration `0003_pdf_templates.sql`)
 - [x] `visual_implementations` table + RLS (migration applied)
 - [x] JWT-gated auth with user-scoped Supabase client
-- [ ] Move component designs from code → `components` table
-- [ ] Web app: list/render saved implementations from `visual_implementations`
+- [ ] Admin app: manage `pdf_templates` blueprints in the UI
+- [ ] Web app: template gallery sourced from `pdf_templates` (currently hardcoded in `apps/web/lib/data/templates.ts`)
 - [ ] Support MCP clients without custom header support (e.g. token via env/query param)

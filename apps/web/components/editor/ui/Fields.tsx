@@ -79,7 +79,7 @@ export function ColorRow({
 
   return (
     <FieldBlock label={label}>
-      <div className="h-8 flex items-center gap-1.5 bg-[#3a3a3a] rounded-[6px] px-2.5">
+      <div className="h-8 flex items-center gap-1.5 bg-[#1e1e1e] rounded-[6px] px-2.5">
         {/* Swatch with transparency checkerboard */}
         <button
           type="button"

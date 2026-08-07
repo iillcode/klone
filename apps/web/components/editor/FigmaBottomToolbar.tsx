@@ -41,7 +41,7 @@ export function FigmaBottomToolbar({
   return (
     <>
       {/* ── Top bar: file name + actions ── */}
-      <div className="h-11 flex items-center justify-between px-4 bg-[#1e1e1e] border-b border-[#2d2d2d]/60">
+      <div className="h-11 flex items-center justify-between px-4 bg-[#161617] border-b border-[#2d2d2d]/60">
         {/* Left: hamburger + file info */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
@@ -53,8 +53,8 @@ export function FigmaBottomToolbar({
               }
               className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
                 leftSidebarOpen
-                  ? "bg-[#2d2d30] text-[#e4e4e7]"
-                  : "text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2d2d30]"
+                  ? "bg-[#202020] text-[#e4e4e7]"
+                  : "text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#202020]"
               }`}
             >
               <MenuIcon />
@@ -73,7 +73,7 @@ export function FigmaBottomToolbar({
                 </span>
               )}
               <span className="text-[10px] text-[#71717a]">Drafts</span>
-              <span className="px-1.5 py-0.5 rounded bg-[#2d2d30] text-[9px] font-medium text-[#a1a1aa]">
+              <span className="px-1.5 py-0.5 rounded bg-[#1e1e1e] text-[9px] font-medium text-[#a1a1aa]">
                 Free
               </span>
             </div>
@@ -89,15 +89,15 @@ export function FigmaBottomToolbar({
             className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
               inspectMode
                 ? "bg-[#18a0fb] text-white shadow-[0_0_6px_rgba(24,160,251,0.3)]"
-                : "text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2d2d30]"
+                : "text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#202020]"
             }`}
           >
             <CursorIcon className="w-3.5 h-3.5" />
           </button>
-          <div className="w-px h-4 bg-[#2d2d30] mx-1" />
+          <div className="w-px h-4 bg-[#262626] mx-1" />
           <button
             onClick={onPresent}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2d2d30] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#202020] transition-colors"
           >
             <PlayIcon className="w-3.5 h-3.5" />
             <span>Present</span>
@@ -108,7 +108,7 @@ export function FigmaBottomToolbar({
           <button
             onClick={onSave}
             disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-[#e4e4e7] border border-[#2d2d30] hover:bg-[#2d2d30] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-[#e4e4e7] border border-[#262626] hover:bg-[#202020] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {saving ? (
               <SpinnerIcon />

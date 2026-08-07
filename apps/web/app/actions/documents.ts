@@ -8,7 +8,7 @@ export type SaveDocumentResult = { ok: true } | { error: string };
 
 /**
  * Create a new persisted document seeded with a starter template's HTML.
- * Used by the dashboard template cards.
+ * Used by the dashboard's "New document" button and the template cards.
  */
 export async function createDocumentFromTemplate(
   templateId: string,

@@ -12,33 +12,17 @@ import { FONT_FAMILIES, FONT_WEIGHTS } from "./constants";
 import {
   UndoIcon,
   RedoIcon,
-  EyeIcon,
-  DropletIcon,
-  MoreDotsIcon,
+  PageBreakIcon,
+  ClearPageBreakIcon,
   AlignLeftIcon,
   AlignCenterIcon,
   AlignRightIcon,
-  AlignTopIcon,
-  AlignMiddleIcon,
-  AlignBottomIcon,
-  ConstraintsIcon,
-  ConstrainIcon,
-  RotateIcon,
-  FlipHIcon,
-  FlipVIcon,
-  CornersIcon,
-  ResizeWIcon,
-  ResizeHIcon,
-  ResizeAutoIcon,
-  RadiusIcon,
-  LineHeightIcon,
-  LetterSpacingIcon,
   TextAlignIcon,
   DeleteIcon,
 } from "./icons/properties-icons";
 import { NumberField } from "./ui/NumberField";
 import { SelectField } from "./ui/SelectField";
-import { IconBtn, BtnGroup, SqBtn, BoxBtn, WideBtn } from "./ui/IconButton";
+import { IconBtn, BtnGroup, SqBtn } from "./ui/IconButton";
 import { FieldBlock, Section, ColorRow } from "./ui/Fields";
 
 interface PropertiesSidebarProps {
@@ -47,6 +31,11 @@ interface PropertiesSidebarProps {
   onDelete?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
+  splitMode?: boolean;
+  hasPageBreak?: boolean;
+  pageBreakCount?: number;
+  onToggleSplitMode?: () => void;
+  onClearPageBreak?: () => void;
 }
 
 export function PropertiesSidebar({
@@ -55,21 +44,29 @@ export function PropertiesSidebar({
   onDelete,
   onUndo,
   onRedo,
+  splitMode = false,
+  hasPageBreak = false,
+  pageBreakCount = 0,
+  onToggleSplitMode,
+  onClearPageBreak,
 }: PropertiesSidebarProps) {
   const first = selectedElements[0];
   const s = first?.styles;
   const count = selectedElements.length;
   const hasSelection = count > 0;
-  // The document container (body/html or the template's .scroll-wrapper)
-  // has a locked width - its W control is disabled so it can't be edited.
-  // X/Y stay editable: the page frame can be moved.
+  // The document container (body/html or the template's system frame -
+  // .scroll-wrapper / .klone-frame) is STICKY: its W control is disabled
+  // (locked width) and X/Y position is locked too, so the page frame can
+  // never be moved.
   const isContainerSel =
     !!first &&
     (first.tag === "html" ||
       first.tag === "body" ||
-      String(first.classes || "")
-        .split(" ")
-        .includes("scroll-wrapper"));
+      ["scroll-wrapper", "klone-frame"].some((cls) =>
+        String(first.classes || "")
+          .split(" ")
+          .includes(cls),
+      ));
 
   // Element display name (Figma-style)
   const elementName = !first
@@ -125,11 +122,6 @@ export function PropertiesSidebar({
     : [{ value: currentFamily, label: currentFamily }, ...FONT_FAMILIES];
   const fontFamily = currentFamily;
 
-  // Opacity as whole percent (100 = default)
-  const opacityPct = s?.opacity
-    ? Math.round(parseFloat(s.opacity) * 100)
-    : 100;
-
   // The element's VISIBLE background color. A background-image (gradient /
   // image) paints OVER background-color, so when one is present we surface
   // its first color stop; otherwise fall back to background-color.
@@ -143,7 +135,7 @@ export function PropertiesSidebar({
     : parseRgbToHex(s?.color);
 
   return (
-    <div className="w-64 shrink-0 h-full flex flex-col bg-[#1e1e1e] border-l border-[#2d2d2d] select-none overflow-hidden">
+    <div className="w-64 shrink-0 h-full flex flex-col bg-[#161617] border-l border-[#2d2d2d] select-none overflow-hidden">
       {/* ── Scrollable properties area (panel padding 14px) ── */}
       <div className="flex-1 overflow-y-auto custom-scroll px-3.5 py-3.5">
         {!hasSelection && (
@@ -169,6 +161,33 @@ export function PropertiesSidebar({
                 <IconBtn title="Redo (⌘⇧Z)" onClick={onRedo}>
                   <RedoIcon />
                 </IconBtn>
+                <IconBtn
+                  title={
+                    splitMode
+                      ? "Cancel PDF page break selection"
+                      : hasPageBreak
+                        ? `Manage PDF page breaks (${pageBreakCount})`
+                        : "Add PDF page break"
+                  }
+                  onClick={onToggleSplitMode}
+                  active={splitMode}
+                  className="relative"
+                >
+                  <PageBreakIcon />
+                  {hasPageBreak && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 rounded-full bg-[#18a0fb] text-white text-[9px] leading-[14px] text-center">
+                      {pageBreakCount}
+                    </span>
+                  )}
+                </IconBtn>
+                {hasPageBreak && (
+                  <IconBtn
+                    title={`Remove all PDF page breaks (${pageBreakCount})`}
+                    onClick={onClearPageBreak}
+                  >
+                    <ClearPageBreakIcon />
+                  </IconBtn>
+                )}
               </div>
             </div>
 
@@ -199,17 +218,6 @@ export function PropertiesSidebar({
                       <AlignRightIcon />
                     </SqBtn>
                   </BtnGroup>
-                  <BtnGroup>
-                    <SqBtn title="Align top">
-                      <AlignTopIcon />
-                    </SqBtn>
-                    <SqBtn title="Align middle">
-                      <AlignMiddleIcon />
-                    </SqBtn>
-                    <SqBtn title="Align bottom">
-                      <AlignBottomIcon />
-                    </SqBtn>
-                  </BtnGroup>
                 </div>
               </FieldBlock>
 
@@ -218,6 +226,7 @@ export function PropertiesSidebar({
                   <NumberField
                     className="flex-1 min-w-0"
                     prefix="X"
+                    disabled={isContainerSel}
                     value={fmtNum(translate[0])}
                     onChange={(v) =>
                       onApplyStyle(
@@ -229,6 +238,7 @@ export function PropertiesSidebar({
                   <NumberField
                     className="flex-1 min-w-0"
                     prefix="Y"
+                    disabled={isContainerSel}
                     value={fmtNum(translate[1])}
                     onChange={(v) =>
                       onApplyStyle(
@@ -237,51 +247,12 @@ export function PropertiesSidebar({
                       )
                     }
                   />
-                  <BoxBtn title="Constraints">
-                    <ConstraintsIcon />
-                  </BoxBtn>
-                </div>
-              </FieldBlock>
-
-              <FieldBlock label="Rotation">
-                <div className="flex items-center gap-1.5">
-                  <div className="flex-1 min-w-0 h-8 flex items-center gap-1.5 bg-[#3a3a3a] rounded-[6px] px-2.5">
-                    <RotateIcon />
-                    <span className="text-[13px] text-[#eaeaea] font-mono">
-                      0°
-                    </span>
-                  </div>
-                  <BtnGroup>
-                    <SqBtn title="Flip horizontal">
-                      <FlipHIcon />
-                    </SqBtn>
-                    <SqBtn title="Flip vertical">
-                      <FlipVIcon />
-                    </SqBtn>
-                    <SqBtn title="Individual corners">
-                      <CornersIcon />
-                    </SqBtn>
-                  </BtnGroup>
                 </div>
               </FieldBlock>
             </Section>
 
             {/* ── Layout ── */}
             <Section title="Layout">
-              <FieldBlock label="Resizing">
-                <div className="flex items-center gap-1.5">
-                  <WideBtn title="Fixed width">
-                    <ResizeWIcon />
-                  </WideBtn>
-                  <WideBtn title="Fixed height">
-                    <ResizeHIcon />
-                  </WideBtn>
-                  <WideBtn title="Auto (hug contents)" active>
-                    <ResizeAutoIcon />
-                  </WideBtn>
-                </div>
-              </FieldBlock>
-
               <FieldBlock label="Dimensions">
                 <div className="flex items-center gap-1.5">
                   <NumberField
@@ -297,45 +268,8 @@ export function PropertiesSidebar({
                     value={cssPx(s.height) || 0}
                     onChange={(v) => onApplyStyle("height", v + "px")}
                   />
-                  <BoxBtn title="Constrain proportions">
-                    <ConstrainIcon />
-                  </BoxBtn>
                 </div>
               </FieldBlock>
-            </Section>
-
-            {/* ── Appearance ── */}
-            <Section
-              title="Appearance"
-              headerIcons={
-                <>
-                  <IconBtn title="Visible">
-                    <EyeIcon />
-                  </IconBtn>
-                  <IconBtn title="Opacity">
-                    <DropletIcon />
-                  </IconBtn>
-                </>
-              }
-            >
-              <div className="flex items-start gap-1.5">
-                <FieldBlock label="Opacity" grow>
-                  <div className="h-8 flex items-center gap-1.5 bg-[#3a3a3a] rounded-[6px] px-2.5">
-                    <DropletIcon />
-                    <span className="text-[13px] text-[#eaeaea] font-mono">
-                      {opacityPct}%
-                    </span>
-                  </div>
-                </FieldBlock>
-                <FieldBlock label="Corner radius" grow>
-                  <div className="h-8 flex items-center gap-1.5 bg-[#3a3a3a] rounded-[6px] px-2.5">
-                    <RadiusIcon />
-                    <span className="text-[13px] text-[#eaeaea] font-mono">
-                      {cssPx(s.borderRadius) || 0}
-                    </span>
-                  </div>
-                </FieldBlock>
-              </div>
             </Section>
 
             {/* ── Color ── */}
@@ -353,15 +287,7 @@ export function PropertiesSidebar({
             </Section>
 
             {/* ── Typography ── */}
-            <Section
-              title="Typography"
-              noBorder
-              headerIcons={
-                <IconBtn title="More typography settings">
-                  <MoreDotsIcon />
-                </IconBtn>
-              }
-            >
+            <Section title="Typography" noBorder>
               <div className="space-y-2">
                 <SelectField
                   title="Font family"
@@ -386,25 +312,7 @@ export function PropertiesSidebar({
                     onChange={(v) => onApplyStyle("fontSize", v + "px")}
                   />
                 </div>
-                <div className="flex items-start gap-1.5 pt-1">
-                  <FieldBlock label="Line height" grow>
-                    <div className="h-8 flex items-center gap-1.5 bg-[#3a3a3a] rounded-[6px] px-2.5">
-                      <LineHeightIcon />
-                      <span className="text-[13px] text-[#eaeaea] font-mono">
-                        Auto
-                      </span>
-                    </div>
-                  </FieldBlock>
-                  <FieldBlock label="Letter spacing" grow>
-                    <div className="h-8 flex items-center gap-1.5 bg-[#3a3a3a] rounded-[6px] px-2.5">
-                      <LetterSpacingIcon />
-                      <span className="text-[13px] text-[#eaeaea] font-mono">
-                        0%
-                      </span>
-                    </div>
-                  </FieldBlock>
-                </div>
-                <FieldBlock label="Alignment" className="pt-1">
+                <FieldBlock label="Alignment">
                   <div className="flex items-center">
                     <BtnGroup>
                       <SqBtn
@@ -427,17 +335,6 @@ export function PropertiesSidebar({
                         onClick={() => onApplyStyle("textAlign", "right")}
                       >
                         <TextAlignIcon align="right" />
-                      </SqBtn>
-                    </BtnGroup>
-                    <BtnGroup>
-                      <SqBtn title="Align top">
-                        <AlignTopIcon />
-                      </SqBtn>
-                      <SqBtn title="Align middle">
-                        <AlignMiddleIcon />
-                      </SqBtn>
-                      <SqBtn title="Align bottom">
-                        <AlignBottomIcon />
                       </SqBtn>
                     </BtnGroup>
                   </div>

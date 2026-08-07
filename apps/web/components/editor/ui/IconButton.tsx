@@ -26,8 +26,8 @@ export function IconBtn({
       aria-pressed={active}
       className={`w-8 h-8 shrink-0 flex items-center justify-center rounded-[6px] transition-colors ${
         active
-          ? "bg-[#454545] text-[#ffffff] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
-          : "text-[#b8b8b8] hover:bg-[#454545] hover:text-[#ffffff]"
+          ? "bg-[#202020] text-[#ffffff] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
+          : "text-[#b8b8b8] hover:bg-[#202020] hover:text-[#ffffff]"
       } ${className}`}
     >
       <span style={{ width: size, height: size }} className="flex items-center justify-center">
@@ -40,7 +40,7 @@ export function IconBtn({
 /* .btn-group — one joined group of 32x28 icon buttons */
 export function BtnGroup({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex bg-[#3a3a3a] rounded-[6px] overflow-hidden mr-1.5 last:mr-0">
+    <div className="flex bg-[#1e1e1e] rounded-[6px] overflow-hidden mr-1.5 last:mr-0">
       {children}
     </div>
   );
@@ -66,8 +66,8 @@ export function SqBtn({
       aria-pressed={active}
       className={`w-8 h-7 shrink-0 flex items-center justify-center transition-colors ${
         active
-          ? "bg-[#454545] text-[#ffffff] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
-          : "text-[#b8b8b8] hover:bg-[#454545] hover:text-[#ffffff]"
+          ? "bg-[#202020] text-[#ffffff] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
+          : "text-[#b8b8b8] hover:bg-[#202020] hover:text-[#ffffff]"
       }`}
     >
       {children}
@@ -95,8 +95,8 @@ export function BoxBtn({
       aria-pressed={active}
       className={`w-8 h-8 shrink-0 flex items-center justify-center rounded-[6px] transition-colors ${
         active
-          ? "bg-[#454545] text-[#ffffff] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
-          : "bg-[#3a3a3a] text-[#b8b8b8] hover:bg-[#454545] hover:text-[#ffffff]"
+          ? "bg-[#202020] text-[#ffffff] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
+          : "bg-[#1e1e1e] text-[#b8b8b8] hover:bg-[#202020] hover:text-[#ffffff]"
       }`}
     >
       {children}
@@ -124,8 +124,8 @@ export function WideBtn({
       aria-pressed={active}
       className={`flex-1 h-8 min-w-0 flex items-center justify-center rounded-[6px] transition-colors ${
         active
-          ? "bg-[#454545] text-[#ffffff] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
-          : "bg-[#3a3a3a] text-[#9b9b9b] hover:bg-[#454545] hover:text-[#ffffff]"
+          ? "bg-[#202020] text-[#ffffff] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
+          : "bg-[#1e1e1e] text-[#9b9b9b] hover:bg-[#202020] hover:text-[#ffffff]"
       }`}
     >
       {children}

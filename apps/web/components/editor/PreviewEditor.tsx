@@ -7,8 +7,9 @@ import {
   type HtmlPreviewHandle,
   type ElementInfo,
 } from "./HtmlPreview";
-import { FigmaLayersSidebar } from "./FigmaLayersSidebar";
 import { FigmaBottomToolbar } from "./FigmaBottomToolbar";
+import { Sidebar } from "@/components/layout/Sidebar";
+import type { UserProfile } from "@/lib/data/users";
 import { PropertiesSidebar } from "./PropertiesSidebar";
 import { getTemplate } from "@/lib/data/templates";
 import {
@@ -20,13 +21,20 @@ import type { Document } from "@/lib/types";
 interface PreviewEditorProps {
   initialDocument?: Document | null;
   initialTemplateSlug?: string | null;
+  documents?: Document[];
+  profile?: UserProfile | null;
 }
 
 export function PreviewEditor({
   initialDocument = null,
   initialTemplateSlug = null,
+  documents = [],
+  profile = null,
 }: PreviewEditorProps) {
   const router = useRouter();
+
+  // Document search state for the dashboard-style sidebar.
+  const [query, setQuery] = useState("");
 
   // ── Dynamic document state ──
   // `docId` is null for a template draft (direct /preview/{slug} visit);
@@ -55,6 +63,10 @@ export function PreviewEditor({
   const [inspectMode, setInspectMode] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [splitMode, setSplitMode] = useState(false);
+  const [pageBreakCount, setPageBreakCount] = useState(
+    () => (html ?? "").match(/data-klone-page-break/g)?.length ?? 0,
+  );
   // isEditingRef is the source of truth for edit-mode gating; the state
   // setter is kept to mirror it into the component (the value itself is
   // never read in render).
@@ -159,6 +171,23 @@ export function PreviewEditor({
     previewRef.current?.redo();
   }, []);
 
+  const handleToggleSplitMode = useCallback(() => {
+    setInspectMode(true);
+    setSplitMode((enabled) => !enabled);
+  }, []);
+
+  const handleClearPageBreak = useCallback(() => {
+    previewRef.current?.clearPageBreak();
+  }, []);
+
+  const handlePageBreakChange = useCallback(
+    (hasBreak: boolean, changed: boolean, count?: number) => {
+      setPageBreakCount(count ?? (hasBreak ? 1 : 0));
+      if (changed) setDirty(true);
+    },
+    [],
+  );
+
   const handleShare = useCallback(async () => {
     setDownloading(true);
     try {
@@ -219,6 +248,10 @@ export function PreviewEditor({
 
       // Escape: deselect all elements
       if (e.key === "Escape") {
+        if (splitMode) {
+          setSplitMode(false);
+          return;
+        }
         previewRef.current?.deselect();
         setSelectedElements([]);
         return;
@@ -298,10 +331,10 @@ export function PreviewEditor({
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [inspectMode, selectedElements.length]);
+  }, [inspectMode, selectedElements.length, splitMode]);
 
   return (
-    <div className="flex flex-col w-full h-full bg-[#1e1e1e]">
+    <div className="flex flex-col w-full h-full bg-[#161617]">
       {/* ── Full-width top bar ── */}
       <FigmaBottomToolbar
         title={docTitle}
@@ -315,6 +348,7 @@ export function PreviewEditor({
             if (!next) {
               setLeftSidebarOpen(false);
               setSelectedElements([]);
+              setSplitMode(false);
               previewRef.current?.deselect();
             }
             return next;
@@ -328,13 +362,18 @@ export function PreviewEditor({
 
       {/* ── Content area: sidebars + canvas ── */}
       <div className="flex-1 flex flex-row min-h-0">
-        {/* ── Left sidebar: Pages + Layers ── */}
+        {/* ── Left sidebar: dashboard shell (search, nav, templates, account) ── */}
         <div
           className="overflow-hidden transition-[width] duration-200 ease-out"
           style={{ width: leftOpen ? 240 : 0 }}
         >
           <div className="w-60 h-full border-r border-[#2d2d2d]">
-            <FigmaLayersSidebar />
+            <Sidebar
+              documents={documents}
+              query={query}
+              onQueryChange={setQuery}
+              profile={profile}
+            />
           </div>
         </div>
 
@@ -359,9 +398,12 @@ export function PreviewEditor({
                 ref={previewRef}
                 html={html ?? undefined}
                 inspectMode={inspectMode}
+                splitMode={splitMode}
                 onElementSelect={handleElementSelect}
                 onStyleUpdated={handleStyleUpdated}
                 onEditModeChange={handleEditModeChange}
+                onPageBreakChange={handlePageBreakChange}
+                onSplitModeChange={setSplitMode}
               />
             </div>
           </div>
@@ -369,18 +411,32 @@ export function PreviewEditor({
           {/* ── Canvas editing hint (inspect mode) ── */}
           {inspectMode && (
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#18181b]/90 border border-[#2d2d2d] backdrop-blur text-[11px] text-[#a1a1aa] shadow-lg whitespace-nowrap">
-                <kbd className="px-1.5 py-0.5 rounded bg-[#27272a] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">
-                  double-click
-                </kbd>
-                edit text
-                <span className="text-[#52525b]">·</span>
-                drag to move
-                <span className="text-[#52525b]">·</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-[#27272a] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">
-                  V
-                </kbd>
-                exit
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1a1a1a]/90 border border-[#2d2d2d] backdrop-blur text-[11px] text-[#a1a1aa] shadow-lg whitespace-nowrap">
+                {splitMode ? (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#18a0fb]" />
+                    Click an element to start a new PDF page
+                    <span className="text-[#52525b]">·</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">
+                      Esc
+                    </kbd>
+                    cancel
+                  </>
+                ) : (
+                  <>
+                    <kbd className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">
+                      double-click
+                    </kbd>
+                    edit text
+                    <span className="text-[#52525b]">·</span>
+                    drag to move
+                    <span className="text-[#52525b]">·</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">
+                      V
+                    </kbd>
+                    exit
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -389,15 +445,20 @@ export function PreviewEditor({
         {/* ── Right sidebar: Design properties ── */}
         <div
           className="overflow-hidden transition-[width] duration-200 ease-out"
-          style={{ width: rightOpen ? 278 : 0 }}
+          style={{ width: rightOpen ? 256 : 0 }}
         >
-          <div className="w-[278px] h-full border-l border-[#2d2d2d]">
+          <div className="w-64 h-full border-l border-[#2d2d2d]">
             <PropertiesSidebar
               selectedElements={selectedElements}
               onApplyStyle={handleApplyStyle}
               onDelete={handleDelete}
               onUndo={handleUndo}
               onRedo={handleRedo}
+              splitMode={splitMode}
+              hasPageBreak={pageBreakCount > 0}
+              pageBreakCount={pageBreakCount}
+              onToggleSplitMode={handleToggleSplitMode}
+              onClearPageBreak={handleClearPageBreak}
             />
           </div>
         </div>

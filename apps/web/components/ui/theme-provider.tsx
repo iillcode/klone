@@ -1,18 +1,19 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light';
 
 interface ThemeContextValue {
   theme: Theme;
+  setTheme: (t: Theme) => void;
   toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark');
+  const [theme, setThemeState] = useState<Theme>('dark');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -20,9 +21,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (stored) {
       // Intentional: hydrating persisted theme once on mount.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTheme(stored);
+      setThemeState(stored);
     } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
-      setTheme('light');
+      setThemeState('light');
     }
     setMounted(true);
   }, []);
@@ -33,10 +34,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('theme', theme);
   }, [theme, mounted]);
 
-  const toggleTheme = () => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  const setTheme = useCallback((t: Theme) => setThemeState(t), []);
+  const toggleTheme = useCallback(
+    () => setThemeState((prev) => (prev === 'dark' ? 'light' : 'dark')),
+    [],
+  );
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -16,6 +16,25 @@ export function RedoIcon() {
     </svg>
   );
 }
+export function PageBreakIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M5 4.5h14v5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M19 14.5v5H5v-5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 12h16" strokeDasharray="2.5 2.5" strokeLinecap="round" />
+      <path d="M12 7.5v9M8.5 13l3.5 3.5 3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function ClearPageBreakIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M5 7h14M5 17h14" strokeLinecap="round" />
+      <path d="M9 9l6 6M15 9l-6 6" strokeLinecap="round" />
+    </svg>
+  );
+}
 export function EyeIcon() {
   return (
     <svg viewBox="0 0 16 16" width="15" height="15" fill="none">

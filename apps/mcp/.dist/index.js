@@ -5,12 +5,12 @@ var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
-var __esm = (fn, res, err) => function __init() {
-  if (err) throw err[0];
+var __esm = (fn, res, err2) => function __init() {
+  if (err2) throw err2[0];
   try {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
   } catch (e2) {
-    throw err = [e2], e2;
+    throw err2 = [e2], e2;
   }
 };
 var __commonJS = (cb, mod) => function __require() {
@@ -1443,22 +1443,22 @@ var require_errors = __commonJS({
     function extendErrors({ gen, keyword, schemaValue, data, errsCount, it }) {
       if (errsCount === void 0)
         throw new Error("ajv implementation error");
-      const err = gen.name("err");
+      const err2 = gen.name("err");
       gen.forRange("i", errsCount, names_1.default.errors, (i2) => {
-        gen.const(err, (0, codegen_1._)`${names_1.default.vErrors}[${i2}]`);
-        gen.if((0, codegen_1._)`${err}.instancePath === undefined`, () => gen.assign((0, codegen_1._)`${err}.instancePath`, (0, codegen_1.strConcat)(names_1.default.instancePath, it.errorPath)));
-        gen.assign((0, codegen_1._)`${err}.schemaPath`, (0, codegen_1.str)`${it.errSchemaPath}/${keyword}`);
+        gen.const(err2, (0, codegen_1._)`${names_1.default.vErrors}[${i2}]`);
+        gen.if((0, codegen_1._)`${err2}.instancePath === undefined`, () => gen.assign((0, codegen_1._)`${err2}.instancePath`, (0, codegen_1.strConcat)(names_1.default.instancePath, it.errorPath)));
+        gen.assign((0, codegen_1._)`${err2}.schemaPath`, (0, codegen_1.str)`${it.errSchemaPath}/${keyword}`);
         if (it.opts.verbose) {
-          gen.assign((0, codegen_1._)`${err}.schema`, schemaValue);
-          gen.assign((0, codegen_1._)`${err}.data`, data);
+          gen.assign((0, codegen_1._)`${err2}.schema`, schemaValue);
+          gen.assign((0, codegen_1._)`${err2}.data`, data);
         }
       });
     }
     __name(extendErrors, "extendErrors");
     exports.extendErrors = extendErrors;
     function addError(gen, errObj) {
-      const err = gen.const("err", errObj);
-      gen.if((0, codegen_1._)`${names_1.default.vErrors} === null`, () => gen.assign(names_1.default.vErrors, (0, codegen_1._)`[${err}]`), (0, codegen_1._)`${names_1.default.vErrors}.push(${err})`);
+      const err2 = gen.const("err", errObj);
+      gen.if((0, codegen_1._)`${names_1.default.vErrors} === null`, () => gen.assign(names_1.default.vErrors, (0, codegen_1._)`[${err2}]`), (0, codegen_1._)`${names_1.default.vErrors}.push(${err2})`);
       gen.code((0, codegen_1._)`${names_1.default.errors}++`);
     }
     __name(addError, "addError");
@@ -18093,8 +18093,8 @@ var ZodType = class {
         } : {
           issues: ctx.common.issues
         };
-      } catch (err) {
-        if (err?.message?.toLowerCase()?.includes("encountered")) {
+      } catch (err2) {
+        if (err2?.message?.toLowerCase()?.includes("encountered")) {
           this["~standard"].async = true;
         }
         ctx.common = {
@@ -31900,7 +31900,7 @@ var CfWorkerJsonSchemaValidator = class {
         return {
           valid: false,
           data: void 0,
-          errorMessage: result.errors.map((err) => `${err.instanceLocation}: ${err.error}`).join("; ")
+          errorMessage: result.errors.map((err2) => `${err2.instanceLocation}: ${err2.error}`).join("; ")
         };
       }
     };
@@ -32497,18 +32497,18 @@ function syntaxError(message2) {
   return typeof DomException == "function" ? new DomException(message2, "SyntaxError") : new SyntaxError(message2);
 }
 __name(syntaxError, "syntaxError");
-function flattenError2(err) {
-  return err instanceof Error ? "errors" in err && Array.isArray(err.errors) ? err.errors.map(flattenError2).join(", ") : "cause" in err && err.cause instanceof Error ? `${err}: ${flattenError2(err.cause)}` : err.message : `${err}`;
+function flattenError2(err2) {
+  return err2 instanceof Error ? "errors" in err2 && Array.isArray(err2.errors) ? err2.errors.map(flattenError2).join(", ") : "cause" in err2 && err2.cause instanceof Error ? `${err2}: ${flattenError2(err2.cause)}` : err2.message : `${err2}`;
 }
 __name(flattenError2, "flattenError");
-function inspectableError(err) {
+function inspectableError(err2) {
   return {
-    type: err.type,
-    message: err.message,
-    code: err.code,
-    defaultPrevented: err.defaultPrevented,
-    cancelable: err.cancelable,
-    timeStamp: err.timeStamp
+    type: err2.type,
+    message: err2.message,
+    code: err2.code,
+    defaultPrevented: err2.defaultPrevented,
+    cancelable: err2.cancelable,
+    timeStamp: err2.timeStamp
   };
 }
 __name(inspectableError, "inspectableError");
@@ -32579,8 +32579,8 @@ var EventSource = class extends EventTarget {
         const { done, value } = await reader.read();
         value && __privateGet(this, _parser).feed(decoder2.decode(value, { stream: !done })), done && (open = false, __privateGet(this, _parser).reset(), __privateMethod(this, _EventSource_instances, scheduleReconnect_fn).call(this));
       } while (open);
-    }), __privateAdd(this, _onFetchError, (err) => {
-      __privateSet(this, _controller, void 0), !(err.name === "AbortError" || err.type === "aborted") && __privateMethod(this, _EventSource_instances, scheduleReconnect_fn).call(this, flattenError2(err));
+    }), __privateAdd(this, _onFetchError, (err2) => {
+      __privateSet(this, _controller, void 0), !(err2.name === "AbortError" || err2.type === "aborted") && __privateMethod(this, _EventSource_instances, scheduleReconnect_fn).call(this, flattenError2(err2));
     }), __privateAdd(this, _onEvent, (event) => {
       typeof event.id == "string" && __privateSet(this, _lastEventId, event.id);
       const messageEvent = new MessageEvent(event.event || "message", {
@@ -34129,9 +34129,9 @@ var StreamableHTTPClientTransport = class {
     try {
       const { resumptionToken, onresumptiontoken } = options || {};
       if (resumptionToken) {
-        this._startOrAuthSse({ resumptionToken, replayMessageId: isJSONRPCRequest(message2) ? message2.id : void 0 }).catch((err) => {
+        this._startOrAuthSse({ resumptionToken, replayMessageId: isJSONRPCRequest(message2) ? message2.id : void 0 }).catch((err2) => {
           var _a2;
-          return (_a2 = this.onerror) === null || _a2 === void 0 ? void 0 : _a2.call(this, err);
+          return (_a2 = this.onerror) === null || _a2 === void 0 ? void 0 : _a2.call(this, err2);
         });
         return;
       }
@@ -34203,9 +34203,9 @@ var StreamableHTTPClientTransport = class {
       this._lastUpscopingHeader = void 0;
       if (response.status === 202) {
         if (isInitializedNotification(message2)) {
-          this._startOrAuthSse({ resumptionToken: void 0 }).catch((err) => {
+          this._startOrAuthSse({ resumptionToken: void 0 }).catch((err2) => {
             var _a2;
-            return (_a2 = this.onerror) === null || _a2 === void 0 ? void 0 : _a2.call(this, err);
+            return (_a2 = this.onerror) === null || _a2 === void 0 ? void 0 : _a2.call(this, err2);
           });
         }
         return;
@@ -34326,8 +34326,8 @@ var Emitter = class {
   fire(data) {
     for (const listener of [...this._listeners]) try {
       listener(data);
-    } catch (err) {
-      console.error("Emitter listener error:", err);
+    } catch (err2) {
+      console.error("Emitter listener error:", err2);
     }
   }
   dispose() {
@@ -36126,19 +36126,19 @@ Did you try connecting directly to this Durable Object? Try using getServerByNam
           webSocket: clientWebSocket
         });
       }
-    } catch (err) {
-      console.error(`Error in ${this.#ParentClass.name}:${this.#_name ?? "<unnamed>"} fetch:`, err);
-      if (!(err instanceof Error)) throw err;
+    } catch (err2) {
+      console.error(`Error in ${this.#ParentClass.name}:${this.#_name ?? "<unnamed>"} fetch:`, err2);
+      if (!(err2 instanceof Error)) throw err2;
       if (request.headers.get("Upgrade") === "websocket") {
         const pair = new WebSocketPair();
         pair[1].accept();
-        pair[1].send(JSON.stringify({ error: err.stack }));
+        pair[1].send(JSON.stringify({ error: err2.stack }));
         pair[1].close(1011, "Uncaught exception during session setup");
         return new Response(null, {
           status: 101,
           webSocket: pair[0]
         });
-      } else return new Response(err.stack, { status: 500 });
+      } else return new Response(err2.stack, { status: 500 });
     }
   }
   async webSocketMessage(ws, message2) {
@@ -42979,8 +42979,8 @@ var Ajax = class {
       const _timeoutId = setTimeout(() => controller.abort(), timeout);
       options.signal = controller.signal;
     }
-    global2.fetch(endPoint, options).then((response) => response.text()).then((data) => this.parseJSON(data)).then((data) => callback && callback(data)).catch((err) => {
-      if (err.name === "AbortError" && ontimeout) {
+    global2.fetch(endPoint, options).then((response) => response.text()).then((data) => this.parseJSON(data)).then((data) => callback && callback(data)).catch((err2) => {
+      if (err2.name === "AbortError" && ontimeout) {
         ontimeout();
       } else {
         callback && callback(null);
@@ -46800,9 +46800,9 @@ var isValidBucketName = /* @__PURE__ */ __name((bucketName) => {
   if (bucketName.includes("/") || bucketName.includes("\\")) return false;
   return /^[\w!.\*'() &$@=;:+,?-]+$/.test(bucketName);
 }, "isValidBucketName");
-var _getErrorMessage = /* @__PURE__ */ __name((err) => {
-  if (typeof err === "object" && err !== null) {
-    const e2 = err;
+var _getErrorMessage = /* @__PURE__ */ __name((err2) => {
+  if (typeof err2 === "object" && err2 !== null) {
+    const e2 = err2;
     if (typeof e2.msg === "string") return e2.msg;
     if (typeof e2.message === "string") return e2.message;
     if (typeof e2.error_description === "string") return e2.error_description;
@@ -46812,16 +46812,16 @@ var _getErrorMessage = /* @__PURE__ */ __name((err) => {
       if (typeof nested.message === "string") return nested.message;
     }
   }
-  return JSON.stringify(err);
+  return JSON.stringify(err2);
 }, "_getErrorMessage");
 var handleError = /* @__PURE__ */ __name(async (error2, reject, options, namespace) => {
   if (error2 !== null && typeof error2 === "object" && "json" in error2 && typeof error2.json === "function") {
     const responseError = error2;
     let status = parseInt(String(responseError.status), 10);
     if (!Number.isFinite(status)) status = 500;
-    responseError.json().then((err) => {
-      const statusCode = (err === null || err === void 0 ? void 0 : err.statusCode) || (err === null || err === void 0 ? void 0 : err.code) || status + "";
-      reject(new StorageApiError(_getErrorMessage(err), status, statusCode, namespace));
+    responseError.json().then((err2) => {
+      const statusCode = (err2 === null || err2 === void 0 ? void 0 : err2.statusCode) || (err2 === null || err2 === void 0 ? void 0 : err2.code) || status + "";
+      reject(new StorageApiError(_getErrorMessage(err2), status, statusCode, namespace));
     }).catch(() => {
       const statusCode = status + "";
       reject(new StorageApiError(responseError.statusText || `HTTP ${status} error`, status, statusCode, namespace));
@@ -50176,9 +50176,9 @@ function deepClone(obj) {
 __name(deepClone, "deepClone");
 
 // ../../node_modules/.pnpm/@supabase+auth-js@2.110.7/node_modules/@supabase/auth-js/dist/module/lib/fetch.js
-var _getErrorMessage2 = /* @__PURE__ */ __name((err) => {
-  if (typeof err === "object" && err !== null) {
-    const e2 = err;
+var _getErrorMessage2 = /* @__PURE__ */ __name((err2) => {
+  if (typeof err2 === "object" && err2 !== null) {
+    const e2 = err2;
     if (typeof e2.msg === "string")
       return e2.msg;
     if (typeof e2.message === "string")
@@ -50188,7 +50188,7 @@ var _getErrorMessage2 = /* @__PURE__ */ __name((err) => {
     if (typeof e2.error === "string")
       return e2.error;
   }
-  return JSON.stringify(err);
+  return JSON.stringify(err2);
 }, "_getErrorMessage");
 var NETWORK_ERROR_CODES = [
   500,
@@ -51918,11 +51918,11 @@ async function createCredential(options) {
       };
     }
     return { data: response, error: null };
-  } catch (err) {
+  } catch (err2) {
     return {
       data: null,
       error: identifyRegistrationError({
-        error: err,
+        error: err2,
         options
       })
     };
@@ -51948,11 +51948,11 @@ async function getCredential(options) {
       };
     }
     return { data: response, error: null };
-  } catch (err) {
+  } catch (err2) {
     return {
       data: null,
       error: identifyAuthenticationError({
-        error: err,
+        error: err2,
         options
       })
     };
@@ -55617,13 +55617,13 @@ var GoTrueClient = class _GoTrueClient {
           throw error2;
         await ((_a = this.stateChangeEmitters.get(id)) === null || _a === void 0 ? void 0 : _a.callback("INITIAL_SESSION", session));
         this._debug("INITIAL_SESSION", "callback id", id, "session", session);
-      } catch (err) {
+      } catch (err2) {
         await ((_b = this.stateChangeEmitters.get(id)) === null || _b === void 0 ? void 0 : _b.callback("INITIAL_SESSION", null));
-        this._debug("INITIAL_SESSION", "callback id", id, "error", err);
-        if (isAuthSessionMissingError(err)) {
-          console.warn(err);
+        this._debug("INITIAL_SESSION", "callback id", id, "error", err2);
+        if (isAuthSessionMissingError(err2)) {
+          console.warn(err2);
         } else {
-          console.error(err);
+          console.error(err2);
         }
       }
     });
@@ -56054,9 +56054,9 @@ var GoTrueClient = class _GoTrueClient {
       } else {
         await this._notifyAllSubscribers("SIGNED_IN", currentSession);
       }
-    } catch (err) {
-      this._debug(debugName, "error", err);
-      console.error(err);
+    } catch (err2) {
+      this._debug(debugName, "error", err2);
+      console.error(err2);
       return;
     } finally {
       this._debug(debugName, "end");
@@ -58188,157 +58188,308 @@ __name(shouldShowDeprecationWarning, "shouldShowDeprecationWarning");
 if (shouldShowDeprecationWarning()) console.warn("\u26A0\uFE0F  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715");
 
 // src/supabase.ts
-function getSupabase(env2) {
-  return createClient(env2.SUPABASE_URL, env2.SUPABASE_ANON_KEY);
+function getSupabase(env2, token) {
+  return createClient(env2.SUPABASE_URL, env2.SUPABASE_ANON_KEY, {
+    global: {
+      headers: token ? { Authorization: `Bearer ${token}` } : void 0
+    }
+  });
 }
 __name(getSupabase, "getSupabase");
 
-// src/tools.ts
-function registerTools(server, env2, userId) {
-  const supabase = getSupabase(env2);
+// src/respond.ts
+function ok(data) {
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ ok: true, data }, null, 2)
+      }
+    ]
+  };
+}
+__name(ok, "ok");
+function err(message2) {
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ ok: false, error: message2 }, null, 2)
+      }
+    ],
+    isError: true
+  };
+}
+__name(err, "err");
+
+// src/templates.ts
+var LIST_FIELDS = "id, slug, name, description, category, tags, is_active, created_at, updated_at";
+var FULL_FIELDS = "id, slug, name, description, category, blueprint, tags, is_active, created_at, updated_at";
+function registerTemplateTools(server, supabase) {
   server.tool(
-    "create_item",
-    "Create a new item/record",
+    "list_pdf_templates",
+    "List the PDF templates available to build a document from. Returns template metadata only (id, slug, name, category, tags) \u2014 use get_pdf_template to fetch the full blueprint outline for the one you want to use. This is the first step when a user asks for a new document.",
     {
-      name: external_exports.string().describe("The name of the item"),
-      description: external_exports.string().optional().describe("A description for the item"),
-      metadata: external_exports.record(external_exports.unknown()).optional().describe("Optional metadata as key-value pairs")
+      category: external_exports.string().optional().describe(
+        "Filter by template category (e.g. 'Reports', 'Business', 'Technical', 'General')"
+      ),
+      query: external_exports.string().optional().describe("Free-text search over template names, descriptions and tags"),
+      limit: external_exports.number().int().min(1).max(100).optional().describe("Max templates to return (default 50)")
     },
-    async ({ name, description, metadata }) => {
-      const { data, error: error2 } = await supabase.from("items").insert({
+    async ({ category, query, limit = 50 }) => {
+      let q = supabase.from("pdf_templates").select(LIST_FIELDS).eq("is_active", true).order("name", { ascending: true });
+      if (category) {
+        q = q.ilike("category", `%${category}%`);
+      }
+      const { data, error: error2 } = await q;
+      if (error2) {
+        return err(`Could not list templates: ${error2.message}`);
+      }
+      let templates = data ?? [];
+      if (query) {
+        const q2 = query.toLowerCase();
+        templates = templates.filter(
+          (t2) => [
+            t2.name,
+            t2.description ?? "",
+            t2.category ?? "",
+            (t2.tags ?? []).join(" ")
+          ].join(" ").toLowerCase().includes(q2)
+        );
+      }
+      templates = templates.slice(0, limit);
+      return ok({
+        count: templates.length,
+        templates: templates.map((t2) => ({
+          id: t2.id,
+          slug: t2.slug,
+          name: t2.name,
+          description: t2.description,
+          category: t2.category,
+          tags: t2.tags,
+          is_active: t2.is_active
+        }))
+      });
+    }
+  );
+  server.tool(
+    "get_pdf_template",
+    "Fetch the full blueprint outline of a single PDF template by slug or id. The blueprint contains the page constraints, the ordered list of sections (name, description and authoring guidance for each) and the global requirements for the final HTML document. Follow it to author a self-contained HTML document, then save it with create_document. This is the main entry point for building a new document.",
+    {
+      template_id: external_exports.string().uuid().optional().describe("The UUID of the template to fetch (provide this OR slug)"),
+      slug: external_exports.string().optional().describe(
+        "The template slug, e.g. 'business-report' or 'invoice' (provide this OR template_id)"
+      )
+    },
+    async ({ template_id, slug }) => {
+      if (!template_id && !slug) {
+        return err("Provide either template_id or slug.");
+      }
+      let q = supabase.from("pdf_templates").select(FULL_FIELDS);
+      if (template_id) q = q.eq("id", template_id);
+      else q = q.eq("slug", slug);
+      const { data, error: error2 } = await q.maybeSingle();
+      if (error2) {
+        return err(`Could not fetch template: ${error2.message}`);
+      }
+      if (!data) {
+        return err(
+          `Template not found. Use list_pdf_templates to see available templates.`
+        );
+      }
+      return ok({ template: data });
+    }
+  );
+}
+__name(registerTemplateTools, "registerTemplateTools");
+
+// src/documents.ts
+var DOCUMENT_FIELDS = "id, title, description, html_code, css_code, template_id, template_slug, prompt_used, metadata, created_at, updated_at";
+var MIN_HTML_LENGTH = 40;
+async function resolveTemplate(supabase, templateId, templateSlug) {
+  if (templateSlug) {
+    const { data, error: error2 } = await supabase.from("pdf_templates").select("id, slug").eq("slug", templateSlug).maybeSingle();
+    if (error2) return { ok: false, error: error2.message };
+    if (!data) {
+      return {
+        ok: false,
+        error: `Template '${templateSlug}' not found. Use list_pdf_templates to see available templates.`
+      };
+    }
+    return { ok: true, template_id: data.id, template_slug: data.slug };
+  }
+  if (templateId) {
+    const { data, error: error2 } = await supabase.from("pdf_templates").select("slug").eq("id", templateId).maybeSingle();
+    if (error2) return { ok: false, error: error2.message };
+    return { ok: true, template_id: templateId, template_slug: data?.slug ?? null };
+  }
+  return { ok: true, template_id: null, template_slug: null };
+}
+__name(resolveTemplate, "resolveTemplate");
+function registerDocumentTools(server, supabase, userId) {
+  server.tool(
+    "create_document",
+    "Save a new document (a self-contained HTML document) under the authenticated user's account. Call this after composing HTML from a pdf template blueprint. The document becomes available in the user's web editor, where they can refine it and export it as a PDF.",
+    {
+      title: external_exports.string().describe("Short, descriptive title of the document"),
+      html_code: external_exports.string().describe(
+        "The full self-contained HTML document (embedded <style> allowed)"
+      ),
+      description: external_exports.string().optional().describe("Optional longer description of the document"),
+      template_id: external_exports.string().uuid().optional().describe("UUID of the pdf template this document was built from"),
+      template_slug: external_exports.string().optional().describe(
+        "Slug of the pdf template this document was built from, e.g. 'invoice' (alternative to template_id)"
+      ),
+      prompt_used: external_exports.string().optional().describe("The goal/prompt that produced this document"),
+      metadata: external_exports.record(external_exports.unknown()).optional().describe("Optional key-value metadata (e.g. task id, project name)")
+    },
+    async ({
+      title,
+      html_code,
+      description,
+      template_id,
+      template_slug,
+      prompt_used,
+      metadata
+    }) => {
+      if (html_code.trim().length < MIN_HTML_LENGTH) {
+        return err(
+          `html_code looks too short (${html_code.trim().length} chars) to be a full HTML document.`
+        );
+      }
+      const template = await resolveTemplate(
+        supabase,
+        template_id,
+        template_slug
+      );
+      if (!template.ok) return err(template.error);
+      const { data, error: error2 } = await supabase.from("visual_implementations").insert({
         user_id: userId,
-        name,
+        title,
         description: description ?? null,
+        html_code,
+        template_id: template.template_id,
+        template_slug: template.template_slug,
+        prompt_used: prompt_used ?? null,
         metadata: metadata ?? null
-      }).select().single();
+      }).select(DOCUMENT_FIELDS).single();
       if (error2) {
-        return {
-          content: [
-            { type: "text", text: `Error creating item: ${error2.message}` }
-          ],
-          isError: true
-        };
+        return err(`Could not save document: ${error2.message}`);
       }
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(data, null, 2)
-          }
-        ]
-      };
+      return ok({ saved: true, document: data });
     }
   );
   server.tool(
-    "get_item",
-    "Get an item by ID",
+    "list_documents",
+    "List all documents saved by the authenticated user, most recently updated first.",
     {
-      id: external_exports.string().uuid().describe("The UUID of the item to retrieve")
-    },
-    async ({ id }) => {
-      const { data, error: error2 } = await supabase.from("items").select("*").eq("id", id).eq("user_id", userId).single();
-      if (error2) {
-        return {
-          content: [
-            { type: "text", text: `Error fetching item: ${error2.message}` }
-          ],
-          isError: true
-        };
-      }
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(data, null, 2)
-          }
-        ]
-      };
-    }
-  );
-  server.tool(
-    "list_items",
-    "List all items for the authenticated user",
-    {
-      limit: external_exports.number().int().min(1).max(100).optional().describe("Max items to return (default 50)"),
+      limit: external_exports.number().int().min(1).max(100).optional().describe("Max documents to return (default 50)"),
       offset: external_exports.number().int().min(0).optional().describe("Offset for pagination (default 0)")
     },
     async ({ limit = 50, offset = 0 }) => {
-      const { data, error: error2 } = await supabase.from("items").select("*").eq("user_id", userId).order("created_at", { ascending: false }).range(offset, offset + limit - 1);
+      const { data, error: error2 } = await supabase.from("visual_implementations").select(DOCUMENT_FIELDS).eq("user_id", userId).order("updated_at", { ascending: false }).range(offset, offset + limit - 1);
       if (error2) {
-        return {
-          content: [
-            { type: "text", text: `Error listing items: ${error2.message}` }
-          ],
-          isError: true
-        };
+        return err(`Could not list documents: ${error2.message}`);
       }
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(data, null, 2)
-          }
-        ]
-      };
+      return ok({
+        count: (data ?? []).length,
+        documents: data ?? []
+      });
     }
   );
   server.tool(
-    "update_item",
-    "Update an existing item",
+    "get_document",
+    "Fetch a single document by id (owned by the authenticated user).",
     {
-      id: external_exports.string().uuid().describe("The UUID of the item to update"),
-      name: external_exports.string().optional().describe("New name for the item"),
-      description: external_exports.string().optional().describe("New description"),
-      metadata: external_exports.record(external_exports.unknown()).optional().describe("New metadata key-value pairs")
-    },
-    async ({ id, name, description, metadata }) => {
-      const updates = {};
-      if (name !== void 0) updates.name = name;
-      if (description !== void 0) updates.description = description;
-      if (metadata !== void 0) updates.metadata = metadata;
-      updates.updated_at = (/* @__PURE__ */ new Date()).toISOString();
-      const { data, error: error2 } = await supabase.from("items").update(updates).eq("id", id).eq("user_id", userId).select().single();
-      if (error2) {
-        return {
-          content: [
-            { type: "text", text: `Error updating item: ${error2.message}` }
-          ],
-          isError: true
-        };
-      }
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(data, null, 2)
-          }
-        ]
-      };
-    }
-  );
-  server.tool(
-    "delete_item",
-    "Delete an item by ID",
-    {
-      id: external_exports.string().uuid().describe("The UUID of the item to delete")
+      id: external_exports.string().uuid().describe("The UUID of the document to retrieve")
     },
     async ({ id }) => {
-      const { error: error2 } = await supabase.from("items").delete().eq("id", id).eq("user_id", userId);
+      const { data, error: error2 } = await supabase.from("visual_implementations").select(DOCUMENT_FIELDS).eq("id", id).eq("user_id", userId).maybeSingle();
       if (error2) {
-        return {
-          content: [
-            { type: "text", text: `Error deleting item: ${error2.message}` }
-          ],
-          isError: true
-        };
+        return err(`Could not fetch document: ${error2.message}`);
       }
-      return {
-        content: [
-          { type: "text", text: `Item ${id} deleted successfully` }
-        ]
-      };
+      if (!data) {
+        return err(`Document '${id}' not found or not owned by this user.`);
+      }
+      return ok({ document: data });
     }
   );
+  server.tool(
+    "update_document",
+    "Update fields of an existing document (only fields provided are changed).",
+    {
+      id: external_exports.string().uuid().describe("The UUID of the document to update"),
+      title: external_exports.string().optional().describe("New title"),
+      description: external_exports.string().optional().describe("New description"),
+      html_code: external_exports.string().optional().describe("New HTML document"),
+      css_code: external_exports.string().optional().describe("New CSS (pass empty string to clear)"),
+      template_id: external_exports.string().uuid().optional().describe("New template uuid"),
+      template_slug: external_exports.string().optional().describe("New template slug"),
+      prompt_used: external_exports.string().optional().describe("New prompt/goal text"),
+      metadata: external_exports.record(external_exports.unknown()).optional().describe("New metadata key-value pairs")
+    },
+    async ({
+      id,
+      title,
+      description,
+      html_code,
+      css_code,
+      template_id,
+      template_slug,
+      prompt_used,
+      metadata
+    }) => {
+      const updates = {
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      if (title !== void 0) updates.title = title;
+      if (description !== void 0) updates.description = description;
+      if (html_code !== void 0) updates.html_code = html_code;
+      if (css_code !== void 0) updates.css_code = css_code;
+      if (prompt_used !== void 0) updates.prompt_used = prompt_used;
+      if (metadata !== void 0) updates.metadata = metadata;
+      if (template_id !== void 0 || template_slug !== void 0) {
+        const template = await resolveTemplate(
+          supabase,
+          template_id,
+          template_slug
+        );
+        if (!template.ok) return err(template.error);
+        updates.template_id = template.template_id;
+        updates.template_slug = template.template_slug;
+      }
+      const { data, error: error2 } = await supabase.from("visual_implementations").update(updates).eq("id", id).eq("user_id", userId).select(DOCUMENT_FIELDS).maybeSingle();
+      if (error2) {
+        return err(`Could not update document: ${error2.message}`);
+      }
+      if (!data) {
+        return err(`Document '${id}' not found or not owned by this user.`);
+      }
+      return ok({ updated: true, document: data });
+    }
+  );
+  server.tool(
+    "delete_document",
+    "Delete a document by id (owned by the authenticated user).",
+    {
+      id: external_exports.string().uuid().describe("The UUID of the document to delete")
+    },
+    async ({ id }) => {
+      const { error: error2 } = await supabase.from("visual_implementations").delete().eq("id", id).eq("user_id", userId);
+      if (error2) {
+        return err(`Could not delete document: ${error2.message}`);
+      }
+      return ok({ deleted: true, id });
+    }
+  );
+}
+__name(registerDocumentTools, "registerDocumentTools");
+
+// src/tools.ts
+function registerTools(server, env2, userId, token) {
+  const supabase = getSupabase(env2, token);
+  registerTemplateTools(server, supabase);
+  registerDocumentTools(server, supabase, userId);
 }
 __name(registerTools, "registerTools");
 
@@ -58986,9 +59137,9 @@ async function normalizeKey(key, alg) {
     if ("toCryptoKey" in key && typeof key.toCryptoKey === "function") {
       try {
         return handleKeyObject(key, alg);
-      } catch (err) {
-        if (err instanceof TypeError) {
-          throw err;
+      } catch (err2) {
+        if (err2 instanceof TypeError) {
+          throw err2;
         }
       }
     }
@@ -59558,8 +59709,8 @@ var index_default = {
       name: "klone-mcp",
       version: "1.0.0"
     });
-    registerTools(server, env2, user.sub);
-    const handler = createMcpHandler(server);
+    registerTools(server, env2, user.sub, token);
+    const handler = createMcpHandler(server, { enableJsonResponse: true });
     return handler(request, env2, ctx);
   }
 };
