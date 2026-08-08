@@ -11,6 +11,7 @@ import { FigmaBottomToolbar } from "./FigmaBottomToolbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import type { UserProfile } from "@/lib/data/users";
 import { PropertiesSidebar } from "./PropertiesSidebar";
+import { PlusIcon } from "./icons/toolbar-icons";
 import { getTemplate } from "@/lib/data/templates";
 import {
   saveDocumentContent,
@@ -67,6 +68,12 @@ export function PreviewEditor({
   const [pageBreakCount, setPageBreakCount] = useState(
     () => (html ?? "").match(/data-klone-page-break/g)?.length ?? 0,
   );
+  // Multi-page state: pageCount comes from persisted boundaries (or the
+  // single default page); currentPage tracks the selection's page.
+  const [pageCount, setPageCount] = useState(
+    () => ((html ?? "").match(/data-klone-page-boundary/g)?.length ?? 0) + 1,
+  );
+  const [currentPage, setCurrentPage] = useState(0);
   // isEditingRef is the source of truth for edit-mode gating; the state
   // setter is kept to mirror it into the component (the value itself is
   // never read in render).
@@ -184,6 +191,19 @@ export function PreviewEditor({
     (hasBreak: boolean, changed: boolean, count?: number) => {
       setPageBreakCount(count ?? (hasBreak ? 1 : 0));
       if (changed) setDirty(true);
+    },
+    [],
+  );
+
+  const handlePagesChange = useCallback((count: number, changed: boolean) => {
+    setPageCount(Math.max(1, count));
+    if (changed) setDirty(true);
+  }, []);
+
+  const handlePageInfo = useCallback(
+    (info: { page: number; pageCount: number }) => {
+      setCurrentPage(info.page);
+      setPageCount(Math.max(1, info.pageCount));
     },
     [],
   );
@@ -404,41 +424,41 @@ export function PreviewEditor({
                 onEditModeChange={handleEditModeChange}
                 onPageBreakChange={handlePageBreakChange}
                 onSplitModeChange={setSplitMode}
+                onPageInfo={handlePageInfo}
+                onPagesChange={handlePagesChange}
               />
             </div>
           </div>
 
-          {/* ── Canvas editing hint (inspect mode) ── */}
-          {inspectMode && (
+          {/* ── Split-mode hint (inspect mode + split mode) ── */}
+          {inspectMode && splitMode && (
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1a1a1a]/90 border border-[#2d2d2d] backdrop-blur text-[11px] text-[#a1a1aa] shadow-lg whitespace-nowrap">
-                {splitMode ? (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#18a0fb]" />
-                    Click an element to start a new PDF page
-                    <span className="text-[#52525b]">·</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">
-                      Esc
-                    </kbd>
-                    cancel
-                  </>
-                ) : (
-                  <>
-                    <kbd className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">
-                      double-click
-                    </kbd>
-                    edit text
-                    <span className="text-[#52525b]">·</span>
-                    drag to move
-                    <span className="text-[#52525b]">·</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">
-                      V
-                    </kbd>
-                    exit
-                  </>
-                )}
+                <span className="w-1.5 h-1.5 rounded-full bg-[#18a0fb]" />
+                Click an element to start a new PDF page
+                <span className="text-[#52525b]">·</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">
+                  Esc
+                </kbd>
+                cancel
               </div>
             </div>
+          )}
+
+          {/* ── Add page button (inspect mode) ── */}
+          {inspectMode && (
+            <button
+              onClick={() => previewRef.current?.addPage()}
+              className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#1a1a1a]/95 border border-[#2d2d2d] shadow-lg text-[11px] font-medium text-[#e4e4e7] hover:bg-[#232325] hover:border-[#3f3f46] transition-colors whitespace-nowrap"
+            >
+              <PlusIcon className="w-3.5 h-3.5 text-[#18a0fb]" />
+              Add page
+              {pageCount > 1 && (
+                <span className="text-[#71717a] font-mono text-[10px]">
+                  · {pageCount}
+                </span>
+              )}
+            </button>
           )}
         </div>
 
@@ -459,6 +479,11 @@ export function PreviewEditor({
               pageBreakCount={pageBreakCount}
               onToggleSplitMode={handleToggleSplitMode}
               onClearPageBreak={handleClearPageBreak}
+              pageCount={pageCount}
+              currentPage={currentPage}
+              onMoveToPage={(pageIndex) =>
+                previewRef.current?.moveToPage(pageIndex)
+              }
             />
           </div>
         </div>

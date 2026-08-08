@@ -36,6 +36,9 @@ interface PropertiesSidebarProps {
   pageBreakCount?: number;
   onToggleSplitMode?: () => void;
   onClearPageBreak?: () => void;
+  pageCount?: number;
+  currentPage?: number;
+  onMoveToPage?: (pageIndex: number) => void;
 }
 
 export function PropertiesSidebar({
@@ -49,6 +52,9 @@ export function PropertiesSidebar({
   pageBreakCount = 0,
   onToggleSplitMode,
   onClearPageBreak,
+  pageCount = 1,
+  currentPage = 0,
+  onMoveToPage,
 }: PropertiesSidebarProps) {
   const first = selectedElements[0];
   const s = first?.styles;
@@ -341,6 +347,36 @@ export function PropertiesSidebar({
                 </FieldBlock>
               </div>
             </Section>
+
+            {/* ── Pages ── */}
+            {onMoveToPage && pageCount > 0 && !isContainerSel && (
+              <Section title="Pages" noBorder>
+                <div className="space-y-2">
+                  <span className="block text-[10px] text-[#71717a]">
+                    On page {currentPage + 1} of {pageCount}
+                  </span>
+                  <SelectField
+                    title="Move to page"
+                    value={String(currentPage)}
+                    onChange={(v) => {
+                      const target = v === "-1" ? -1 : parseInt(v, 10);
+                      if (Number.isNaN(target) || target === currentPage)
+                        return;
+                      onMoveToPage(target);
+                    }}
+                    options={[
+                      ...Array.from({ length: pageCount }, (_, i) => ({
+                        value: String(i),
+                        label: `Page ${i + 1}${
+                          i === currentPage ? " (current)" : ""
+                        }`,
+                      })),
+                      { value: "-1", label: "+ New page" },
+                    ]}
+                  />
+                </div>
+              </Section>
+            )}
 
             {/* ── Delete ── */}
             {onDelete && (

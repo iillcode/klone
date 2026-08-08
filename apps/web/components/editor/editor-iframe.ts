@@ -25,6 +25,7 @@ var pendingEditEl=null;
 var editReqId=0;
 var isMoving=false;
 var moveDeltas=[];
+var autoScrollDir=null; // 'up'|'down'|null - edge auto-scroll while dragging
 var selBoxEl=null;
 var isResizing=false;
 var resizeHandle='';
@@ -156,6 +157,515 @@ function setSplitMode(enabled){
   updatePageBreakMarkers();
 }
 
+// ── Pages ──
+// A "page" is a real CONTAINER element (data-klone-page-boundary) appended
+// to the content container. Content before the first page container = page
+// 1; the content INSIDE page container N = page N+1. Each page container
+// reserves a full page of height (A4 ratio) so an empty page is visible and
+// droppable. Page containers are system-level: never selectable/draggable.
+function isPageBoundary(el){
+  return !!(el&&el.getAttribute&&el.getAttribute('data-klone-page-boundary')!==null);
+}
+
+function getPageBoundaryEls(){
+  var list=document.querySelectorAll('[data-klone-page-boundary]');
+  var result=[];
+  for(var i=0;i<list.length;i++)result.push(list[i]);
+  return result;
+}
+
+function getContentContainer(){
+  var wrap=document.querySelector('.scroll-wrapper');
+  return wrap||document.body;
+}
+
+// One printed page of height for the current page width (A4 = 210x297mm).
+// The container's own width IS the page width, so the ratio keeps an added
+// empty page the same shape as the exported PDF page.
+function getPageHeightPx(){
+  var c=getContentContainer();
+  var w=c?c.clientWidth:794;
+  if(!w||w<=0)w=794;
+  return Math.round(w*297/210);
+}
+
+// The element that HOLDS page pageIndex content (0-based): page 0 lives
+// directly in the content container, page N inside page container N-1.
+function getPageContainer(pageIndex){
+  if(pageIndex<=0)return getContentContainer();
+  var boundaries=getPageBoundaryEls();
+  return boundaries[pageIndex-1]||getContentContainer();
+}
+
+function countPages(){
+  return getPageBoundaryEls().length+1;
+}
+
+var lastReportedPageCount=-1;
+function reportPages(changed){
+  var count=countPages();
+  if(count===lastReportedPageCount&&!changed)return; // nothing new to report
+  lastReportedPageCount=count;
+  window.parent.postMessage({type:'pages-changed',count:count,changed:!!changed},'*');
+}
+
+// The page container's own box: a real, page-sized empty area so a newly
+// added page is VISIBLE and can be dropped into. Kept as inline styles so
+// the page survives save/reload without depending on template CSS.
+function pageBoundaryCss(){
+  return 'display:block;position:relative;width:100%;min-height:'+getPageHeightPx()+'px;margin:0;padding:0;border:0;';
+}
+
+// Append a new empty page (a page-sized container) at the end of the doc.
+function addPageBoundary(record,sharedBatchId){
+  var container=getContentContainer();
+  if(!container)return;
+  var b=document.createElement('div');
+  b.setAttribute('data-klone-page-boundary','');
+  b.style.cssText=pageBoundaryCss();
+  if(record){
+    var bid=sharedBatchId||++batchId;
+    undoStack.push({property:'__page_boundary__',element:b,adding:true,nextSibling:null,parentNode:container,batchId:bid});
+    redoStack=[];
+  }
+  container.appendChild(b);
+  updateBoundaryMarkers();
+  reportPages(true);
+}
+
+// Keep every page's height in sync with the current page width (the page
+// container is responsive, so a resize must re-derive the A4 height), and
+// re-apply the box styles to pages restored from saved HTML.
+function syncPageBoundarySizes(){
+  var els=getPageBoundaryEls();
+  var css=pageBoundaryCss();
+  for(var i=0;i<els.length;i++){
+    if(els[i].getAttribute('style')!==css)els[i].style.cssText=css;
+  }
+}
+
+// Delete a page AND everything on it. The page is a real container, so
+// removing it takes its content with it - including elements that were
+// moved onto the page from another page. The whole page (with its content)
+// is kept in the undo entry, so one undo restores the page and everything
+// that was on it.
+function removePageBoundary(boundary,record,sharedBatchId){
+  if(!boundary||!boundary.isConnected)return;
+  var parent=boundary.parentNode;
+  // Anything selected on this page is about to disappear - drop it from the
+  // selection first so the sidebar never edits a detached element.
+  var hadSelection=false;
+  for(var i=selectedEls.length-1;i>=0;i--){
+    if(boundary===selectedEls[i]||boundary.contains(selectedEls[i])){
+      selectedEls[i].style.outline='';
+      selectedEls[i].style.outlineOffset='';
+      selectedEls.splice(i,1);
+      hadSelection=true;
+    }
+  }
+  // A text edit in progress on this page must be abandoned too.
+  if(pendingEditEl&&boundary.contains(pendingEditEl)){
+    pendingEditEl=null;
+    editReqId=0;
+  }
+  // Elements that were moved OFF this page leave origin-space placeholders
+  // on their old pages - free them too (their content is gone now). Kept
+  // on the undo entry so undoing the page delete restores them.
+  var removedPlaceholders=removePlaceholdersFor(boundary);
+  if(record){
+    var bid=sharedBatchId||++batchId;
+    undoStack.push({property:'__page_boundary__',element:boundary,adding:false,nextSibling:boundary.nextSibling,parentNode:parent,placeholders:removedPlaceholders,batchId:bid});
+    redoStack=[];
+  }
+  boundary.remove();
+  if(hadSelection){
+    if(selectedEls.length===0){
+      if(selBoxEl)selBoxEl.style.display='none';
+      window.parent.postMessage({type:'selection-cleared'},'*');
+    }else{
+      fireSelected();
+    }
+  }
+  updateBoundaryMarkers();
+  reportPages(true);
+  // Deleted content may have carried PDF split markers - resync both the
+  // overlays and the parent's break count.
+  updatePageBreakMarkers();
+  reportPageBreak(false);
+}
+
+// ── Inline delete confirmation ──
+// The preview iframe is sandboxed WITHOUT allow-modals, so window.confirm()
+// is blocked. Deleting a page that holds content therefore arms a "Delete
+// page?" state on the chip: the first click arms it, a second click within
+// the timeout deletes. Clicking anywhere else (or the timeout) disarms.
+var pendingDeletePage=null;
+var pendingDeleteTimer=null;
+
+function disarmPageDelete(){
+  if(pendingDeleteTimer){clearTimeout(pendingDeleteTimer);pendingDeleteTimer=null;}
+  if(pendingDeletePage){
+    pendingDeletePage=null;
+    updateBoundaryMarkers();
+  }
+}
+
+function armPageDelete(page){
+  if(pendingDeleteTimer)clearTimeout(pendingDeleteTimer);
+  pendingDeletePage=page;
+  updateBoundaryMarkers();
+  pendingDeleteTimer=setTimeout(disarmPageDelete,4000);
+}
+
+function createPageBoundaryMarker(boundary,pageNum){
+  var armed=(pendingDeletePage===boundary);
+  var marker=document.createElement('div');
+  marker.setAttribute('data-editor-ui','page-boundary-marker');
+  // Outlines the page's own area (so an EMPTY page is clearly visible) with
+  // a stronger dashed line on the top edge where the page starts. An armed
+  // (pending-delete) page turns red so it is obvious WHAT will be deleted.
+  var edge=armed?'rgba(248,113,113,0.85)':'rgba(255,255,255,0.4)';
+  var box=armed?'rgba(248,113,113,0.5)':'rgba(255,255,255,0.14)';
+  marker.style.cssText='position:fixed;left:0;top:0;box-sizing:border-box;border:1px dashed '+box+';border-top:1px dashed '+edge+';border-radius:2px;pointer-events:none;z-index:99995;display:none;'+(armed?'background:rgba(248,113,113,0.06);':'');
+  var chip=document.createElement('div');
+  chip.style.cssText='position:absolute;top:-22px;right:8px;display:flex;align-items:center;gap:6px;padding:3px 6px 3px 8px;border-radius:4px;background:'+(armed?'#3b1f22':'#2a2a2c')+';border:1px solid '+(armed?'#7f2b2b':'#3f3f46')+';color:#e4e4e7;font:600 10px/1.2 Arial,sans-serif;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.28);';
+  var label=document.createElement('span');
+  var n=boundary.children.length;
+  label.textContent=armed
+    ?('Delete page '+pageNum+' and '+n+' element'+(n===1?'':'s')+'?')
+    :('Page '+pageNum+' starts here');
+  chip.appendChild(label);
+  var removeBtn=document.createElement('button');
+  removeBtn.setAttribute('data-action','remove-boundary');
+  removeBtn.textContent=armed?'Delete':'×';
+  removeBtn.title=armed?'Click again to delete this page and its content':'Delete this page and everything on it';
+  removeBtn.style.cssText='border:0;background:transparent;color:'+(armed?'#fca5a5':'#a1a1aa')+';font:600 '+(armed?'10px':'12px')+'/1 Arial,sans-serif;cursor:pointer;padding:0 2px;pointer-events:auto;';
+  chip.appendChild(removeBtn);
+  marker.appendChild(chip);
+  document.body.appendChild(marker);
+  return marker;
+}
+
+function updateBoundaryMarkers(){
+  // Rebuild every marker from the live boundaries so deletes/undo/redo can
+  // never leave a stale overlay behind. Only shown in inspect mode.
+  var old=document.querySelectorAll('[data-editor-ui="page-boundary-marker"]');
+  for(var i=0;i<old.length;i++)old[i].remove();
+  if(!inspectEnabled)return;
+  var boundaries=getPageBoundaryEls();
+  for(var j=0;j<boundaries.length;j++){
+    var b=boundaries[j];
+    if(!b||!b.isConnected)continue;
+    var marker=createPageBoundaryMarker(b,j+2); // page container j holds page j+2
+    var r=b.getBoundingClientRect();
+    // The divider is drawn across the TOP edge of the page container, and
+    // the page's own area is outlined so an empty page is clearly visible.
+    marker.style.display='block';
+    marker.style.left=Math.round(r.left)+'px';
+    marker.style.width=Math.round(r.width)+'px';
+    marker.style.top=Math.round(r.top)+'px';
+    marker.style.height=Math.round(r.height)+'px';
+  }
+}
+
+// ── Moved-element placeholders ──
+// Moving an element to another page removes it from its page's flow, which
+// collapses the layout (everything below shifts up and the page shrinks).
+// To keep the origin page's space for inserting other elements, a
+// placeholder - a transparent box with the SAME display, box and margins as
+// the moved element - is left where the element used to be. Placeholders
+// are system-level (never selectable/draggable), persist in saved HTML, and
+// are cleaned up automatically when their element is deleted (or its page
+// is deleted). The link back to the origin element is JS-only (never
+// serialized).
+function isPagePlaceholder(el){
+  return !!(el&&el.getAttribute&&el.getAttribute('data-klone-page-placeholder')!==null);
+}
+
+// Create a placeholder for el (measured at oldRect) at its old position.
+// Returns null when the element does not occupy flow space (inline text or
+// absolutely/fixed positioned), in which case removing it never collapses
+// the layout.
+function createPagePlaceholder(el,oldParent,oldNextSibling,oldRect){
+  if(!oldParent)return null;
+  var cs=getComputedStyle(el);
+  if(cs.position==='absolute'||cs.position==='fixed')return null;
+  if(cs.display==='inline')return null; // inline text just reflows
+  var ph=document.createElement('div');
+  ph.setAttribute('data-klone-page-placeholder','');
+  ph.__kloneOriginEl=el; // JS-only link back to the moved element
+  var s=ph.style;
+  s.display=(cs.display==='inline-block'||cs.display==='inline-flex')?'inline-block':'block';
+  s.boxSizing='border-box';
+  s.width=Math.round(oldRect.width)+'px';
+  s.height=Math.round(oldRect.height)+'px';
+  s.marginTop=cs.marginTop;
+  s.marginRight=cs.marginRight;
+  s.marginBottom=cs.marginBottom;
+  s.marginLeft=cs.marginLeft;
+  if(s.display==='inline-block')s.verticalAlign=cs.verticalAlign;
+  // Transparent and click-through: reserves space but never blocks
+  // selection/dragging of the elements around it.
+  s.pointerEvents='none';
+  if(oldNextSibling&&oldNextSibling.parentNode)oldParent.insertBefore(ph,oldNextSibling);
+  else oldParent.appendChild(ph);
+  return ph;
+}
+
+// Remove every placeholder that preserves the space of el (or of any
+// element inside el) - used when an element or its page is deleted. Returns
+// the removed placeholders with their positions so an undo can restore
+// them.
+function removePlaceholdersFor(el){
+  var removed=[];
+  if(!el)return removed;
+  var all=document.querySelectorAll('[data-klone-page-placeholder]');
+  for(var i=0;i<all.length;i++){
+    var ph=all[i];
+    if(!ph.__kloneOriginEl)continue;
+    if(ph.__kloneOriginEl===el||el.contains(ph.__kloneOriginEl)){
+      removed.push({ph:ph,parentNode:ph.parentNode,nextSibling:ph.nextSibling});
+      ph.remove();
+    }
+  }
+  return removed;
+}
+
+// Restore a list of placeholders (undo of a delete / page delete).
+function restorePlaceholders(list){
+  if(!list)return;
+  for(var i=0;i<list.length;i++){
+    var item=list[i];
+    if(!item||!item.ph||item.ph.isConnected)continue;
+    if(item.nextSibling&&item.nextSibling.parentNode)item.parentNode.insertBefore(item.ph,item.nextSibling);
+    else if(item.parentNode)item.parentNode.appendChild(item.ph);
+  }
+}
+
+// Move el to the END of page pageIndex (0-based) inside the content
+// container. Two placement modes:
+//   - Drag drop (placeOnPage=false): keep the EXACT visual position where
+//     the element was dropped. The static flow position changes after
+//     reparenting, so the transform is compensated by exactly the flow
+//     shift (delta between untransformed rects before/after).
+//   - Sidebar move (placeOnPage=true): land the element INSIDE the target
+//     page - it keeps its offset relative to the page it was on (clamped
+//     into the target page's bounds) so the moved element is actually
+//     visible on the new page, instead of floating at its old viewport
+//     spot on a different page.
+function reparentElementToPage(el,pageIndex,bid,placeOnPage){
+  if(!el||!el.parentNode)return;
+  var boundaries=getPageBoundaryEls();
+  if(pageIndex<0)pageIndex=0;
+  if(pageIndex>boundaries.length)pageIndex=boundaries.length;
+  // Never move a page into itself or into one of its own descendants.
+  if(isPageBoundary(el))return;
+  var target=getPageContainer(pageIndex);
+  if(!target||el===target||el.contains(target))return;
+  var oldParent=el.parentNode;
+  var oldNextSibling=el.nextSibling;
+  var oldTransform=el.style.transform||'';
+  var cc=getContentContainer();
+  var curPage=getPageIndexOf(el);
+  // The page AREA the element currently lives on - the relative offset is
+  // measured against its top so it survives the reparent.
+  var oldPageTop=cc.getBoundingClientRect().top;
+  if(curPage>0){
+    oldPageTop=boundaries[curPage-1].getBoundingClientRect().top;
+  }
+  var ot=getTranslate(el);
+  el.style.transform='';
+  var oldRect=el.getBoundingClientRect();
+  // Reserve the origin space BEFORE the element moves, so the origin page
+  // keeps its layout (and a visible spot to insert other elements). The
+  // placeholder is removed again below if the move turns out to be a no-op.
+  var placeholder=createPagePlaceholder(el,oldParent,oldNextSibling,oldRect);
+  // The element's VISUAL offset within its current page (its previous
+  // translate is part of where the user sees it) - the placement below
+  // reproduces that same relative spot on the target page.
+  var relTop=(oldRect.top+ot[1])-oldPageTop;
+  if(pageIndex===0){
+    // Page 1 lives directly in the content container, BEFORE the first
+    // page container (which starts page 2).
+    if(boundaries.length>0)target.insertBefore(el,boundaries[0]);
+    else target.appendChild(el);
+  }else{
+    // Pages 2+ are real containers - the element goes INSIDE them.
+    target.appendChild(el);
+  }
+  var newRect=el.getBoundingClientRect();
+  var tx,ty;
+  if(placeOnPage){
+    // Land the element ON the target page: same relative offset into the
+    // target page's content area, clamped so the whole element stays
+    // inside the page. The element is then visible when the user scrolls
+    // to the page it was moved to. Y is an ABSOLUTE placement on the new
+    // page (the previous translate is not carried over - it only described
+    // the position on the OLD page); X keeps the visual position including
+    // any previous horizontal translate.
+    var tTop,tH;
+    if(pageIndex===0){
+      var cr=cc.getBoundingClientRect();
+      tTop=cr.top;
+      tH=(boundaries.length>0?boundaries[0].getBoundingClientRect().top:cr.bottom)-tTop;
+    }else{
+      tH=boundaries[pageIndex-1].getBoundingClientRect().height;
+      tTop=boundaries[pageIndex-1].getBoundingClientRect().top;
+    }
+    var maxRel=Math.max(0,tH-oldRect.height);
+    var finalTop=tTop+Math.min(Math.max(relTop,0),maxRel);
+    tx=ot[0]+oldRect.left-newRect.left;
+    ty=finalTop-newRect.top;
+  }else{
+    // Drag drop: keep the exact drop position (compensate the flow shift).
+    tx=ot[0]+oldRect.left-newRect.left;
+    ty=ot[1]+oldRect.top-newRect.top;
+  }
+  var nt=(tx===0&&ty===0)?'':'translate('+tx+'px,'+ty+'px)';
+  el.style.transform=nt;
+  var sameSpot=(oldParent===el.parentNode&&oldNextSibling===el.nextSibling);
+  if(sameSpot&&placeholder&&placeholder.parentNode)placeholder.remove();
+  // The element came home: its origin-space placeholder(s) now live in the
+  // SAME container as the element (e.g. moved to page 2 then back to page
+  // 1, or dragged to a new spot within its own page). A placeholder next
+  // to the element it preserves would double the space, so they are
+  // removed - but recorded on the undo entry so undoing the move restores
+  // the exact pre-move layout.
+  var homePlaceholders=[];
+  var allPhHome=document.querySelectorAll('[data-klone-page-placeholder]');
+  for(var zh=0;zh<allPhHome.length;zh++){
+    var zph=allPhHome[zh];
+    if(zph.__kloneOriginEl===el&&zph.parentNode===el.parentNode){
+      homePlaceholders.push({ph:zph,parentNode:zph.parentNode,nextSibling:zph.nextSibling});
+      zph.remove();
+    }
+  }
+  if(bid>0&&!sameSpot){
+    undoStack.push({
+      property:'__reparent__',
+      element:el,
+      oldParent:oldParent,
+      oldNextSibling:oldNextSibling,
+      oldTransform:oldTransform,
+      newParent:el.parentNode,
+      newNextSibling:el.nextSibling,
+      newTransform:nt,
+      placeholder:placeholder,
+      homePlaceholders:homePlaceholders,
+      batchId:bid
+    });
+  }
+}
+
+// 0-based index of the page el currently lives on. Pages 2+ are real
+// containers, so the page is simply the page container that CONTAINS the
+// element; anything outside every page container is on page 1.
+function getPageIndexOf(el){
+  if(!el)return 0;
+  var boundaries=getPageBoundaryEls();
+  for(var i=0;i<boundaries.length;i++){
+    if(boundaries[i].contains(el))return i+1;
+  }
+  return 0;
+}
+
+// The 0-based page whose AREA contains viewport y, for an element that
+// currently lives on page curPage. Only pages the element could have been
+// dragged INTO are candidates: its own page (no move), pages BELOW it
+// (dropping down), or pages above it up to page 1 (dropping up). Page
+// containers reserve a full page each and sit flush together, so the
+// centre of a dropped element maps to exactly one page area. Defaulting to
+// the element's OWN page is the key: without it, dragging an element
+// within page 2+ would re-derive page 1 as the target and silently yank
+// the element back to the first page.
+function getDropPage(cy,curPage){
+  var boundaries=getPageBoundaryEls();
+  var N=boundaries.length;
+  if(N===0)return 0;
+  var rects=[];
+  for(var i=0;i<N;i++)rects.push(boundaries[i].getBoundingClientRect());
+  if(curPage===0){
+    // Page 1: only pages below (boundary j holds page j+2).
+    for(var bi=0;bi<N;bi++){
+      if(cy>=rects[bi].top&&cy<rects[bi].bottom)return bi+1;
+    }
+    // Dropping below every page area lands on the last page.
+    return (cy>=rects[N-1].bottom)?N:0;
+  }
+  // Pages 2+ live in page containers (boundary curPage-1 holds the page).
+  var own=rects[curPage-1];
+  if(cy>=own.bottom){
+    // Dropped below its own page: pages curPage+1..N (boundaries curPage..).
+    for(var bj=curPage;bj<N;bj++){
+      if(cy>=rects[bj].top&&cy<rects[bj].bottom)return bj+1;
+    }
+    return N;
+  }
+  if(cy<own.top){
+    // Dropped above its own page: pages 1..curPage (boundaries 0..curPage-2).
+    for(var bk=0;bk<curPage-1;bk++){
+      if(cy>=rects[bk].top&&cy<rects[bk].bottom)return bk+1;
+    }
+    return 0;
+  }
+  return curPage;
+}
+
+// Move the current selection to the END of page pageIndex (0-based).
+// pageIndex -1 (or beyond the last page) creates a new page at the end
+// and moves the selection into it. One undo batch covers the whole move
+// (including any boundary created for a new page).
+function moveSelectionToPage(pageIndex){
+  if(selectedEls.length===0)return;
+  for(var i=0;i<selectedEls.length;i++){
+    if(isContainer(selectedEls[i]))return; // the page frame never moves
+  }
+  var target=Number(pageIndex);
+  if(isNaN(target)||target<0)target=countPages(); // "new page"
+  var bid=++batchId;
+  while(target>=countPages()){
+    addPageBoundary(true,bid); // shared batch id → one undo step
+  }
+  // Move in document order so relative stacking is preserved.
+  var els=selectedEls.slice().sort(function(a,b){
+    return (a.compareDocumentPosition(b)&4)?1:-1;
+  });
+  for(var j=0;j<els.length;j++){
+    var e=els[j];
+    if(isContainer(e)||isPageBoundary(e))continue;
+    // The sidebar move LANDS the element on the target page (rather than
+    // keeping its old viewport spot) so the move is actually visible.
+    reparentElementToPage(e,target,bid,true);
+  }
+  redoStack=[];
+  updateBoundaryMarkers();
+  reportPages(false);
+  fireSelected();
+  updateSelectionBox();
+  // Bring the moved element into view so the move is visible (the wrap is
+  // the nearest scroll container, so this never scrolls the outer page).
+  if(selectedEls.length>0&&selectedEls[0].scrollIntoView){
+    selectedEls[0].scrollIntoView({block:'nearest',inline:'nearest'});
+  }
+}
+
+// Drop any selected element that is no longer in the document (its page was
+// deleted, or an undo/redo detached it), so the sidebar never edits - and
+// getComputedStyle is never called on - a detached node.
+function pruneDetachedSelection(){
+  var removed=false;
+  for(var i=selectedEls.length-1;i>=0;i--){
+    if(!selectedEls[i].isConnected){selectedEls.splice(i,1);removed=true;}
+  }
+  if(!removed)return;
+  if(selectedEls.length===0){
+    if(selBoxEl)selBoxEl.style.display='none';
+    window.parent.postMessage({type:'selection-cleared'},'*');
+  }else{
+    fireSelected();
+  }
+}
+
 function deselect(){
   for(var i=0;i<selectedEls.length;i++){
     selectedEls[i].style.outline='';
@@ -209,6 +719,9 @@ function isClickable(el){
   if(tag==='html'||tag==='head'||tag==='body'||tag==='script')return false;
   if(tag==='style'||tag==='meta'||tag==='link'||tag==='title'||tag==='base'||tag==='noscript'||tag==='template')return false;
   if(el.getAttribute&&el.getAttribute('data-editor-ui'))return false;
+  if(el.getAttribute&&el.getAttribute('data-klone-page-boundary')!==null)return false;
+  // Moved-element placeholders are system-level too - never selectable.
+  if(el.getAttribute&&el.getAttribute('data-klone-page-placeholder')!==null)return false;
   // The system frame is sticky - it can never be selected.
   if(isSystemFrame(el))return false;
   return true;
@@ -266,6 +779,9 @@ function performUndo(){
   for(var i=0;i<entries.length;i++){
     var entry=entries[i];
     if(entry.property==='__delete__'){
+      // Undoing a delete also brings back the origin-space placeholders
+      // that were freed along with the element.
+      restorePlaceholders(entry.placeholders);
       if(entry.nextSibling&&entry.nextSibling.parentNode){
         entry.nextSibling.parentNode.insertBefore(entry.element,entry.nextSibling);
       }else if(entry.parentNode){
@@ -279,6 +795,35 @@ function performUndo(){
       else entry.element.setAttribute('data-klone-page-break','');
       updatePageBreakMarkers();
       reportPageBreak(true);
+    }else if(entry.property==='__page_boundary__'){
+      // Reverse the boundary op: an added boundary is removed, a removed
+      // one is restored at its original position (together with any
+      // placeholders that were freed with its content).
+      redoStack.push({property:'__page_boundary__',element:entry.element,adding:!entry.adding,nextSibling:entry.nextSibling,parentNode:entry.parentNode,placeholders:entry.placeholders,batchId:lastBatch});
+      if(entry.adding){
+        entry.element.remove();
+      }else if(entry.parentNode){
+        restorePlaceholders(entry.placeholders);
+        if(entry.nextSibling&&entry.nextSibling.parentNode)entry.nextSibling.parentNode.insertBefore(entry.element,entry.nextSibling);
+        else entry.parentNode.appendChild(entry.element);
+      }
+      updateBoundaryMarkers();
+      reportPages(true);
+    }else if(entry.property==='__reparent__'){
+      // Restore the pre-move position; push the swapped entry so redo
+      // moves the element back to where the user put it. The origin-space
+      // placeholder is removed with the undo (the element returns to that
+      // spot) and re-added by redo; placeholders that were dropped because
+      // the element came home are restored.
+      redoStack.push({property:'__reparent__',element:entry.element,oldParent:entry.newParent,oldNextSibling:entry.newNextSibling,oldTransform:entry.newTransform,newParent:entry.oldParent,newNextSibling:entry.oldNextSibling,newTransform:entry.oldTransform,placeholder:entry.placeholder,homePlaceholders:entry.homePlaceholders,batchId:lastBatch});
+      if(entry.placeholder&&entry.placeholder.parentNode)entry.placeholder.remove();
+      if(entry.oldNextSibling&&entry.oldNextSibling.parentNode){
+        entry.oldParent.insertBefore(entry.element,entry.oldNextSibling);
+      }else if(entry.oldParent){
+        entry.oldParent.appendChild(entry.element);
+      }
+      entry.element.style.transform=entry.oldTransform;
+      restorePlaceholders(entry.homePlaceholders);
     }else if(entry.property==='__text__'){
       var cur=entry.element.innerHTML;
       redoStack.push({element:entry.element,property:'__text__',oldValue:cur,batchId:lastBatch});
@@ -289,13 +834,18 @@ function performUndo(){
       entry.element.style[entry.property]=entry.oldValue;
     }
   }
+  // Undoing/redoing a page delete detaches whole subtrees - drop anything
+  // no longer in the document from the selection.
+  pruneDetachedSelection();
   // Page-break markers must mirror the live DOM after any undo (a deleted
   // marked element being restored, a break toggled back, etc.).
   updatePageBreakMarkers();
   reportPageBreak(false);
+  updateBoundaryMarkers();
+  reportPages(false);
   if(entries.length>0&&entries[0].property==='__text__'){
     window.parent.postMessage({type:'style-updated',property:'textContent',value:entries[0].element.textContent},'*');
-  }else if(entries.length>0&&entries[0].property!=='__delete__'&&entries[0].property!=='__page_break__'){
+  }else if(entries.length>0&&entries[0].property!=='__delete__'&&entries[0].property!=='__page_break__'&&entries[0].property!=='__page_boundary__'&&entries[0].property!=='__reparent__'){
     var s2=getComputedStyle(entries[0].element);
     window.parent.postMessage({type:'style-updated',property:entries[0].property,value:formatStyleValue(entries[0].property,s2[entries[0].property])},'*');
   }
@@ -318,6 +868,48 @@ function performRedo(){
       else entry.element.removeAttribute('data-klone-page-break');
       updatePageBreakMarkers();
       reportPageBreak(true);
+    }else if(entry.property==='__page_boundary__'){
+      undoStack.push({property:'__page_boundary__',element:entry.element,adding:!entry.adding,nextSibling:entry.nextSibling,parentNode:entry.parentNode,placeholders:entry.placeholders,batchId:lastBatch});
+      // entry.adding=true means "undo of an add" → remove; false means
+      // "undo of a remove" → restore at the recorded position.
+      if(entry.adding){
+        entry.element.remove();
+        // Re-free the placeholders that belonged to the deleted content.
+        if(entry.placeholders){
+          for(var pfi=0;pfi<entry.placeholders.length;pfi++){
+            var pf=entry.placeholders[pfi];
+            if(pf&&pf.ph&&pf.ph.isConnected)pf.ph.remove();
+          }
+        }
+      }else if(entry.parentNode){
+        if(entry.nextSibling&&entry.nextSibling.parentNode)entry.nextSibling.parentNode.insertBefore(entry.element,entry.nextSibling);
+        else entry.parentNode.appendChild(entry.element);
+      }
+      updateBoundaryMarkers();
+      reportPages(true);
+    }else if(entry.property==='__reparent__'){
+      undoStack.push({property:'__reparent__',element:entry.element,oldParent:entry.newParent,oldNextSibling:entry.newNextSibling,oldTransform:entry.newTransform,newParent:entry.oldParent,newNextSibling:entry.oldNextSibling,newTransform:entry.oldTransform,placeholder:entry.placeholder,homePlaceholders:entry.homePlaceholders,batchId:lastBatch});
+      // Redo moves the element to the state it had BEFORE the undo ran
+      // (the entry's "old" fields: the post-reparent position), and puts
+      // the origin-space placeholder back where the element had been.
+      // Placeholders that the move had dropped (element came home) are
+      // dropped again.
+      if(entry.placeholder&&!entry.placeholder.isConnected){
+        if(entry.newNextSibling&&entry.newNextSibling.parentNode)entry.newParent.insertBefore(entry.placeholder,entry.newNextSibling);
+        else if(entry.newParent)entry.newParent.appendChild(entry.placeholder);
+      }
+      if(entry.homePlaceholders){
+        for(var hri=0;hri<entry.homePlaceholders.length;hri++){
+          var hr=entry.homePlaceholders[hri];
+          if(hr&&hr.ph&&hr.ph.isConnected)hr.ph.remove();
+        }
+      }
+      if(entry.oldNextSibling&&entry.oldNextSibling.parentNode){
+        entry.oldParent.insertBefore(entry.element,entry.oldNextSibling);
+      }else if(entry.oldParent){
+        entry.oldParent.appendChild(entry.element);
+      }
+      entry.element.style.transform=entry.oldTransform;
     }else if(entry.property==='__text__'){
       var cur=entry.element.innerHTML;
       undoStack.push({element:entry.element,property:'__text__',oldValue:cur,batchId:lastBatch});
@@ -328,12 +920,17 @@ function performRedo(){
       entry.element.style[entry.property]=entry.oldValue;
     }
   }
+  // Redoing a page delete detaches whole subtrees - drop anything no longer
+  // in the document from the selection.
+  pruneDetachedSelection();
   // Page-break markers must mirror the live DOM after any redo.
   updatePageBreakMarkers();
   reportPageBreak(false);
+  updateBoundaryMarkers();
+  reportPages(false);
   if(entries[0].property==='__text__'){
     window.parent.postMessage({type:'style-updated',property:'textContent',value:entries[0].element.textContent},'*');
-  }else if(entries[0].property!=='__page_break__'){
+  }else if(entries[0].property!=='__page_break__'&&entries[0].property!=='__page_boundary__'&&entries[0].property!=='__reparent__'){
     var s3=getComputedStyle(entries[0].element);
     window.parent.postMessage({type:'style-updated',property:entries[0].property,value:formatStyleValue(entries[0].property,s3[entries[0].property])},'*');
   }
@@ -376,7 +973,12 @@ function fireSelected(){
       }
     });
   }
-  window.parent.postMessage({type:'element-selected',elements:infos},'*');
+  window.parent.postMessage({
+    type:'element-selected',
+    elements:infos,
+    page:selectedEls.length>0?getPageIndexOf(selectedEls[0]):0,
+    pageCount:countPages()
+  },'*');
   updateSelectionBox();
 }
 
@@ -385,7 +987,11 @@ function deleteSelected(){
   batchId++;
   for(var i=0;i<selectedEls.length;i++){
     var el=selectedEls[i];
-    undoStack.push({element:el,property:'__delete__',oldValue:null,nextSibling:el.nextSibling,parentNode:el.parentNode,batchId:batchId});
+    // Placeholders that preserve this element's origin space go with it -
+    // the element no longer exists, so the reserved space is freed. They
+    // are stored on the undo entry so undoing the delete restores them.
+    var removedPlaceholders=removePlaceholdersFor(el);
+    undoStack.push({element:el,property:'__delete__',oldValue:null,nextSibling:el.nextSibling,parentNode:el.parentNode,placeholders:removedPlaceholders,batchId:batchId});
     el.remove();
   }
   selectedEls=[];
@@ -471,23 +1077,45 @@ function ensureSystemFrame(){
   var parent=wrap.parentNode;
   if(!parent)return;
   // Already wrapped by a previous run (reloaded documents stay idempotent).
-  if(parent.nodeType===1&&parent.classList&&parent.classList.contains('klone-frame'))return;
-  var cs=getComputedStyle(wrap);
-  var w=parseFloat(cs.width);
+  if(parent.nodeType===1&&parent.classList&&parent.classList.contains('klone-frame')){
+    // Re-fit the frame to the wrapper's CURRENT width - the canvas may have
+    // a different size than when this document was saved/loaded.
+    syncSystemFrameSize();
+    return;
+  }
   var frame=document.createElement('div');
   frame.className='klone-frame';
   frame.setAttribute('data-klone-system-frame','');
   // Same width as the template frame; centered and full height so the inner
-  // scroller's height:100% keeps scrolling exactly as authored.
-  frame.style.cssText='width:'+(isFinite(w)&&w>0?w+'px':'100%')+';max-width:100%;height:100%;margin:0 auto;overflow:hidden;';
+  // scroller's height:100% keeps scrolling exactly as authored. Width is
+  // re-fitted by syncSystemFrameSize() after every layout change (initial
+  // layout, late CSS, canvas resize).
+  frame.style.cssText='width:100%;max-width:100%;height:100%;margin:0 auto;overflow:hidden;';
   parent.insertBefore(frame,wrap);
   frame.appendChild(wrap);
+  syncSystemFrameSize();
   // The sticky frame sits at its authored position - clear any leftover
   // transform from documents that were dragged before this feature existed
   // (otherwise the offset would clip content against the frame's
   // overflow:hidden).
   wrap.style.transform='';
   frame.style.transform='';
+}
+
+// Fit the .klone-frame to the wrapper's CURRENT computed width. The frame
+// hugs the page (so the wrapper's scrollbar sits at the page edge, not the
+// canvas edge) but must never stay frozen at a width measured before the
+// document's CSS/fonts were laid out - that clips or stretches the page
+// (the intermittent reload crash). Called on init and whenever the wrapper
+// or canvas resizes.
+function syncSystemFrameSize(){
+  var wrap=document.querySelector('.scroll-wrapper');
+  if(!wrap)return;
+  var parent=wrap.parentNode;
+  if(!parent||parent.nodeType!==1||!parent.classList||!parent.classList.contains('klone-frame'))return;
+  var cs=getComputedStyle(wrap);
+  var w=parseFloat(cs.width);
+  parent.style.width=(isFinite(w)&&w>0?w+'px':'100%');
 }
 
 // True when applying a width-related style to any selected element would
@@ -850,6 +1478,8 @@ document.addEventListener('mouseout',function(e){
 
 document.addEventListener('click',function(e){
   if(splitMode){
+    // The × on a page-boundary chip is handled by its own listener.
+    if(e.target&&e.target.getAttribute&&e.target.getAttribute('data-action')==='remove-boundary')return;
     e.preventDefault();
     e.stopPropagation();
     var splitTarget=e.target;
@@ -865,6 +1495,9 @@ document.addEventListener('click',function(e){
     return;
   }
   if(!inspectEnabled||isDragging)return;
+  // The × on a page-boundary chip is handled by its own listener - never
+  // let clicking it select the chip/button.
+  if(e.target&&e.target.getAttribute&&e.target.getAttribute('data-action')==='remove-boundary')return;
   if(justDragged){justDragged=false;return;}
   e.stopPropagation();
   var el=e.target;
@@ -911,6 +1544,34 @@ document.addEventListener('click',function(e){
   }
 });
 
+// Remove a page boundary from its divider chip (×). Runs as a separate
+// listener; stopImmediatePropagation prevents the MAIN click handler (also
+// on document, registered earlier) from also seeing the click and selecting
+// the chip/button.
+document.addEventListener('click',function(e){
+  var t=e.target;
+  if(!t||!t.getAttribute||t.getAttribute('data-action')!=='remove-boundary')return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  var marker=t.closest?t.closest('[data-editor-ui="page-boundary-marker"]'):null;
+  var markers=document.querySelectorAll('[data-editor-ui="page-boundary-marker"]');
+  var idx=marker?Array.prototype.indexOf.call(markers,marker):-1;
+  var boundaries=getPageBoundaryEls();
+  var page=(idx>=0)?boundaries[idx]:null;
+  if(!page)return;
+  // Deleting a page deletes its content too, so a page that HAS content
+  // asks first via an INLINE confirm (the preview iframe is sandboxed
+  // without allow-modals, so window.confirm is blocked). An empty page is
+  // removed straight away. Undo restores the page and its content either
+  // way, in a single step.
+  if(page.children.length>0&&pendingDeletePage!==page){
+    armPageDelete(page);
+    return;
+  }
+  disarmPageDelete();
+  removePageBoundary(page,true);
+});
+
 document.addEventListener('dblclick',function(e){
   if(!inspectEnabled||isDragging)return;
   var el=e.target;
@@ -954,6 +1615,10 @@ document.addEventListener('dblclick',function(e){
 });
 
 document.addEventListener('mousedown',function(e){
+  // Any interaction outside the armed chip cancels a pending page delete.
+  if(pendingDeletePage&&!(e.target&&e.target.getAttribute&&e.target.getAttribute('data-action')==='remove-boundary')){
+    disarmPageDelete();
+  }
   if(splitMode){
     e.preventDefault();
     return;
@@ -969,6 +1634,7 @@ document.addEventListener('mousedown',function(e){
   dragStartY=e.clientY;
   isDragging=true;
   isMoving=false;
+  autoScrollDir=null;
   // Shift/Ctrl+drag starts an ADDITIVE marquee (adds to the current
   // selection); a plain drag on empty space replaces the selection.
   marqueeAdditive=(e.shiftKey||e.ctrlKey||e.metaKey);
@@ -1035,6 +1701,69 @@ document.addEventListener('mousedown',function(e){
   document.documentElement.style.webkitUserSelect='none';
 });
 
+// ── Drag auto-scroll ──
+// While dragging an element, holding the cursor near the top/bottom edge
+// of the canvas auto-scrolls it so the element can be moved onto pages
+// that are currently off-screen (above or below). The scroll container is
+// the document container itself (.scroll-wrapper, or the body for
+// user-authored HTML), so the same code works for both.
+function getScrollState(){
+  var wrap=getContentContainer();
+  var isBody=(wrap===document.body);
+  var el=isBody?document.documentElement:wrap;
+  return {
+    el:el,
+    useBody:isBody,
+    scrollTop:isBody?(window.pageYOffset||el.scrollTop||0):el.scrollTop,
+    clientH:isBody?window.innerHeight:el.clientHeight,
+    scrollH:isBody?document.documentElement.scrollHeight:el.scrollHeight
+  };
+}
+
+function setScrollTop(st,top){
+  if(st.useBody)window.scrollTo(0,top);
+  else st.el.scrollTop=top;
+}
+
+// Point the auto-scroll direction at the canvas edge the cursor is in.
+// The scroll container's getBoundingClientRect includes its full (scrolled)
+// content box, so the VISIBLE viewport is derived from the client height.
+function updateAutoScroll(cx,cy){
+  autoScrollDir=null;
+  var st=getScrollState();
+  if(!st.el)return;
+  var r=st.el.getBoundingClientRect();
+  var top=r.top;
+  var bottom=r.top+st.clientH;
+  var edge=44;
+  if(cy<top+edge)autoScrollDir='up';
+  else if(cy>bottom-edge)autoScrollDir='down';
+}
+
+// Scroll one step toward autoScrollDir; returns the viewport scroll delta
+// (positive = content moved up, i.e. scrolled down). 0 when the scroll is
+// already at its limit - the caller then stops auto-scrolling.
+function stepAutoScroll(){
+  var st=getScrollState();
+  if(!st.el)return 0;
+  var step=14;
+  var top=st.scrollTop;
+  var maxTop=Math.max(0,st.scrollH-st.clientH);
+  if(autoScrollDir==='down'){
+    if(top>=maxTop)return 0;
+    var next=Math.min(maxTop,top+step);
+    setScrollTop(st,next);
+    return next-top;
+  }
+  if(autoScrollDir==='up'){
+    if(top<=0)return 0;
+    var nextUp=Math.max(0,top-step);
+    setScrollTop(st,nextUp);
+    return nextUp-top; // negative: content moved down
+  }
+  return 0;
+}
+
 // Runs once per animation frame while an element is being dragged. All
 // layout data was cached at mousedown (dragBounds, dragBaseRect,
 // moveRects), so each frame only does cheap style reads and one transform
@@ -1043,6 +1772,17 @@ document.addEventListener('mousedown',function(e){
 function dragFrame(){
   dragFrameScheduled=false;
   if(!isMoving||!isDragging)return;
+  // Auto-scroll the canvas while the cursor is held against the top/bottom
+  // edge, so the dragged element can reach off-screen pages. The scroll
+  // moves the content under a stationary cursor, so the element's transform
+  // is compensated by exactly the scroll delta to keep it glued to the
+  // cursor. The loop keeps running (re-scheduling itself) while the cursor
+  // stays in the edge zone, even though mousemove stops firing.
+  var scrollDeltaY=0;
+  if(autoScrollDir){
+    scrollDeltaY=stepAutoScroll();
+    if(scrollDeltaY===0)autoScrollDir=null; // reached the scroll limit
+  }
   // Apply ONLY the cursor delta since the last APPLIED frame, on top of
   // the element's CURRENT transform (re-read every frame). Each drag
   // therefore continues from where the element actually is - it never
@@ -1076,12 +1816,16 @@ function dragFrame(){
       if(curRight+relX>dragBounds.right)nx=curT2[0]+(dragBounds.right-curRight);
     }
     rawNx.push(nx);
-    rawNy.push(curT2[1]+ddy);
+    // The scroll compensation keeps the element under the cursor while the
+    // canvas auto-scrolls underneath it.
+    rawNy.push(curT2[1]+ddy+scrollDeltaY);
   }
   // Alignment snap (Figma/Canva-style). Holding Shift disables it for
-  // fine-tuned placement.
+  // fine-tuned placement. Snap targets are captured at mousedown in
+  // viewport coordinates, so snapping is skipped while auto-scrolling
+  // (the canvas is moving, the targets are stale).
   var appliedDx=0,appliedDy=0;
-  if(!pendingShift&&selectedEls.length>0&&dragBaseRect){
+  if(!pendingShift&&!autoScrollDir&&selectedEls.length>0&&dragBaseRect){
     var proj=shiftRect(dragBaseRect,rawNx[0]-dragBasePos[0],rawNy[0]-dragBasePos[1]);
     var snap=computeSnap(proj,moveTargets,dragDirX,dragDirY);
     appliedDx=snap.snapX;
@@ -1109,6 +1853,12 @@ function dragFrame(){
     }else{
       renderGuides(shiftRect(dragBaseRect,rawNx[0]-dragBasePos[0]+appliedDx,rawNy[0]-dragBasePos[1]+appliedDy),moveTargets);
     }
+  }
+  // Keep auto-scrolling frame after frame while the cursor stays in the
+  // edge zone (mousemove stops firing when the cursor is stationary).
+  if(autoScrollDir&&isMoving&&isDragging){
+    dragFrameScheduled=true;
+    requestAnimationFrame(dragFrame);
   }
 }
 
@@ -1159,6 +1909,9 @@ document.addEventListener('mousemove',function(e){
     pendingMX=e.clientX;
     pendingMY=e.clientY;
     pendingShift=e.shiftKey;
+    // Watch the canvas edges so the drag auto-scrolls toward off-screen
+    // pages while the cursor is held against the top/bottom edge.
+    updateAutoScroll(e.clientX,e.clientY);
     if(!dragFrameScheduled){
       dragFrameScheduled=true;
       requestAnimationFrame(dragFrame);
@@ -1235,6 +1988,7 @@ document.addEventListener('mouseup',function(e){
   hideGuides();
   lastGuidesKey=null;
   isDragging=false;
+  autoScrollDir=null;
   document.body.style.cursor='';
   document.body.style.userSelect='';
   document.body.style.webkitUserSelect='';
@@ -1253,6 +2007,33 @@ document.addEventListener('mouseup',function(e){
         undoStack.push({element:selectedEls[i],property:'transform',oldValue:m[0],batchId:batchId});
       }
       if(moved)redoStack=[];
+      // ── Drag across pages ──
+      // Pages 2+ are real page-sized containers, so "which page did the
+      // user drop this on" is the page area the element's centre now sits
+      // in. The element's OWN page is the default target - only a centre
+      // that crossed INTO a different page area (up or down) triggers a
+      // reparent, so dragging within a page never moves it. When a move
+      // IS needed the transform compensation keeps the element exactly
+      // where it was dropped. Each element is evaluated on its own: group
+      // members may end up on different pages.
+      var boundaries=getPageBoundaryEls();
+      if(boundaries.length>0){
+        for(var pi=0;pi<selectedEls.length;pi++){
+          var pel=selectedEls[pi];
+          if(isContainer(pel)||isPageBoundary(pel))continue;
+          var m2=moveDeltas[pi];
+          if(m2[1]===0&&m2[2]===0)continue;
+          var er=pel.getBoundingClientRect();
+          var cy=er.top+er.height/2;
+          var curPage=getPageIndexOf(pel);
+          var dropPage=getDropPage(cy,curPage);
+          if(dropPage!==curPage){
+            reparentElementToPage(pel,dropPage,batchId);
+          }
+        }
+        updateBoundaryMarkers();
+        reportPages(false);
+      }
       fireSelected();
     }else if(selectedEls.length>0){
       // Marquee: if more than one element was selected, ensure each has
@@ -1276,6 +2057,7 @@ document.addEventListener('keydown',function(e){
     fireSelected();
   }
   if(e.key==='Escape'){
+    disarmPageDelete();
     deselect();
     window.parent.postMessage({type:'selection-cleared'},'*');
   }
@@ -1298,11 +2080,90 @@ document.addEventListener('dragstart',function(e){
 createSelectionBox();
 createMarquee();
 createGuidesLayer();
-// Make the template's page frame sticky (wrap it in the system frame)
-// BEFORE any selection/marker logic runs.
-ensureSystemFrame();
-updatePageBreakMarkers();
-reportPageBreak(false);
+
+// ── Reload-safe layout sync ──
+// When this script parses, the document may not be laid out yet: external
+// stylesheets and fonts load asynchronously, and the iframe itself is only
+// sized by React slightly later. One-shot measurements taken at parse time
+// would therefore freeze wrong values (a page frame sized before its CSS
+// loaded, page min-heights derived from a 0-width canvas) - the
+// intermittent reload crash. The first sync is deferred to after the
+// initial layout, then a ResizeObserver on the content container re-syncs
+// on ANY later size change (late CSS/fonts, sidebar toggles, window
+// resizes), and window.load gives one final pass once every resource is in.
+// Documents saved while the PDF clipping strip ran on EVERY save carry
+// baked inline overflow/height overrides (overflow:visible; height:auto;
+// max-height:none on html/body/.scroll-wrapper) that defeat the template's
+// height:100% / overflow-y:auto scroll layout - the reopened preview can't
+// scroll. Heal such docs on load by removing exactly those baked values.
+// Template documents only (.scroll-wrapper guard); user-authored HTML is
+// never touched.
+function healBakedClipping(){
+  if(!document.querySelector('.scroll-wrapper'))return;
+  var els=[document.documentElement,document.body];
+  for(var i=0;i<els.length;i++){
+    var el=els[i];
+    if(!el)continue;
+    if(el.style.overflow==='visible')el.style.overflow='';
+    if(el.style.height==='auto')el.style.height='';
+  }
+  var wrap=document.querySelector('.scroll-wrapper');
+  if(wrap){
+    if(wrap.style.overflow==='visible')wrap.style.overflow='';
+    if(wrap.style.height==='auto')wrap.style.height='';
+    if(wrap.style.maxHeight==='none')wrap.style.maxHeight='';
+  }
+  // Docs saved while an element was hovered/selected also baked the purple
+  // editor outline as an inline style - it is editor chrome, never part of
+  // the design, so strip it from every element on load.
+  var styled=document.querySelectorAll('[style]');
+  for(var j=0;j<styled.length;j++){
+    var e2=styled[j];
+    var o2=e2.style.outline||'';
+    if(o2.indexOf('8b5cf6')!==-1||o2.indexOf('139, 92, 246')!==-1){
+      e2.style.outline='';
+      e2.style.outlineOffset='';
+    }
+  }
+}
+
+function syncLayout(){
+  healBakedClipping();
+  ensureSystemFrame();
+  syncSystemFrameSize();
+  syncPageBoundarySizes();
+  updatePageBreakMarkers();
+  updateBoundaryMarkers();
+}
+
+var layoutWatchStarted=false;
+function startLayoutWatch(){
+  if(layoutWatchStarted)return;
+  layoutWatchStarted=true;
+  if(typeof ResizeObserver==='undefined')return;
+  // Watch BOTH the document element (its client box changes whenever the
+  // iframe/canvas resizes - the .scroll-wrapper is max-width capped, so it
+  // stays put and would never fire) and the .scroll-wrapper itself (its
+  // width changes when its own CSS settles, e.g. a late external
+  // stylesheet). Either change re-syncs the frame + page sizes.
+  var obs=new ResizeObserver(function(){syncLayout();});
+  obs.observe(document.documentElement);
+  var wrap=document.querySelector('.scroll-wrapper');
+  if(wrap)obs.observe(wrap);
+  // One final pass once all resources (external CSS, fonts, images) are in.
+  window.addEventListener('load',function(){syncLayout();});
+}
+
+// Defer the first sync until the document has had a layout pass, so widths
+// measured here are real. Messages to the parent are also posted slightly
+// later - the parent's listeners are attached by then, so no report is ever
+// lost (the old synchronous init could post before the listener existed).
+requestAnimationFrame(function(){
+  syncLayout();
+  reportPageBreak(false);
+  reportPages(false);
+  startLayoutWatch();
+});
 
 // ── Preview canvas colour ──
 // Always keep Klone's canvas colour on the preview <body> so a document's
@@ -1314,8 +2175,8 @@ if(document.body){
   document.body.__kloneAuthoredBg=(__kloneComputedBg&&__kloneComputedBg!=='transparent'&&__kloneComputedBg!=='rgba(0, 0, 0, 0)')?__kloneComputedBg:'';
   document.body.style.setProperty('background-color','#161617','important');
 }
-window.addEventListener('resize',function(){updateSelectionBox();updatePageBreakMarkers();});
-window.addEventListener('scroll',function(){updateSelectionBox();updatePageBreakMarkers();},true);
+window.addEventListener('resize',function(){updateSelectionBox();updatePageBreakMarkers();syncSystemFrameSize();syncPageBoundarySizes();updateBoundaryMarkers();});
+window.addEventListener('scroll',function(){updateSelectionBox();updatePageBreakMarkers();updateBoundaryMarkers();},true);
 
 window.addEventListener('message',function(e){
   var data=e.data;
@@ -1378,6 +2239,14 @@ window.addEventListener('message',function(e){
 
   if(data.type==='clear-split'){
     clearPageBreaks(true);
+  }
+
+  if(data.type==='add-page'){
+    addPageBoundary(true);
+  }
+
+  if(data.type==='move-to-page'){
+    moveSelectionToPage(data.pageIndex);
   }
 
   if(data.type==='set-text'){
@@ -1468,11 +2337,16 @@ window.addEventListener('message',function(e){
       if(pendingEditEl)pendingEditEl.style.visibility='';
       pendingEditEl=null;
       editReqId=0;
+      // The delete-confirm chip is inspect-mode UI - never leave it armed.
+      pendingDeletePage=null;
+      if(pendingDeleteTimer){clearTimeout(pendingDeleteTimer);pendingDeleteTimer=null;}
       deselect();
       window.parent.postMessage({type:'selection-cleared'},'*');
     }
     // Show/hide the PDF split lines with inspect mode (hidden in preview).
     updatePageBreakMarkers();
+    // Page-boundary dividers render only in inspect mode too.
+    updateBoundaryMarkers();
   }
 });
 
