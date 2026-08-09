@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { LoginForm } from "@/components/auth/LoginForm";
+import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthShell } from "@/components/auth/AuthShell";
 
 export const metadata: Metadata = {
@@ -22,20 +22,14 @@ export default async function LoginPage({
   return (
     <AuthShell
       title="Welcome back"
-      subtitle="Sign in to your Klone account and keep creating."
       footer={
         <>
-          New to Klone?{" "}
-          <Link
-            href="/register"
-            className="font-semibold text-primary transition-colors hover:text-primary/80"
-          >
-            Create an account
-          </Link>
+          Don&apos;t have an account?{" "}
+          <Link href="/register">Sign up</Link>
         </>
       }
     >
-      <LoginForm urlError={urlError} />
+      <AuthCard mode="signin" urlError={urlError} />
     </AuthShell>
   );
 }

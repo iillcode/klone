@@ -1,34 +1,38 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { signInWithGoogle } from "@/app/actions/auth";
 
-/** Official Google "G" mark (four brand colors). */
+/** Official Google "G" mark (four brand colors), 24x24 viewBox. */
 function GoogleMark() {
   return (
-    <svg viewBox="0 0 48 48" className="h-5 w-5" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
       <path
         fill="#EA4335"
-        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+        d="M12 5.4c1.6 0 3 .55 4.1 1.62l3.07-3.07C17.3 2.19 14.87 1.2 12 1.2 7.78 1.2 4.13 3.62 2.35 7.15l3.58 2.78C6.78 7.32 9.17 5.4 12 5.4z"
       />
       <path
         fill="#4285F4"
-        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+        d="M23.49 12.27c0-.79-.07-1.55-.2-2.28H12v4.51h6.44c-.28 1.48-1.12 2.73-2.38 3.58l3.68 2.85c2.15-1.99 3.75-4.93 3.75-8.66z"
       />
       <path
         fill="#FBBC05"
-        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+        d="M5.93 14.07a6.6 6.6 0 0 1 0-4.14L2.35 7.15a10.8 10.8 0 0 0 0 9.7l3.58 2.78z"
       />
       <path
         fill="#34A853"
-        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+        d="M12 22.8c2.87 0 5.28-.95 7.04-2.57l-3.68-2.85c-1.02.69-2.33 1.1-3.36 1.1-2.83 0-5.22-1.92-6.07-4.5l-3.58 2.78C4.13 20.38 7.78 22.8 12 22.8z"
       />
     </svg>
   );
 }
 
-export function GoogleButton() {
+interface GoogleButtonProps {
+  label?: string;
+}
+
+export function GoogleButton({ label = "Continue with Google" }: GoogleButtonProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,26 +54,12 @@ export function GoogleButton() {
   };
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={pending}
-        className="group relative flex h-11 w-full items-center justify-center gap-2.5 rounded-xl border border-input bg-background text-sm font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-accent/50 hover:border-muted-foreground/50 hover:shadow-md active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
-      >
-        {pending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <GoogleMark />
-        )}
-        {pending ? "Redirecting to Google…" : "Continue with Google"}
+    <>
+      <button type="button" className="gbtn" onClick={handleClick} disabled={pending}>
+        {pending ? <Loader2 className="animate-spin" /> : <GoogleMark />}
+        <span>{pending ? "Redirecting to Google…" : label}</span>
       </button>
-      {error && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-destructive">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-          {error}
-        </p>
-      )}
-    </div>
+      {error && <div className="err show">{error}</div>}
+    </>
   );
 }

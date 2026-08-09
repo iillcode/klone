@@ -52,6 +52,8 @@ var dragBounds=null;
 var dragBaseRect=null;
 var dragBasePos=[0,0];
 var moveRects=[];
+var dragScrollTop=0; // scroll offset at mousedown (converts drag rects to document space)
+var lastDragMoveEls=[]; // elements moved in the most recent drag (used to auto-move them onto a page added right after the drop)
 var lastGuidesKey=null;
 var dragDirX=0;
 var dragDirY=0;
@@ -212,35 +214,72 @@ function reportPages(changed){
 // The page container's own box: a real, page-sized empty area so a newly
 // added page is VISIBLE and can be dropped into. Kept as inline styles so
 // the page survives save/reload without depending on template CSS.
+// pointer-events:none makes the page container CLICK-THROUGH: an element
+// dropped at the bottom (visually overlapping the page area) stays
+// selectable instead of being blocked by the transparent page box. Content
+// moved ONTO the page re-enables pointer events on itself (see
+// syncPageBoundarySizes / reparentElementToPage), so it remains clickable.
 function pageBoundaryCss(){
-  return 'display:block;position:relative;width:100%;min-height:'+getPageHeightPx()+'px;margin:0;padding:0;border:0;';
+  return 'display:block;position:relative;width:100%;min-height:'+getPageHeightPx()+'px;margin:0;padding:0;border:0;pointer-events:none;';
 }
 
 // Append a new empty page (a page-sized container) at the end of the doc.
-function addPageBoundary(record,sharedBatchId){
+// autoMoveDropped: when the user drags an element to the bottom and THEN
+// adds the page, any element from that drag whose centre now sits inside
+// the new page's area is pulled onto the page (same undo batch as the
+// boundary, so one undo reverses both) - the element lands where the user
+// meant it to go instead of being stranded overlapping the page box.
+function addPageBoundary(record,sharedBatchId,autoMoveDropped){
   var container=getContentContainer();
   if(!container)return;
   var b=document.createElement('div');
   b.setAttribute('data-klone-page-boundary','');
   b.style.cssText=pageBoundaryCss();
+  var bid=0;
   if(record){
-    var bid=sharedBatchId||++batchId;
+    bid=sharedBatchId||++batchId;
     undoStack.push({property:'__page_boundary__',element:b,adding:true,nextSibling:null,parentNode:container,batchId:bid});
     redoStack=[];
   }
   container.appendChild(b);
+  // Freshly dragged elements that ended up at/below the new page's top
+  // edge are moved onto it, preserving their exact visual drop position.
+  if(autoMoveDropped&&lastDragMoveEls.length>0){
+    var nr=b.getBoundingClientRect();
+    for(var ai=0;ai<lastDragMoveEls.length;ai++){
+      var ael=lastDragMoveEls[ai];
+      if(!ael||!ael.isConnected)continue;
+      if(isContainer(ael)||isPageBoundary(ael))continue;
+      if(getPageIndexOf(ael)>0)continue; // already lives on a page container
+      var ar=ael.getBoundingClientRect();
+      var acy=ar.top+ar.height/2;
+      // Centre at/inside the new page's area - or the element was dropped
+      // against the bottom edge of the previous page (drag clamping keeps
+      // it inside the body, so its centre sits just above the new page's
+      // top) - pull it onto the page either way.
+      if(acy<nr.top-(ar.height/2))continue;
+      if(bid>0)reparentElementToPage(ael,countPages()-1,bid);
+    }
+    lastDragMoveEls=[];
+  }
   updateBoundaryMarkers();
   reportPages(true);
 }
 
 // Keep every page's height in sync with the current page width (the page
 // container is responsive, so a resize must re-derive the A4 height), and
-// re-apply the box styles to pages restored from saved HTML.
+// re-apply the box styles to pages restored from saved HTML. Content that
+// lives on a page re-enables pointer events (the page box itself is
+// click-through) so elements on the page stay selectable after a reload.
 function syncPageBoundarySizes(){
   var els=getPageBoundaryEls();
   var css=pageBoundaryCss();
   for(var i=0;i<els.length;i++){
     if(els[i].getAttribute('style')!==css)els[i].style.cssText=css;
+    var kids=els[i].children;
+    for(var k=0;k<kids.length;k++){
+      kids[k].style.pointerEvents='auto';
+    }
   }
 }
 
@@ -442,6 +481,82 @@ function restorePlaceholders(list){
   }
 }
 
+// ── Cross-page style preservation ──
+// Moving an element into a page container changes its DOM ancestry, so
+// ancestor-context CSS rules (e.g. .header .meta, .section h2) stop
+// matching and the element silently reverts to page defaults - colors,
+// fonts, margins, display, etc. are lost, and the transform compensation
+// then bakes the wrong offsets in (the element lands off-canvas). The move
+// therefore snapshots the computed styles of the element AND its whole
+// subtree, then re-inlines exactly the properties whose computed value
+// changed after the move, so the element looks identical on the new page.
+// Layout-driving properties are listed first so inlining e.g. line-height
+// restores a content-derived height before height itself is compared
+// (content-sized heights stay auto instead of being frozen to px).
+var PRESERVED_STYLE_PROPS=[
+  'display','position','cssFloat','clear','boxSizing','visibility','opacity','zIndex','overflow','overflowX','overflowY',
+  'fontFamily','fontSize','fontWeight','fontStyle','lineHeight','letterSpacing','wordSpacing','textAlign','textTransform','textDecorationLine','textIndent','whiteSpace','wordBreak','overflowWrap',
+  'color','backgroundColor','backgroundImage','backgroundSize','backgroundPosition','backgroundRepeat',
+  'marginTop','marginRight','marginBottom','marginLeft',
+  'paddingTop','paddingRight','paddingBottom','paddingLeft',
+  'width','height','minWidth','minHeight','maxWidth','maxHeight',
+  'top','right','bottom','left','verticalAlign',
+  'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
+  'borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle',
+  'borderTopColor','borderRightColor','borderBottomColor','borderLeftColor',
+  'borderTopLeftRadius','borderTopRightRadius','borderBottomLeftRadius','borderBottomRightRadius',
+  'justifyContent','alignItems','alignContent','flexDirection','flexWrap','flexGrow','flexShrink','flexBasis','gap','rowGap','columnGap','order'
+];
+
+// Capture the computed styles of root and every descendant, for
+// restoreSubtreeStyles() to diff against after the move.
+function captureSubtreeStyles(root){
+  var out=[];
+  if(!root)return out;
+  var queue=[root];
+  while(queue.length){
+    var n=queue.shift();
+    var cs=(n.ownerDocument&&n.ownerDocument.defaultView)?getComputedStyle(n):null;
+    var vals={};
+    if(cs){
+      for(var p=0;p<PRESERVED_STYLE_PROPS.length;p++){
+        vals[PRESERVED_STYLE_PROPS[p]]=cs[PRESERVED_STYLE_PROPS[p]];
+      }
+    }
+    out.push({el:n,vals:vals});
+    for(var c=0;c<n.children.length;c++)queue.push(n.children[c]);
+  }
+  return out;
+}
+
+// Re-apply the pre-move appearance: inline every preserved property whose
+// computed value changed since the snapshot (the new context computed it
+// differently - that IS the style loss). Two passes: inlining one property
+// can change how a later one computes (e.g. line-height restores a
+// content-driven height), so the second pass catches anything the first
+// pass's comparison missed.
+function restoreSubtreeStyles(root,snapshots){
+  if(!snapshots)return;
+  for(var pass=0;pass<2;pass++){
+    var changed=false;
+    for(var i=0;i<snapshots.length;i++){
+      var s=snapshots[i];
+      var el=s.el;
+      if(!el||!el.isConnected)continue;
+      var cs=el.ownerDocument?getComputedStyle(el):null;
+      if(!cs)continue;
+      for(var p=0;p<PRESERVED_STYLE_PROPS.length;p++){
+        var prop=PRESERVED_STYLE_PROPS[p];
+        if(cs[prop]!==s.vals[prop]){
+          el.style[prop]=s.vals[prop];
+          changed=true;
+        }
+      }
+    }
+    if(!changed)break;
+  }
+}
+
 // Move el to the END of page pageIndex (0-based) inside the content
 // container. Two placement modes:
 //   - Drag drop (placeOnPage=false): keep the EXACT visual position where
@@ -465,6 +580,11 @@ function reparentElementToPage(el,pageIndex,bid,placeOnPage){
   var oldParent=el.parentNode;
   var oldNextSibling=el.nextSibling;
   var oldTransform=el.style.transform||'';
+  // Snapshot the element's appearance (its whole subtree) BEFORE the move:
+  // reparenting changes which ancestor-context CSS rules match, so styles
+  // would be silently lost on the new page. restoreSubtreeStyles() below
+  // re-inlines exactly what changed.
+  var styleSnapshots=captureSubtreeStyles(el);
   var cc=getContentContainer();
   var curPage=getPageIndexOf(el);
   // The page AREA the element currently lives on - the relative offset is
@@ -493,6 +613,14 @@ function reparentElementToPage(el,pageIndex,bid,placeOnPage){
     // Pages 2+ are real containers - the element goes INSIDE them.
     target.appendChild(el);
   }
+  // Preserve the pre-move appearance BEFORE measuring newRect, so the
+  // transform compensation below lands the element exactly where it was
+  // dropped - with its styles intact, not reverted to page defaults.
+  restoreSubtreeStyles(el,styleSnapshots);
+  // Content on a page container must stay selectable even though the page
+  // container itself is click-through (pointer-events:none) so it can never
+  // block elements that visually overlap the page area.
+  syncElementPointerEvents(el);
   var newRect=el.getBoundingClientRect();
   var tx,ty;
   if(placeOnPage){
@@ -752,23 +880,30 @@ function clearHover(){
   }
 }
 
-function parseRgbToHex(s){
-  if(!s||s==='transparent'||s==='rgba(0, 0, 0, 0)')return'#000000';
-  if(s.startsWith('#'))return s;
-  var m=s.match(/(\\d+)/g);
-  if(!m||m.length<3)return'#000000';
-  var r=parseInt(m[0]).toString(16).padStart(2,'0');
-  var g=parseInt(m[1]).toString(16).padStart(2,'0');
-  var b=parseInt(m[2]).toString(16).padStart(2,'0');
-  return'#'+r+g+b;
-}
-// color-like properties that need hex conversion; everything else sends raw value
+// Color-like properties keep their ALPHA so the sidebar's opacity field
+// stays in sync: computed values come back as rgb(...)/rgba(...), which we
+// forward as-is. Fully-opaque colors may arrive as rgb(...) too - the
+// sidebar converts to hex for display and derives the alpha itself. Every
+// other property sends its raw value.
 function isColorProperty(p){return p==='color'||p==='backgroundColor';}
 
 function formatStyleValue(property,computedValue){
-  if(isColorProperty(property))return parseRgbToHex(computedValue);
+  if(isColorProperty(property)){
+    if(!computedValue||computedValue==='transparent')return'rgba(0, 0, 0, 0)';
+    return computedValue;
+  }
   return computedValue;
 }
+// Content moved onto a page container re-enables pointer events on itself
+// (the page box is click-through, so without this it could never be
+// selected). Kept in sync on reparent AND undo/redo: only elements whose
+// parent IS a page container carry the inline override.
+function syncElementPointerEvents(el){
+  if(!el||!el.style)return;
+  if(el.parentNode&&isPageBoundary(el.parentNode))el.style.pointerEvents='auto';
+  else if(el.style.pointerEvents==='auto')el.style.pointerEvents='';
+}
+
 function performUndo(){
   if(undoStack.length===0)return;
   var lastBatch=undoStack[undoStack.length-1].batchId;
@@ -824,6 +959,7 @@ function performUndo(){
       }
       entry.element.style.transform=entry.oldTransform;
       restorePlaceholders(entry.homePlaceholders);
+      syncElementPointerEvents(entry.element);
     }else if(entry.property==='__text__'){
       var cur=entry.element.innerHTML;
       redoStack.push({element:entry.element,property:'__text__',oldValue:cur,batchId:lastBatch});
@@ -910,6 +1046,7 @@ function performRedo(){
         entry.oldParent.appendChild(entry.element);
       }
       entry.element.style.transform=entry.oldTransform;
+      syncElementPointerEvents(entry.element);
     }else if(entry.property==='__text__'){
       var cur=entry.element.innerHTML;
       undoStack.push({element:entry.element,property:'__text__',oldValue:cur,batchId:lastBatch});
@@ -966,6 +1103,8 @@ function fireSelected(){
         fontFamily:s.fontFamily,
         lineHeight:s.lineHeight,
         letterSpacing:s.letterSpacing,
+        textDecorationLine:s.textDecorationLine,
+        textTransform:s.textTransform,
         rotate:s.rotate,
         opacity:s.opacity,
         borderRadius:s.borderRadius,
@@ -1028,12 +1167,31 @@ function getTranslate(el){
 
 // The document container: the default preview template uses a centered
 // .scroll-wrapper; user-authored HTML falls back to the body.
+// top/bottom are DOCUMENT-space vertical bounds (the content's top and
+// bottom edges), NOT the visible viewport edges. They are scroll-
+// independent: a scrolled viewport shows a slice of the content, but the
+// element may be dragged anywhere inside the full content area - including
+// below the current screen while auto-scroll carries it to the last page -
+// and only clamps at the actual document edges so it never leaves the body.
 function getMoveBounds(){
   var wrap=document.querySelector('.scroll-wrapper');
   var box=wrap||document.body;
   if(!box)return null;
   var r=box.getBoundingClientRect();
-  return{left:r.left,right:r.right};
+  var top,bottom;
+  if(wrap){
+    // .scroll-wrapper is the scroll container: its content runs from its
+    // top edge down scrollHeight (document space, unaffected by scrollTop).
+    top=r.top;
+    var sh=Math.max(box.scrollHeight,box.clientHeight);
+    bottom=top+sh;
+  }else{
+    // body fallback: the document origin is the top of the page.
+    var dh=document.documentElement;
+    top=0;
+    bottom=Math.max(dh?dh.scrollHeight:0,dh?dh.clientHeight:0,r.height);
+  }
+  return{left:r.left,right:r.right,top:top,bottom:bottom};
 }
 
 // Clamp a proposed translate-x so the element NEVER leaves the container
@@ -1049,6 +1207,28 @@ function clampTranslateX(el,nx){
   if(r.left+relX<bounds.left)return cur[0]+(bounds.left-r.left);
   if(r.right+relX>bounds.right)return cur[0]+(bounds.right-r.right);
   return nx;
+}
+
+// Clamp a proposed translate-y so the element NEVER leaves the document
+// vertically - it stays inside the body (top edge at/after the content
+// top, bottom edge at/before the content bottom). Mirrors
+// clampTranslateX; the container itself moves freely.
+function clampTranslateY(el,ny){
+  var bounds=getMoveBounds();
+  if(!bounds)return ny;
+  if(isContainer(el))return ny;
+  var cur=getTranslate(el);
+  var r=el.getBoundingClientRect();
+  // Convert the element's viewport rect to DOCUMENT space (add the current
+  // scroll offset) so it compares against the scroll-independent bounds.
+  var st=getScrollState();
+  var S=(st&&st.el)?st.scrollTop:0;
+  var docTop=r.top+S;
+  var docBottom=r.bottom+S;
+  var relY=ny-cur[1];
+  if(docTop+relY<bounds.top)return cur[1]+(bounds.top-docTop);
+  if(docBottom+relY>bounds.bottom)return cur[1]+(bounds.bottom-docBottom);
+  return ny;
 }
 
 // Elements whose width is LOCKED: the document container (html/body) and
@@ -1628,6 +1808,10 @@ document.addEventListener('mousedown',function(e){
   hideGuides();
   justDragged=false;
   dragMoved=false;
+  // A new interaction with the canvas invalidates the previous drag's
+  // "dropped for a new page" mark (only the most recent drop can be
+  // auto-moved when the user adds a page right after it).
+  lastDragMoveEls=[];
   lastDragX=null;
   lastDragY=null;
   dragStartX=e.clientX;
@@ -1683,6 +1867,7 @@ document.addEventListener('mousedown',function(e){
     e.preventDefault();
     moveDeltas=[];
     moveRects=[];
+    dragScrollTop=getScrollState().scrollTop;
     for(var i=0;i<selectedEls.length;i++){
       // moveDeltas entry: [oldTransform, finalX, finalY]
       // oldTransform is kept for undo; finalX/finalY track the element's
@@ -1797,28 +1982,50 @@ function dragFrame(){
   if(ddy!==0)dragDirY=ddy>0?1:-1;
   // Raw next positions (clamped to the container) before any snapping.
   var rawNx=[],rawNy=[];
+  // Fresh bounds EVERY frame: the bounds are in DOCUMENT space (scroll-
+  // independent) so they are stable during auto-scroll - the element's
+  // document position grows as its transform compensates the scrolling,
+  // letting it ride down to the last page, and it only clamps when it
+  // reaches the actual content edges (never the visible screen edge).
+  var frameBounds=getMoveBounds()||dragBounds;
   for(var i=0;i<selectedEls.length;i++){
     var el=selectedEls[i];
     var curT2=getTranslate(el);
     var nx=curT2[0]+ddx;
-    // Horizontal clamp against the CACHED container bounds, derived from
-    // the element's CURRENT rect (cached rect shifted by how far the drag
-    // has moved since the grab). Never touches layout during the drag, and
+    // Horizontal clamp against the container bounds, derived from the
+    // element's CURRENT rect (cached rect shifted by how far the drag has
+    // moved since the grab). Never touches layout during the drag, and
     // pins AT the boundary instead of compounding an offset when the
     // element is already at the edge.
-    if(!isContainer(el)&&dragBounds&&moveRects[i]){
+    if(!isContainer(el)&&frameBounds&&moveRects[i]){
       var relX=nx-curT2[0];
       var rr=moveRects[i];
       var shift=curT2[0]-dragBasePos[0];
       var curLeft=rr.left+shift;
       var curRight=rr.right+shift;
-      if(curLeft+relX<dragBounds.left)nx=curT2[0]+(dragBounds.left-curLeft);
-      if(curRight+relX>dragBounds.right)nx=curT2[0]+(dragBounds.right-curRight);
+      if(curLeft+relX<frameBounds.left)nx=curT2[0]+(frameBounds.left-curLeft);
+      if(curRight+relX>frameBounds.right)nx=curT2[0]+(frameBounds.right-curRight);
     }
     rawNx.push(nx);
     // The scroll compensation keeps the element under the cursor while the
     // canvas auto-scrolls underneath it.
-    rawNy.push(curT2[1]+ddy+scrollDeltaY);
+    var ny=curT2[1]+ddy+scrollDeltaY;
+    // Vertical clamp in DOCUMENT space: the mousedown rect plus the scroll
+    // offset at mousedown is the element's document position; the transform
+    // delta (including scroll compensation) moves it through the document.
+    // This pins at the content edges - it never pins at the screen edge, so
+    // a bottom-edge drag keeps riding down to the last page while
+    // auto-scrolling, and can't leave the body above/below.
+    if(!isContainer(el)&&frameBounds&&moveRects[i]){
+      var relY=ny-curT2[1];
+      var rr2=moveRects[i];
+      var shiftY=curT2[1]-dragBasePos[1];
+      var curTop=rr2.top+dragScrollTop+shiftY;
+      var curBottom=rr2.bottom+dragScrollTop+shiftY;
+      if(curTop+relY<frameBounds.top)ny=curT2[1]+(frameBounds.top-curTop);
+      if(curBottom+relY>frameBounds.bottom)ny=curT2[1]+(frameBounds.bottom-curBottom);
+    }
+    rawNy.push(ny);
   }
   // Alignment snap (Figma/Canva-style). Holding Shift disables it for
   // fine-tuned placement. Snap targets are captured at mousedown in
@@ -2000,10 +2207,12 @@ document.addEventListener('mouseup',function(e){
       isMoving=false;
       batchId++;
       var moved=false;
+      lastDragMoveEls=[];
       for(var i=0;i<selectedEls.length;i++){
         var m=moveDeltas[i];
         if(m[1]===0&&m[2]===0)continue;
         moved=true;
+        lastDragMoveEls.push(selectedEls[i]);
         undoStack.push({element:selectedEls[i],property:'transform',oldValue:m[0],batchId:batchId});
       }
       if(moved)redoStack=[];
@@ -2242,7 +2451,9 @@ window.addEventListener('message',function(e){
   }
 
   if(data.type==='add-page'){
-    addPageBoundary(true);
+    // autoMoveDropped: pull any element the user JUST dragged down onto the
+    // new page so it stays selectable and lands where the user wanted it.
+    addPageBoundary(true,0,true);
   }
 
   if(data.type==='move-to-page'){
@@ -2299,9 +2510,10 @@ window.addEventListener('message',function(e){
       var t=getTranslate(el2);
       undoStack.push({element:el2,property:'transform',oldValue:el2.style.transform||'',batchId:batchId});
       // Clamp so nudging (arrow keys) never pushes the element outside
-      // the container - the container width must not expand.
+      // the container - the container width must not expand, and the
+      // element must stay inside the document vertically.
       rawNx.push(clampTranslateX(el2,t[0]+mdx));
-      rawNy.push(t[1]+mdy);
+      rawNy.push(clampTranslateY(el2,t[1]+mdy));
     }
     var dirX=mdx>0?1:(mdx<0?-1:0);
     var dirY=mdy>0?1:(mdy<0?-1:0);
@@ -2323,6 +2535,59 @@ window.addEventListener('message',function(e){
       hideGuides();
     }
     fireSelected();
+  }
+
+  if(data.type==='align-elements'){
+    if(selectedEls.length===0)return;
+    // The system frame is sticky - never align it.
+    for(var ali=0;ali<selectedEls.length;ali++){
+      if(isContainer(selectedEls[ali]))return;
+    }
+    var align=data.align||'left';
+    batchId++;
+    for(var ai=0;ai<selectedEls.length;ai++){
+      var ael=selectedEls[ai];
+      // The page container that holds the element defines the alignment
+      // box (page 1 = content container, pages 2+ = the page boundary).
+      var apage=getPageContainer(getPageIndexOf(ael));
+      if(!apage)continue;
+      var pcs=getComputedStyle(apage);
+      var pRect=apage.getBoundingClientRect();
+      // Content box: subtract padding so alignment lands inside the page.
+      var pL=parseFloat(pcs.paddingLeft)||0;
+      var pR=parseFloat(pcs.paddingRight)||0;
+      var pT=parseFloat(pcs.paddingTop)||0;
+      var pB=parseFloat(pcs.paddingBottom)||0;
+      var cLeft=pRect.left+pL;
+      var cTop=pRect.top+pT;
+      var cW=pRect.width-pL-pR;
+      // Page 1 lives inside a scroll container whose visible height is NOT
+      // the page height, so vertical alignment on page 1 must use the true
+      // PDF page height (one page of content), not the wrapper's viewport.
+      var cH=pRect.height-pT-pB;
+      var pageIndex=getPageIndexOf(ael);
+      if(pageIndex<=0)cH=getPageHeightPx();
+      var ar=ael.getBoundingClientRect();
+      var t=getTranslate(ael);
+      // The element's flow position (translate removed), then the target
+      // translate that lands it at the desired alignment edge.
+      var flowX=ar.left-t[0];
+      var flowY=ar.top-t[1];
+      var nx=t[0],ny=t[1];
+      if(align==='left')nx=cLeft-flowX;
+      else if(align==='center-x')nx=(cLeft+(cW-ar.width)/2)-flowX;
+      else if(align==='right')nx=(cLeft+cW-ar.width)-flowX;
+      if(align==='top')ny=cTop-flowY;
+      else if(align==='center-y')ny=(cTop+(cH-ar.height)/2)-flowY;
+      else if(align==='bottom')ny=(cTop+cH-ar.height)-flowY;
+      var nt=(nx===0&&ny===0)?'':'translate('+nx+'px,'+ny+'px)';
+      if(ael.style.transform===nt)continue; // no-op - skip undo entry
+      undoStack.push({element:ael,property:'transform',oldValue:ael.style.transform||'',batchId:batchId});
+      ael.style.transform=nt;
+    }
+    redoStack=[];
+    fireSelected();
+    updateSelectionBox();
   }
 
   if(data.type==='undo'){performUndo();}

@@ -118,7 +118,7 @@ export function NumberField({
 
   return (
     <div
-      className={`flex items-center gap-1.5 bg-[#1e1e1e] rounded-[6px] px-2.5 h-8 min-w-0 ${className}`}
+      className={`flex items-center gap-1.5 bg-[#1e1e1e] rounded-[6px] px-2.5 h-7 min-w-0 border border-transparent transition-colors focus-within:border-[#3b82f6] ${className}`}
     >
       {prefix && (
         <span className="text-[12px] text-[#9b9b9b] shrink-0 select-none flex items-center">
@@ -153,7 +153,7 @@ export function NumberField({
           onChange(v);
           lastCommitted.current = v;
         }}
-        className="w-full min-w-0 bg-transparent text-[13px] text-[#eaeaea] font-mono text-center focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+        className="w-full min-w-0 bg-transparent text-[13px] text-[#eaeaea] font-mono text-center focus:outline-none caret-[#3b82f6] disabled:opacity-40 disabled:cursor-not-allowed"
       />
       {suffix && !disabled && (
         <span className="text-[12px] text-[#9b9b9b] shrink-0 select-none">

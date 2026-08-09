@@ -53,11 +53,17 @@ export async function register(
     return { error: "Email and password are required." };
   }
 
-  if (password.length < 6) {
-    return { error: "Password must be at least 6 characters." };
+  // Strong password: min 8 chars, uppercase, lowercase, number and symbol.
+  if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(password)) {
+    return {
+      error:
+        "Use at least 8 characters with uppercase, lowercase, number and symbol.",
+    };
   }
 
-  if (password !== confirmPassword) {
+  // Only enforce a confirm-password check when the form actually provides one
+  // (the new design has no confirm field, so it's sent as the same value).
+  if (confirmPassword && password !== confirmPassword) {
     return { error: "Passwords do not match." };
   }
 
@@ -83,15 +89,30 @@ export async function register(
     };
   }
 
-  // Email confirmation disabled → session exists right away.
+  // Make sure a profile row exists for the new user.
+  await ensureUserProfile(supabase, data.user);
+
+  // Email confirmation disabled → signUp already returns a session.
   if (data.session) {
-    await ensureUserProfile(supabase, data.user);
     redirect("/");
   }
 
-  // Email confirmation enabled → the callback route creates the profile
-  // once the user clicks the confirmation link.
-  return { success: true };
+  // Email confirmation enabled → sign the user in right away so they land
+  // directly on the dashboard (no success screen / no manual re-login).
+  const signIn = await supabase.auth.signInWithPassword({ email, password });
+  if (signIn.data.session) {
+    const user = signIn.data.user;
+    if (user) {
+      await ensureUserProfile(supabase, user);
+    }
+    redirect("/");
+  }
+
+  // Couldn't establish a session (e.g. email still pending confirmation) —
+  // surface the reason instead of the demo success screen.
+  return {
+    error: signIn.error?.message ?? "Could not sign you in. Please try again.",
+  };
 }
 
 /**

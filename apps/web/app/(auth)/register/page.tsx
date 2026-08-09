@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { RegisterForm } from "@/components/auth/RegisterForm";
+import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthShell } from "@/components/auth/AuthShell";
 
 export const metadata: Metadata = {
@@ -12,20 +12,14 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title="Create your account"
-      subtitle="Start turning prompts into polished PDFs — free forever."
       footer={
         <>
           Already have an account?{" "}
-          <Link
-            href="/login"
-            className="font-semibold text-primary transition-colors hover:text-primary/80"
-          >
-            Sign in
-          </Link>
+          <Link href="/login">Log in</Link>
         </>
       }
     >
-      <RegisterForm />
+      <AuthCard mode="signup" />
     </AuthShell>
   );
 }

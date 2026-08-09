@@ -471,6 +471,9 @@ export function PreviewEditor({
             <PropertiesSidebar
               selectedElements={selectedElements}
               onApplyStyle={handleApplyStyle}
+              onAlignElements={(align) =>
+                previewRef.current?.alignElements(align)
+              }
               onDelete={handleDelete}
               onUndo={handleUndo}
               onRedo={handleRedo}

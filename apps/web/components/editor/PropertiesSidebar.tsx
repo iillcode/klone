@@ -1,33 +1,86 @@
 "use client";
 
-import type { ElementInfo } from "./HtmlPreview";
+import type { ElementInfo, AlignMode } from "./HtmlPreview";
+import { Keyboard } from "lucide-react";
 import {
   cssPx,
   parseTranslate,
   parseRgbToHex,
+  parseColorAlpha,
+  withColorAlpha,
   gradientFirstColor,
   isTransparentColor,
 } from "./utils/style-utils";
-import { FONT_FAMILIES, FONT_WEIGHTS } from "./constants";
 import {
   UndoIcon,
   RedoIcon,
   PageBreakIcon,
   ClearPageBreakIcon,
-  AlignLeftIcon,
-  AlignCenterIcon,
-  AlignRightIcon,
-  TextAlignIcon,
+  AlignHLeftIcon,
+  AlignHCenterIcon,
+  AlignHRightIcon,
+  AlignVTopIcon,
+  AlignVMiddleIcon,
+  AlignVBottomIcon,
   DeleteIcon,
 } from "./icons/properties-icons";
 import { NumberField } from "./ui/NumberField";
 import { SelectField } from "./ui/SelectField";
 import { IconBtn, BtnGroup, SqBtn } from "./ui/IconButton";
 import { FieldBlock, Section, ColorRow } from "./ui/Fields";
+import { TypographyPanel } from "./ui/TypographyPanel";
+
+/**
+ * Keyboard shortcuts available in the Klone editor, shown in the design
+ * panel when nothing is selected. `keys` are rendered as small kbd chips;
+ * "⌘" means ⌘ on macOS / Ctrl on Windows & Linux.
+ */
+const SHORTCUT_GROUPS: {
+  title: string;
+  items: { label: string; keys: string[] }[];
+}[] = [
+  {
+    title: "Inspect & select",
+    items: [
+      { label: "Inspect mode", keys: ["V"] },
+      { label: "Select all", keys: ["⌘", "A"] },
+      { label: "Toggle selection", keys: ["⌘", "Click"] },
+      { label: "Additive marquee", keys: ["⇧", "Drag"] },
+      { label: "Clear selection", keys: ["Esc"] },
+    ],
+  },
+  {
+    title: "Editing",
+    items: [
+      { label: "Edit text", keys: ["Double-click"] },
+      { label: "Undo", keys: ["⌘", "Z"] },
+      { label: "Redo", keys: ["⇧", "⌘", "Z"] },
+      { label: "Delete selection", keys: ["⌫"] },
+      { label: "Nudge 1px", keys: ["← ↑ ↓ →"] },
+      { label: "Nudge 10px", keys: ["⇧", "← ↑ ↓ →"] },
+    ],
+  },
+  {
+    title: "Text editing",
+    items: [
+      { label: "Save text", keys: ["Enter"] },
+      { label: "Save (code blocks)", keys: ["⌘", "Enter"] },
+      { label: "Cancel edit", keys: ["Esc"] },
+    ],
+  },
+  {
+    title: "Canvas",
+    items: [
+      { label: "Search documents", keys: ["/"] },
+      { label: "Cancel page break", keys: ["Esc"] },
+    ],
+  },
+];
 
 interface PropertiesSidebarProps {
   selectedElements: ElementInfo[];
   onApplyStyle: (property: string, value: string) => void;
+  onAlignElements?: (align: AlignMode) => void;
   onDelete?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
@@ -44,6 +97,7 @@ interface PropertiesSidebarProps {
 export function PropertiesSidebar({
   selectedElements,
   onApplyStyle,
+  onAlignElements,
   onDelete,
   onUndo,
   onRedo,
@@ -99,35 +153,6 @@ export function PropertiesSidebar({
   // Format numbers without trailing decimals (12.5 stays 12.5, 12.0 → 12)
   const fmtNum = (n: number) => (Math.round(n * 10) / 10).toString();
 
-  // Normalize computed text-align (start/end → left/right)
-  const rawAlign = s?.textAlign || "left";
-  const alignValue =
-    rawAlign === "start" ? "left" : rawAlign === "end" ? "right" : rawAlign;
-
-  // Font weight dropdown value — surface the element's actual computed
-  // weight, adding it to the option list when it's not one of the presets
-  // (e.g. templates using 300, 800, etc. would otherwise collapse to 400).
-  const rawWeight = s?.fontWeight;
-  const weightPreset =
-    rawWeight === "bold"
-      ? "700"
-      : rawWeight === "normal" || rawWeight === undefined || rawWeight === ""
-        ? "400"
-        : rawWeight;
-  const weightOptions = FONT_WEIGHTS.some((w) => w.value === weightPreset)
-    ? FONT_WEIGHTS
-    : [{ value: weightPreset, label: weightPreset }, ...FONT_WEIGHTS];
-  const weightValue = weightPreset;
-
-  // Font family dropdown value — surface the element's actual computed
-  // family, adding it to the option list when it's not one of the presets.
-  const currentFamily = s?.fontFamily ?? "";
-  const familyIsPreset = FONT_FAMILIES.some((f) => f.value === currentFamily);
-  const fontOptions = familyIsPreset
-    ? FONT_FAMILIES
-    : [{ value: currentFamily, label: currentFamily }, ...FONT_FAMILIES];
-  const fontFamily = currentFamily;
-
   // The element's VISIBLE background color. A background-image (gradient /
   // image) paints OVER background-color, so when one is present we surface
   // its first color stop; otherwise fall back to background-color.
@@ -136,19 +161,55 @@ export function PropertiesSidebar({
   const bgColor = isTransparentColor(visibleBg)
     ? ""
     : parseRgbToHex(visibleBg);
+  const bgOpacity = parseColorAlpha(visibleBg);
   const txtColor = isTransparentColor(s?.color)
     ? ""
     : parseRgbToHex(s?.color);
+  const txtOpacity = parseColorAlpha(s?.color);
 
   return (
-    <div className="w-64 shrink-0 h-full flex flex-col bg-[#161617] border-l border-[#2d2d2d] select-none overflow-hidden">
+    <div className="w-64 shrink-0 h-full flex flex-col bg-[#161617] select-none overflow-hidden">
       {/* ── Scrollable properties area (panel padding 14px) ── */}
       <div className="flex-1 overflow-y-auto custom-scroll px-3.5 py-3.5">
         {!hasSelection && (
-          <div className="flex items-center justify-center h-full px-6 text-center text-[11px] text-[#9b9b9b] leading-relaxed">
-            Select an element
-            <br />
-            in the preview to edit
+          <div className="flex h-full flex-col p-3">
+            {/* Keyboard shortcuts */}
+            <div className="mb-3.5 flex items-center gap-2">
+              <Keyboard className="h-3.5 w-3.5 text-[#52525b]" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#6f6f6f]">
+                Keyboard shortcuts
+              </span>
+            </div>
+
+            {SHORTCUT_GROUPS.map((group) => (
+              <div key={group.title} className="mb-4">
+                <p className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[#4a4a4a]">
+                  {group.title}
+                </p>
+                <div className="space-y-[5px]">
+                  {group.items.map((item) => (
+                    <div
+                      key={item.label}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-[10.5px] text-[#71717a]">
+                        {item.label}
+                      </span>
+                      <span className="flex flex-none items-center gap-[3px]">
+                        {item.keys.map((key, i) => (
+                          <kbd
+                            key={i}
+                            className="rounded-[4px] border border-[#262626] bg-[#1a1a1a] px-[5px] py-[2px] font-mono text-[8.5px] font-medium leading-[12px] text-[#8f8f8f]"
+                          >
+                            {key}
+                          </kbd>
+                        ))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -200,28 +261,45 @@ export function PropertiesSidebar({
             {/* ── Position ── */}
             <Section title="Position">
               <FieldBlock label="Alignment">
-                <div className="flex items-center">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <BtnGroup>
                     <SqBtn
                       title="Align left"
-                      active={alignValue === "left"}
-                      onClick={() => onApplyStyle("textAlign", "left")}
+                      onClick={() => onAlignElements?.("left")}
                     >
-                      <AlignLeftIcon />
+                      <AlignHLeftIcon />
                     </SqBtn>
                     <SqBtn
                       title="Align center"
-                      active={alignValue === "center"}
-                      onClick={() => onApplyStyle("textAlign", "center")}
+                      onClick={() => onAlignElements?.("center-x")}
                     >
-                      <AlignCenterIcon />
+                      <AlignHCenterIcon />
                     </SqBtn>
                     <SqBtn
                       title="Align right"
-                      active={alignValue === "right"}
-                      onClick={() => onApplyStyle("textAlign", "right")}
+                      onClick={() => onAlignElements?.("right")}
                     >
-                      <AlignRightIcon />
+                      <AlignHRightIcon />
+                    </SqBtn>
+                  </BtnGroup>
+                  <BtnGroup>
+                    <SqBtn
+                      title="Align top"
+                      onClick={() => onAlignElements?.("top")}
+                    >
+                      <AlignVTopIcon />
+                    </SqBtn>
+                    <SqBtn
+                      title="Align middle"
+                      onClick={() => onAlignElements?.("center-y")}
+                    >
+                      <AlignVMiddleIcon />
+                    </SqBtn>
+                    <SqBtn
+                      title="Align bottom"
+                      onClick={() => onAlignElements?.("bottom")}
+                    >
+                      <AlignVBottomIcon />
                     </SqBtn>
                   </BtnGroup>
                 </div>
@@ -283,70 +361,47 @@ export function PropertiesSidebar({
               <ColorRow
                 label="Text"
                 color={txtColor}
-                onChange={(c) => onApplyStyle("color", c)}
+                opacity={txtOpacity}
+                onChange={(c) => {
+                  // If the incoming value already carries an alpha (color
+                  // picker alpha slider), use it as-is. Otherwise keep the
+                  // current opacity — unless there is no base color yet,
+                  // in which case the new color shows at full opacity.
+                  const cAlpha = parseColorAlpha(c);
+                  onApplyStyle(
+                    "color",
+                    cAlpha < 1 || !txtColor
+                      ? c
+                      : withColorAlpha(c, txtOpacity),
+                  );
+                }}
+                onOpacityChange={(a) => {
+                  if (!txtColor) return;
+                  onApplyStyle("color", withColorAlpha(txtColor, a));
+                }}
               />
               <ColorRow
                 label="Background"
                 color={bgColor}
-                onChange={(c) => onApplyStyle("backgroundColor", c)}
+                opacity={bgOpacity}
+                onChange={(c) => {
+                  const cAlpha = parseColorAlpha(c);
+                  onApplyStyle(
+                    "backgroundColor",
+                    cAlpha < 1 || !bgColor
+                      ? c
+                      : withColorAlpha(c, bgOpacity),
+                  );
+                }}
+                onOpacityChange={(a) => {
+                  if (!bgColor) return;
+                  onApplyStyle("backgroundColor", withColorAlpha(bgColor, a));
+                }}
               />
             </Section>
 
             {/* ── Typography ── */}
-            <Section title="Typography" noBorder>
-              <div className="space-y-2">
-                <SelectField
-                  title="Font family"
-                  value={fontFamily}
-                  onChange={(v) => onApplyStyle("fontFamily", v)}
-                  options={fontOptions}
-                  fontPreview
-                />
-                <div className="flex items-center gap-1.5">
-                  <SelectField
-                    title="Font weight"
-                    grow
-                    value={weightValue}
-                    onChange={(v) => onApplyStyle("fontWeight", v)}
-                    options={weightOptions}
-                  />
-                  <NumberField
-                    className="flex-1 min-w-0"
-                    value={cssPx(s.fontSize) || 18}
-                    suffix="px"
-                    min={0}
-                    onChange={(v) => onApplyStyle("fontSize", v + "px")}
-                  />
-                </div>
-                <FieldBlock label="Alignment">
-                  <div className="flex items-center">
-                    <BtnGroup>
-                      <SqBtn
-                        title="Align left"
-                        active={alignValue === "left"}
-                        onClick={() => onApplyStyle("textAlign", "left")}
-                      >
-                        <TextAlignIcon align="left" />
-                      </SqBtn>
-                      <SqBtn
-                        title="Align center"
-                        active={alignValue === "center"}
-                        onClick={() => onApplyStyle("textAlign", "center")}
-                      >
-                        <TextAlignIcon align="center" />
-                      </SqBtn>
-                      <SqBtn
-                        title="Align right"
-                        active={alignValue === "right"}
-                        onClick={() => onApplyStyle("textAlign", "right")}
-                      >
-                        <TextAlignIcon align="right" />
-                      </SqBtn>
-                    </BtnGroup>
-                  </div>
-                </FieldBlock>
-              </div>
-            </Section>
+            <TypographyPanel styles={s} onApplyStyle={onApplyStyle} />
 
             {/* ── Pages ── */}
             {onMoveToPage && pageCount > 0 && !isContainerSel && (

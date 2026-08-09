@@ -69,6 +69,8 @@ export interface HtmlPreviewHandle {
   deleteMulti: () => void;
   deselect: () => void;
   moveBy: (dx: number, dy: number) => void;
+  /** Align the current selection within its page container. */
+  alignElements: (align: AlignMode) => void;
   cancelTextEdit: () => void;
   getFullHtml: () => Promise<string | null>;
   exportPdf: () => Promise<void>;
@@ -79,6 +81,14 @@ export interface HtmlPreviewHandle {
   /** Move the current selection to page `pageIndex` (0-based; -1 = new page). */
   moveToPage: (pageIndex: number) => void;
 }
+
+export type AlignMode =
+  | "left"
+  | "center-x"
+  | "right"
+  | "top"
+  | "center-y"
+  | "bottom";
 
 interface TextEditState {
   reqId: number;
@@ -400,6 +410,12 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       moveBy: (dx: number, dy: number) => {
         iframeRef.current?.contentWindow?.postMessage(
           { type: "move-by", dx, dy },
+          "*",
+        );
+      },
+      alignElements: (align) => {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "align-elements", align },
           "*",
         );
       },

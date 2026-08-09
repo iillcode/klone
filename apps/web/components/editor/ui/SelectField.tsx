@@ -128,7 +128,7 @@ export function SelectField({
   return (
     <>
       <div
-        className={`relative h-8 bg-[#1e1e1e] rounded-[6px] transition-colors hover:bg-[#202020] ${
+        className={`relative h-7 bg-[#1e1e1e] rounded-[6px] transition-colors hover:bg-[#202020] ${
           open ? "bg-[#202020]" : ""
         } ${grow ? "flex-1 min-w-0" : "shrink-0"} ${className}`}
       >

@@ -118,6 +118,64 @@ export function AlignBottomIcon() {
   );
 }
 
+/* ── Container alignment icons (horizontal + vertical) ──
+   These align a selected element within its page container (Figma-style
+   "align objects" tools). Paths match the reference markup exactly. */
+export function AlignHLeftIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <rect x="2" y="2" width="1" height="12" rx="0.5" />
+      <rect x="5.5" y="5" width="7.5" height="2" rx="1" />
+      <rect x="5.5" y="9" width="4.5" height="2" rx="1" />
+    </svg>
+  );
+}
+export function AlignHCenterIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <rect x="7.5" y="2" width="1" height="12" rx="0.5" />
+      <rect x="4" y="5" width="8" height="2" rx="1" />
+      <rect x="5.75" y="9" width="4.5" height="2" rx="1" />
+    </svg>
+  );
+}
+export function AlignHRightIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <rect x="13" y="2" width="1" height="12" rx="0.5" />
+      <rect x="3" y="5" width="7.5" height="2" rx="1" />
+      <rect x="6" y="9" width="4.5" height="2" rx="1" />
+    </svg>
+  );
+}
+export function AlignVTopIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <rect x="2" y="2" width="12" height="1" rx="0.5" />
+      <rect x="5" y="5.5" width="2" height="7.5" rx="1" />
+      <rect x="9" y="5.5" width="2" height="4.5" rx="1" />
+    </svg>
+  );
+}
+export function AlignVMiddleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <rect x="2" y="7.5" width="12" height="1" rx="0.5" />
+      <rect x="5" y="4" width="2" height="8" rx="1" />
+      <rect x="9" y="5.75" width="2" height="4.5" rx="1" />
+    </svg>
+  );
+}
+export function AlignVBottomIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <rect x="2" y="13" width="12" height="1" rx="0.5" />
+      <rect x="5" y="3" width="2" height="7.5" rx="1" />
+      <rect x="9" y="6" width="2" height="4.5" rx="1" />
+    </svg>
+  );
+}
+
 export function ConstraintsIcon() {
   return (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none">
@@ -215,27 +273,91 @@ export function RadiusIcon() {
     </svg>
   );
 }
-export function LineHeightIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none">
-      <line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="2" y1="12" x2="14" y2="12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-export function LetterSpacingIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none">
-      <path d="M2 4v8M14 4v8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M6 8h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
 export function ChevronIcon() {
   return (
     <svg viewBox="0 0 12 12" width="12" height="12" fill="none">
       <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+/* Small 10x6 caret used by typography fields (matches the reference panel). */
+export function TypographyCaretIcon() {
+  return (
+    <svg viewBox="0 0 10 6" width="10" height="6" fill="none">
+      <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+/* 4-dot "styles" menu button (matches the reference panel head). */
+export function TypographyStylesIcon() {
+  return (
+    <svg viewBox="0 0 14 14" width="14" height="14" fill="currentColor">
+      <circle cx="4" cy="4" r="1.7" />
+      <circle cx="10" cy="4" r="1.7" />
+      <circle cx="4" cy="10" r="1.7" />
+      <circle cx="10" cy="10" r="1.7" />
+    </svg>
+  );
+}
+/* Line-height icon: two horizontal rules around an "A". */
+export function LineHeightIcon() {
+  return (
+    <svg viewBox="0 0 14 14" width="13" height="13" fill="none">
+      <path d="M1.5 1.5h11M1.5 12.5h11" stroke="currentColor" strokeWidth="1.4" />
+      <text x="7" y="10" textAnchor="middle" fontSize="8.5" fill="currentColor">
+        A
+      </text>
+    </svg>
+  );
+}
+/* Letter-spacing icon: two vertical rules around an "A". */
+export function LetterSpacingIcon() {
+  return (
+    <svg viewBox="0 0 14 14" width="13" height="13" fill="none">
+      <path d="M1.5 1.5v11M12.5 1.5v11" stroke="currentColor" strokeWidth="1.4" />
+      <text x="7" y="10" textAnchor="middle" fontSize="8.5" fill="currentColor">
+        A
+      </text>
+    </svg>
+  );
+}
+/* Magnifier icon for the fonts popover search. */
+export function SearchIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none">
+      <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+/* Clear icon (circle + x) for the fonts search. */
+export function ClearIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
+      <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+/* Gear icon for the fonts popover header. */
+export function FontSettingsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
+      <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M12.4 3.6L11 5M5 11l-1.4 1.4"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+/* Plain X close icon for the fonts popover. */
+export function CloseIcon() {
+  return (
+    <svg viewBox="0 0 14 14" width="12" height="12" fill="none">
+      <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
