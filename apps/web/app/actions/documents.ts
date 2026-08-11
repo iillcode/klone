@@ -56,6 +56,7 @@ export async function saveDocumentContent(
 export async function createDocumentFromHtml(
   title: string,
   html: string,
+  templateSlug?: string | null,
 ): Promise<CreateDocumentResult> {
   if (!html || html.length === 0) {
     return { error: "Nothing to save." };
@@ -64,6 +65,7 @@ export async function createDocumentFromHtml(
   const doc = await createDocument({
     title: title.trim() || "Untitled",
     html_code: html,
+    template_slug: templateSlug ?? null,
   });
 
   if (!doc) {

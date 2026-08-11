@@ -11,7 +11,7 @@ export default async function AdminLayout({
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="flex items-center justify-between border-b border-white/5 px-6 py-4">
-        <span className="text-sm font-semibold text-white">DevLibrary Admin</span>
+        <span className="text-sm font-semibold text-white">Klone Admin</span>
         <div className="flex items-center gap-4">
           <span className="text-sm text-zinc-400">{session.email}</span>
           <form action={logout}>

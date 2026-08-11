@@ -169,6 +169,83 @@ function isPageBoundary(el){
   return !!(el&&el.getAttribute&&el.getAttribute('data-klone-page-boundary')!==null);
 }
 
+// ── Copy / Paste ──
+// A single clipboard holds serialized element HTML (or a full page). Ctrl/Cmd
+// + C copies the current selection; Ctrl/Cmd + V pastes a clone of whatever
+// is on the clipboard as a NEW element right after the source location (or at
+// the end of the body when nothing is selected). This mirrors the user's
+// "duplicate via copy/paste" expectation without a separate Duplicate button.
+var clipboard=null; // { html: string }
+
+// Serialize a node to an outerHTML string, stripping editor-only attributes
+// so the stored copy is a clean, re-insertable block.
+function serializeForClipboard(el){
+  var clone=el.cloneNode(true);
+  clone.removeAttribute('data-editor-selected');
+  clone.removeAttribute('data-editor-block');
+  if(isPageBoundary(clone))clone.removeAttribute('id');
+  return clone.outerHTML;
+}
+
+// Copy the current selection into the clipboard. Supports a whole page (when
+// the selection is a page boundary) as well as individual elements.
+function copySelection(){
+  if(selectedEls.length===0){clipboard=null;return;}
+  // If a single page boundary is selected, copy the whole page.
+  if(selectedEls.length===1&&isPageBoundary(selectedEls[0])){
+    clipboard={html:serializeForClipboard(selectedEls[0])};
+    return;
+  }
+  // Otherwise copy each selected element (skipping system frames).
+  var parts=[];
+  for(var i=0;i<selectedEls.length;i++){
+    var el=selectedEls[i];
+    if(isContainer(el))continue;
+    parts.push(serializeForClipboard(el));
+  }
+  clipboard=parts.length>0?{html:parts.join('')}:null;
+}
+
+// Insert a parsed clipboard node into the container right after afterEl
+// (or appended when afterEl is null/last). Returns the inserted element or
+// null. Re-enables pointer events for page-boundary content.
+function insertClipboardNode(container,afterEl){
+  if(!clipboard||!clipboard.html)return null;
+  var wrapper=document.createElement('div');
+  wrapper.innerHTML=clipboard.html;
+  var node=wrapper.firstElementChild;
+  if(!node)return null;
+  if(isPageBoundary(node)){
+    var kids=node.children;
+    for(var k=0;k<kids.length;k++)kids[k].style.pointerEvents='auto';
+    undoStack.push({property:'__page_boundary__',element:node,adding:true,nextSibling:afterEl?afterEl.nextSibling:null,parentNode:container,batchId:batchId});
+    redoStack=[];
+  }else{
+    undoStack.push({property:'__component__',element:node,adding:true,nextSibling:afterEl?afterEl.nextSibling:null,parentNode:container,batchId:batchId});
+    redoStack=[];
+    if(container!==getContentContainer())node.style.pointerEvents='auto';
+  }
+  if(afterEl&&afterEl.parentNode)container.insertBefore(node,afterEl.nextSibling);
+  else container.appendChild(node);
+  return node;
+}
+
+// Paste the clipboard as NEW element(s). When something is selected, the copy
+// is placed after the last selected element (same container); otherwise it is
+// appended to the end of the body. The pasted node becomes the new selection.
+function pasteClipboard(){
+  if(!clipboard||!clipboard.html)return;
+  batchId++;
+  var anchor=selectedEls.length>0?selectedEls[selectedEls.length-1]:null;
+  var container=getContentContainer();
+  if(anchor&&anchor.parentNode)container=anchor.parentNode;
+  var node=insertClipboardNode(container,anchor);
+  if(!node)return;
+  selectedEls=[node];
+  fireSelected();
+  reportDirty();
+}
+
 function getPageBoundaryEls(){
   var list=document.querySelectorAll('[data-klone-page-boundary]');
   var result=[];
@@ -266,6 +343,52 @@ function addPageBoundary(record,sharedBatchId,autoMoveDropped){
   reportPages(true);
 }
 
+// Append a template component (key + html + css) into the document. The
+// block goes inside the EXISTING body when there are no extra pages, or
+// inside the LAST page boundary (the most recently added page) when the
+// user has created new pages — so components accumulate on the page the user
+// is building rather than spilling back into the root body. The component
+// HTML is wrapped in a block-level container so it behaves like a normal
+// selectable/editable element, with its CSS scoped inside the block. One
+// undo step restores the document to its previous state.
+function addComponentToBottom(key, html, css){
+  if(!key||!html)return;
+  var container=getContentContainer();
+  if(!container)return;
+  // When extra pages exist, append into the last page boundary so the new
+  // block lands on the page the user just created (not the root body).
+  var pages=getPageBoundaryEls();
+  if(pages.length>0)container=pages[pages.length-1];
+  var wrap=document.createElement('div');
+  wrap.setAttribute('data-klone-component', key);
+  wrap.setAttribute('data-editor-block','');
+  // Elements inside a page boundary must be click-through-disabled on the
+  // page box but re-enabled on the element so they stay selectable.
+  if(container!==getContentContainer())wrap.style.pointerEvents='auto';
+  wrap.innerHTML=(css?('<style>'+css+'</style>'):'')+html;
+  batchId++;
+  undoStack.push({property:'__component__',element:wrap,adding:true,parentNode:container,batchId:batchId});
+  redoStack=[];
+  container.appendChild(wrap);
+  // Select the newly added block so the user can immediately style it.
+  selectedEls=[wrap];
+  fireSelected();
+  reportDirty();
+}
+
+// Deep-clone an element, stripping any editor-only selection/state
+// attributes so the duplicate is a clean, editable copy. The clone keeps its
+// inline styles (position via transform included) so it lands exactly where
+// the source sits.
+function cloneForDuplicate(el){
+  var clone=el.cloneNode(true);
+  clone.removeAttribute('data-editor-selected');
+  clone.removeAttribute('data-editor-block');
+  // A cloned page boundary must keep its page marker but drop a stale id.
+  if(isPageBoundary(clone))clone.removeAttribute('id');
+  return clone;
+}
+
 // Keep every page's height in sync with the current page width (the page
 // container is responsive, so a resize must re-derive the A4 height), and
 // re-apply the box styles to pages restored from saved HTML. Content that
@@ -360,12 +483,11 @@ function createPageBoundaryMarker(boundary,pageNum){
   var armed=(pendingDeletePage===boundary);
   var marker=document.createElement('div');
   marker.setAttribute('data-editor-ui','page-boundary-marker');
-  // Outlines the page's own area (so an EMPTY page is clearly visible) with
-  // a stronger dashed line on the top edge where the page starts. An armed
+  // A hairline top divider marks where the new page starts - no full box
+  // outline, so the page border never looks broken/uneven. An armed
   // (pending-delete) page turns red so it is obvious WHAT will be deleted.
-  var edge=armed?'rgba(248,113,113,0.85)':'rgba(255,255,255,0.4)';
-  var box=armed?'rgba(248,113,113,0.5)':'rgba(255,255,255,0.14)';
-  marker.style.cssText='position:fixed;left:0;top:0;box-sizing:border-box;border:1px dashed '+box+';border-top:1px dashed '+edge+';border-radius:2px;pointer-events:none;z-index:99995;display:none;'+(armed?'background:rgba(248,113,113,0.06);':'');
+  var edge=armed?'rgba(248,113,113,0.85)':'rgba(255,255,255,0.28)';
+  marker.style.cssText='position:fixed;left:0;top:0;box-sizing:border-box;border:0;border-top:1px dashed '+edge+';pointer-events:none;z-index:99995;display:none;'+(armed?'background:rgba(248,113,113,0.06);':'');
   var chip=document.createElement('div');
   chip.style.cssText='position:absolute;top:-22px;right:8px;display:flex;align-items:center;gap:6px;padding:3px 6px 3px 8px;border-radius:4px;background:'+(armed?'#3b1f22':'#2a2a2c')+';border:1px solid '+(armed?'#7f2b2b':'#3f3f46')+';color:#e4e4e7;font:600 10px/1.2 Arial,sans-serif;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.28);';
   var label=document.createElement('span');
@@ -386,10 +508,15 @@ function createPageBoundaryMarker(boundary,pageNum){
 }
 
 function updateBoundaryMarkers(){
-  // Rebuild every marker from the live boundaries so deletes/undo/redo can
-  // never leave a stale overlay behind. Only shown in inspect mode.
+  // Page boundaries no longer render any canvas overlay (no divider lines
+  // or boxes). Delete/inspect of pages happens from the sidebar's page
+  // list instead, so stale overlays can't linger after undo/redo. We still
+  // clear any leftover markers, but create none.
   var old=document.querySelectorAll('[data-editor-ui="page-boundary-marker"]');
   for(var i=0;i<old.length;i++)old[i].remove();
+  return;
+  // (Marker-building code below is unreachable; kept only so the function
+  // shape and helpers remain intact for future reuse.)
   if(!inspectEnabled)return;
   var boundaries=getPageBoundaryEls();
   for(var j=0;j<boundaries.length;j++){
@@ -915,7 +1042,9 @@ function performUndo(){
     var entry=entries[i];
     if(entry.property==='__delete__'){
       // Undoing a delete also brings back the origin-space placeholders
-      // that were freed along with the element.
+      // that were freed along with the element. Record an inverse redo
+      // entry so the deletion can be replayed by redo.
+      redoStack.push({element:entry.element,property:'__delete__',oldValue:null,nextSibling:entry.nextSibling,parentNode:entry.parentNode,placeholders:entry.placeholders,batchId:lastBatch});
       restorePlaceholders(entry.placeholders);
       if(entry.nextSibling&&entry.nextSibling.parentNode){
         entry.nextSibling.parentNode.insertBefore(entry.element,entry.nextSibling);
@@ -944,6 +1073,16 @@ function performUndo(){
       }
       updateBoundaryMarkers();
       reportPages(true);
+    }else if(entry.property==='__component__'){
+      // A duplicated/pasted element. Undo removes it; redo re-inserts it
+      // at its recorded position (so it reappears exactly where it landed).
+      redoStack.push({property:'__component__',element:entry.element,adding:!entry.adding,nextSibling:entry.nextSibling,parentNode:entry.parentNode,batchId:lastBatch});
+      if(entry.adding){
+        entry.element.remove();
+      }else if(entry.parentNode){
+        if(entry.nextSibling&&entry.nextSibling.parentNode)entry.nextSibling.parentNode.insertBefore(entry.element,entry.nextSibling);
+        else entry.parentNode.appendChild(entry.element);
+      }
     }else if(entry.property==='__reparent__'){
       // Restore the pre-move position; push the swapped entry so redo
       // moves the element back to where the user put it. The origin-space
@@ -1023,6 +1162,18 @@ function performRedo(){
       }
       updateBoundaryMarkers();
       reportPages(true);
+    }else if(entry.property==='__component__'){
+      // A duplicated/pasted element. Redo re-inserts it (or removes it if
+      // the entry represents the undo of an add).
+      undoStack.push({property:'__component__',element:entry.element,adding:!entry.adding,nextSibling:entry.nextSibling,parentNode:entry.parentNode,batchId:lastBatch});
+      if(entry.adding){
+        if(entry.parentNode){
+          if(entry.nextSibling&&entry.nextSibling.parentNode)entry.nextSibling.parentNode.insertBefore(entry.element,entry.nextSibling);
+          else entry.parentNode.appendChild(entry.element);
+        }
+      }else{
+        entry.element.remove();
+      }
     }else if(entry.property==='__reparent__'){
       undoStack.push({property:'__reparent__',element:entry.element,oldParent:entry.newParent,oldNextSibling:entry.newNextSibling,oldTransform:entry.newTransform,newParent:entry.oldParent,newNextSibling:entry.oldNextSibling,newTransform:entry.oldTransform,placeholder:entry.placeholder,homePlaceholders:entry.homePlaceholders,batchId:lastBatch});
       // Redo moves the element to the state it had BEFORE the undo ran
@@ -1047,6 +1198,13 @@ function performRedo(){
       }
       entry.element.style.transform=entry.oldTransform;
       syncElementPointerEvents(entry.element);
+    }else if(entry.property==='__delete__'){
+      // Redo of a delete: remove the element again and free the
+      // origin-space placeholders that came back with the undo. Push the
+      // inverse entry so undo can restore it once more.
+      undoStack.push({element:entry.element,property:'__delete__',oldValue:null,nextSibling:entry.nextSibling,parentNode:entry.parentNode,placeholders:entry.placeholders,batchId:lastBatch});
+      removePlaceholdersFor(entry.element);
+      entry.element.remove();
     }else if(entry.property==='__text__'){
       var cur=entry.element.innerHTML;
       undoStack.push({element:entry.element,property:'__text__',oldValue:cur,batchId:lastBatch});
@@ -1134,6 +1292,7 @@ function deleteSelected(){
     el.remove();
   }
   selectedEls=[];
+  if(selBoxEl)selBoxEl.style.display='none';
   window.parent.postMessage({type:'selection-cleared'},'*');
   // Deleting a marked element must clear its split marker and resync the
   // parent (deduped: only reports when the break count actually changed).
@@ -2265,6 +2424,17 @@ document.addEventListener('keydown',function(e){
     highlightSelected();
     fireSelected();
   }
+  // Copy the current selection (Ctrl/Cmd+C).
+  if((e.ctrlKey||e.metaKey)&&(e.key==='c'||e.key==='C')){
+    e.preventDefault();
+    copySelection();
+  }
+  // Paste as a NEW element (Ctrl/Cmd+V). This creates a duplicate of whatever
+  // is on the clipboard, placed after the selection (or at the body end).
+  if((e.ctrlKey||e.metaKey)&&(e.key==='v'||e.key==='V')){
+    e.preventDefault();
+    pasteClipboard();
+  }
   if(e.key==='Escape'){
     disarmPageDelete();
     deselect();
@@ -2442,6 +2612,29 @@ window.addEventListener('message',function(e){
     deleteSelected();
   }
 
+  if(data.type==='delete-page'){
+    // Delete a page by its 0-based index. Page 0 is the root document body
+    // and has no boundary, so it is never deletable. Pages >= 1 map to the
+    // (index-1)th page boundary. The sidebar page list drives deletion (no
+    // canvas chip anymore), so deletion is immediate - the page + its
+    // content are restored in a single undo step, which is the safety net.
+    var di=Number(data.pageIndex);
+    if(!isFinite(di)||di<1)return;
+    var dbs=getPageBoundaryEls();
+    var db=dbs[di-1];
+    if(!db)return;
+    disarmPageDelete();
+    removePageBoundary(db,true);
+  }
+
+  if(data.type==='copy'){
+    copySelection();
+  }
+
+  if(data.type==='paste'){
+    pasteClipboard();
+  }
+
   if(data.type==='set-split-mode'){
     setSplitMode(data.enabled);
   }
@@ -2454,6 +2647,10 @@ window.addEventListener('message',function(e){
     // autoMoveDropped: pull any element the user JUST dragged down onto the
     // new page so it stays selectable and lands where the user wanted it.
     addPageBoundary(true,0,true);
+  }
+
+  if(data.type==='add-component'){
+    addComponentToBottom(data.key, data.html, data.css);
   }
 
   if(data.type==='move-to-page'){

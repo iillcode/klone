@@ -8,6 +8,8 @@ export interface Document {
   title: string;
   description: string | null;
   html_code: string;
+  /** Linked source template (pdf_templates.id), if this doc was created from one. */
+  template_id: string | null;
   created_at: string;
   updated_at: string;
 }

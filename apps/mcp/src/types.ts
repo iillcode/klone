@@ -22,7 +22,7 @@ export interface PdfTemplatePage {
   body_background: string;
 }
 
-/** One section of a template outline. */
+/** One section of a legacy v1 template outline (guidance-only). */
 export interface PdfSection {
   /** Stable key, e.g. "executive-summary". */
   key: string;
@@ -36,11 +36,42 @@ export interface PdfSection {
   required?: boolean;
 }
 
+/**
+ * One reusable component block of a v2 template. Each component carries its
+ * own HTML structure and CSS design, plus agent-facing description/guidance so
+ * the agent knows when to use the block and how to author it into a response.
+ */
+export interface PdfComponent {
+  /** Stable key, e.g. "cover". */
+  key: string;
+  /** Human-readable name, e.g. "Cover page". */
+  name: string;
+  /** What this component is for — when the agent should use this block. */
+  description: string;
+  /** Concrete authoring guidance for the agent. */
+  guidance: string;
+  /** Whether the agent must include this component in the response. */
+  required?: boolean;
+  /** HTML structure of the block (may use {placeholders}). */
+  html: string;
+  /** CSS design (styles) for the block. */
+  css: string;
+}
+
 /** The outline blueprint stored on a pdf_template row. */
 export interface PdfTemplateBlueprint {
   version: number;
   page: PdfTemplatePage;
-  sections: PdfSection[];
+  /** v1 (legacy): guidance-only sections. */
+  sections?: PdfSection[];
+  /** v2: reusable component blocks carried by each template. */
+  components?: PdfComponent[];
+  /**
+   * v2: overall HTML structure agents use to assemble their response. It
+   * contains a `<!--content-->` marker where the chosen components' HTML is
+   * injected, and component CSS is merged into the document's <style>.
+   */
+  structure?: string;
   /** Global assembly constraints for the final HTML document. */
   requirements: string[];
 }

@@ -1,0 +1,20 @@
+
+> web@0.1.0 dev C:\Users\HP\Desktop\Projects\MVP\klone\apps\web
+> next dev
+
+ΓÜá Port 3000 is in use by process 15872, using available port 3001 instead.
+Γû▓ Next.js 16.2.10 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://10.204.154.186:3001
+- Environments: .env.local
+Γ£ô Ready in 1242ms
+Γ¿» Another next dev server is already running.
+
+- Local:        http://localhost:3000
+- PID:          15872
+- Dir:          C:\Users\HP\Desktop\Projects\MVP\klone\apps\web
+- Log:          .next\dev\logs\next-development.log
+
+Run taskkill /PID 15872 /F to stop it.
+[?25h
+ΓÇëELIFECYCLEΓÇë Command failed with exit code 1.

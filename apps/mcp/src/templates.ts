@@ -92,7 +92,7 @@ export function registerTemplateTools(
 
   server.tool(
     "get_pdf_template",
-    "Fetch the full blueprint outline of a single PDF template by slug or id. The blueprint contains the page constraints, the ordered list of sections (name, description and authoring guidance for each) and the global requirements for the final HTML document. Follow it to author a self-contained HTML document, then save it with create_document. This is the main entry point for building a new document.",
+    "Fetch the full blueprint of a single PDF template by slug or id. The blueprint contains the page constraints, the response structure (the overall HTML skeleton agents use to assemble their output, with a <!--content--> injection point), the list of component blocks (each carries its own HTML structure, CSS design, description and authoring guidance), and the global requirements for the final HTML document. Use the component html/css as the design source for matching blocks in the generated document, and follow the response structure to assemble it. Then save it with create_document. This is the main entry point for building a new document.",
     {
       template_id: z
         .string()

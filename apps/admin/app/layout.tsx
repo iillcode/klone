@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
-  title: "DevLibrary Admin",
-  description: "Admin console for DevLibrary.",
+  title: "Klone Admin",
+  description: "Admin console for Klone.",
 };
 
 export default function RootLayout({

@@ -25,7 +25,6 @@ import {
   DeleteIcon,
 } from "./icons/properties-icons";
 import { NumberField } from "./ui/NumberField";
-import { SelectField } from "./ui/SelectField";
 import { IconBtn, BtnGroup, SqBtn } from "./ui/IconButton";
 import { FieldBlock, Section, ColorRow } from "./ui/Fields";
 import { TypographyPanel } from "./ui/TypographyPanel";
@@ -92,6 +91,7 @@ interface PropertiesSidebarProps {
   pageCount?: number;
   currentPage?: number;
   onMoveToPage?: (pageIndex: number) => void;
+  onDeletePage?: (pageIndex: number) => void;
 }
 
 export function PropertiesSidebar({
@@ -109,6 +109,7 @@ export function PropertiesSidebar({
   pageCount = 1,
   currentPage = 0,
   onMoveToPage,
+  onDeletePage,
 }: PropertiesSidebarProps) {
   const first = selectedElements[0];
   const s = first?.styles;
@@ -410,25 +411,58 @@ export function PropertiesSidebar({
                   <span className="block text-[10px] text-[#71717a]">
                     On page {currentPage + 1} of {pageCount}
                   </span>
-                  <SelectField
-                    title="Move to page"
-                    value={String(currentPage)}
-                    onChange={(v) => {
-                      const target = v === "-1" ? -1 : parseInt(v, 10);
-                      if (Number.isNaN(target) || target === currentPage)
-                        return;
-                      onMoveToPage(target);
-                    }}
-                    options={[
-                      ...Array.from({ length: pageCount }, (_, i) => ({
-                        value: String(i),
-                        label: `Page ${i + 1}${
-                          i === currentPage ? " (current)" : ""
-                        }`,
-                      })),
-                      { value: "-1", label: "+ New page" },
-                    ]}
-                  />
+
+                  {/* Page list: every page shown with a delete button. Page
+                      1 is the root canvas and cannot be deleted. Selecting a
+                      page moves the current selection onto it (+ New page
+                      appends a fresh page). */}
+                  <div className="space-y-1">
+                    {Array.from({ length: pageCount }, (_, i) => {
+                      const isCurrent = i === currentPage;
+                      return (
+                        <div
+                          key={i}
+                          className={
+                            "group flex items-center justify-between gap-2 px-2 py-1.5 rounded-[6px] text-[11px] transition-colors " +
+                            (isCurrent
+                              ? "bg-[#8b5cf6]/15 text-[#c4b5fd]"
+                              : "text-[#9b9b9b] hover:bg-white/5")
+                          }
+                        >
+                          <button
+                            type="button"
+                            disabled={!onMoveToPage}
+                            onClick={() =>
+                              onMoveToPage && onMoveToPage(i)
+                            }
+                            className="flex-1 text-left truncate"
+                            title="Move selection to this page"
+                          >
+                            Page {i + 1}
+                            {i === currentPage ? " (current)" : ""}
+                          </button>
+                          {i > 0 && onDeletePage && (
+                            <button
+                              type="button"
+                              onClick={() => onDeletePage(i)}
+                              title="Delete this page and everything on it"
+                              className="flex items-center justify-center w-5 h-5 rounded-[5px] text-[#71717a] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            >
+                              <DeleteIcon />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      disabled={!onMoveToPage}
+                      onClick={() => onMoveToPage && onMoveToPage(-1)}
+                      className="flex items-center justify-center w-full py-1.5 rounded-[6px] text-[10px] text-[#9b9b9b] hover:text-[#c4b5fd] hover:bg-white/5 transition-colors"
+                    >
+                      + New page
+                    </button>
+                  </div>
                 </div>
               </Section>
             )}

@@ -80,6 +80,14 @@ export interface HtmlPreviewHandle {
   addPage: () => void;
   /** Move the current selection to page `pageIndex` (0-based; -1 = new page). */
   moveToPage: (pageIndex: number) => void;
+  /** Delete the page at `pageIndex` (0-based; page 0 is the root, undeletable). */
+  deletePage: (pageIndex: number) => void;
+  /** Append a template component block at the bottom of the document. */
+  addComponent: (key: string, html: string, css?: string) => void;
+  /** Copy the current selection (elements/page) to the internal clipboard. */
+  copy: () => void;
+  /** Paste the clipboard as a NEW element after the selection (or body end). */
+  paste: () => void;
 }
 
 export type AlignMode =
@@ -492,6 +500,24 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
           { type: "move-to-page", pageIndex },
           "*",
         );
+      },
+      deletePage: (pageIndex: number) => {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "delete-page", pageIndex },
+          "*",
+        );
+      },
+      addComponent: (key: string, html: string, css?: string) => {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "add-component", key, html, css },
+          "*",
+        );
+      },
+      copy: () => {
+        iframeRef.current?.contentWindow?.postMessage({ type: "copy" }, "*");
+      },
+      paste: () => {
+        iframeRef.current?.contentWindow?.postMessage({ type: "paste" }, "*");
       },
     }));
 

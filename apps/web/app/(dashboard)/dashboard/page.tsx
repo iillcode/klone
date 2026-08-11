@@ -1,14 +1,14 @@
 import { listDocuments } from "@/lib/data/documents";
 import { getProfile } from "@/lib/data/users";
 import type { Document } from "@/lib/types";
-import { HomeView } from "./_components/HomeView";
+import { HomeView } from "../_components/HomeView";
 
 export default async function Home() {
   let documents: Document[] = [];
   try {
     documents = await listDocuments();
   } catch (error) {
-    console.error("[home] Could not load documents:", error);
+    console.error("[dashboard] Could not load documents:", error);
   }
 
   const profile = await getProfile();

@@ -8,7 +8,7 @@ import type { Document } from "@/lib/types";
  * Mirrors the query contract used by the MCP server (apps/mcp/src/tools.ts).
  */
 const DOCUMENT_FIELDS =
-  "id, title, description, html_code, created_at, updated_at";
+  "id, title, description, html_code, template_id, created_at, updated_at";
 
 /** List the current user's documents, most recently updated first. */
 export async function listDocuments(): Promise<Document[]> {
@@ -55,9 +55,27 @@ export async function getDocument(id: string): Promise<Document | null> {
 export async function createDocument(input: {
   title: string;
   html_code: string;
+  /** Linked source template id, if created from a template. */
+  template_id?: string | null;
+  /** Linked source template slug, resolved to an id when an id isn't given. */
+  template_slug?: string | null;
 }): Promise<Document | null> {
   const session = await getSession();
   if (!session) return null;
+
+  // Resolve the template id from the slug when only a slug is known (e.g. a
+  // direct /preview/<slug> visit being saved as a new document). This keeps
+  // the document linked to its template so the editor can later load that
+  // template's component blocks.
+  let templateId = input.template_id ?? null;
+  if (!templateId && input.template_slug) {
+    const { data: tpl } = await createServerClient()
+      .from("pdf_templates")
+      .select("id")
+      .eq("slug", input.template_slug)
+      .maybeSingle();
+    templateId = (tpl?.id as string | undefined) ?? null;
+  }
 
   const supabase = await createServerClient();
   const { data, error } = await supabase
@@ -66,6 +84,8 @@ export async function createDocument(input: {
       user_id: session.userId,
       title: input.title,
       html_code: input.html_code,
+      template_id: templateId,
+      template_slug: input.template_slug ?? null,
     })
     .select(DOCUMENT_FIELDS)
     .single();

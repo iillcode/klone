@@ -11,8 +11,9 @@ import { FigmaBottomToolbar } from "./FigmaBottomToolbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import type { UserProfile } from "@/lib/data/users";
 import { PropertiesSidebar } from "./PropertiesSidebar";
-import { PlusIcon } from "./icons/toolbar-icons";
+import { BottomComponentDock } from "./BottomComponentDock";
 import { getTemplate } from "@/lib/data/templates";
+import type { ComponentGroup } from "@/lib/data/types";
 import {
   saveDocumentContent,
   createDocumentFromHtml,
@@ -24,6 +25,8 @@ interface PreviewEditorProps {
   initialTemplateSlug?: string | null;
   documents?: Document[];
   profile?: UserProfile | null;
+  /** Grouped template components loaded from the database. */
+  componentGroups?: ComponentGroup[];
 }
 
 export function PreviewEditor({
@@ -31,6 +34,7 @@ export function PreviewEditor({
   initialTemplateSlug = null,
   documents = [],
   profile = null,
+  componentGroups = [],
 }: PreviewEditorProps) {
   const router = useRouter();
 
@@ -208,6 +212,10 @@ export function PreviewEditor({
     [],
   );
 
+  const handleDeletePage = useCallback((pageIndex: number) => {
+    previewRef.current?.deletePage(pageIndex);
+  }, []);
+
   const handleShare = useCallback(async () => {
     setDownloading(true);
     try {
@@ -235,8 +243,14 @@ export function PreviewEditor({
         setDirty(false);
       } else {
         // Draft (direct template-slug visit): persist as a new document and
-        // move the URL to the real document id.
-        const result = await createDocumentFromHtml(docTitle, fullHtml);
+        // move the URL to the real document id. Carry the template slug so
+        // the new row is linked to its source template (template_id), which
+        // the component dock relies on to list that template's blocks.
+        const result = await createDocumentFromHtml(
+          docTitle,
+          fullHtml,
+          initialTemplateSlug,
+        );
         if ("error" in result) {
           console.error("[PreviewEditor] save failed:", result.error);
           return;
@@ -260,6 +274,19 @@ export function PreviewEditor({
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
+
+  // Inject a template component block at the bottom of the document.
+  const handleAddComponent = useCallback(
+    (component: { key: string; html: string; css: string }) => {
+      previewRef.current?.addComponent(
+        component.key,
+        component.html,
+        component.css,
+      );
+      setDirty(true);
+    },
+    [],
+  );
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -299,6 +326,23 @@ export function PreviewEditor({
         el?.tagName === "SELECT";
       const isEditorCapture =
         el?.getAttribute("data-editor-capture") === "true";
+
+      // Copy / Paste as a NEW element: Ctrl+C then Ctrl+V.
+      // Works while a block is selected (focus is on the hidden editor-capture
+      // input). Disabled when the user is typing in a real form field.
+      if (!isInput || isEditorCapture) {
+        if ((e.metaKey || e.ctrlKey) && (e.key === "c" || e.key === "C")) {
+          e.preventDefault();
+          previewRef.current?.copy();
+          return;
+        }
+        if ((e.metaKey || e.ctrlKey) && (e.key === "v" || e.key === "V")) {
+          e.preventDefault();
+          previewRef.current?.paste();
+          return;
+        }
+      }
+
       if (!isInput && !e.metaKey && !e.ctrlKey && !e.altKey) {
         if (e.key.toLowerCase() === "v") {
           setInspectMode((prev) => {
@@ -445,21 +489,7 @@ export function PreviewEditor({
             </div>
           )}
 
-          {/* ── Add page button (inspect mode) ── */}
-          {inspectMode && (
-            <button
-              onClick={() => previewRef.current?.addPage()}
-              className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#1a1a1a]/95 border border-[#2d2d2d] shadow-lg text-[11px] font-medium text-[#e4e4e7] hover:bg-[#232325] hover:border-[#3f3f46] transition-colors whitespace-nowrap"
-            >
-              <PlusIcon className="w-3.5 h-3.5 text-[#18a0fb]" />
-              Add page
-              {pageCount > 1 && (
-                <span className="text-[#71717a] font-mono text-[10px]">
-                  · {pageCount}
-                </span>
-              )}
-            </button>
-          )}
+          {/* ── Add page (now lives in the bottom dock, inspect mode only) ── */}
         </div>
 
         {/* ── Right sidebar: Design properties ── */}
@@ -487,10 +517,20 @@ export function PreviewEditor({
               onMoveToPage={(pageIndex) =>
                 previewRef.current?.moveToPage(pageIndex)
               }
+              onDeletePage={handleDeletePage}
             />
           </div>
         </div>
       </div>
+
+      {/* ── Bottom dock: insert template component + add page (inspect mode) ── */}
+      <BottomComponentDock
+        groups={componentGroups}
+        inspectMode={inspectMode}
+        onAddComponent={handleAddComponent}
+        onAddPage={() => previewRef.current?.addPage()}
+        pageCount={pageCount}
+      />
     </div>
   );
 }

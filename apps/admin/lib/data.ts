@@ -1,56 +1,44 @@
+/**
+ * Server-only template data access for the Klone admin app
+ * (public.pdf_templates).
+ *
+ * Types + constants live in `@/lib/template-types` (client-safe). Re-exported
+ * here so server modules can import types from `@/lib/data`.
+ */
 import { createServerClient } from "@/lib/supabase/server";
+import {
+  TEMPLATE_FIELDS,
+  type TemplateRow,
+} from "@/lib/template-types";
 
-export type Category = {
-  id: string;
-  name: string;
-  slug: string;
-};
+export type {
+  TemplateComponent,
+  TemplatePageSettings,
+  TemplateBlueprint,
+  TemplateRow,
+} from "@/lib/template-types";
+export {
+  TEMPLATE_CATEGORIES,
+  DEFAULT_STRUCTURE,
+} from "@/lib/template-types";
 
-export type SubCategory = {
-  id: string;
-  category_id: string;
-  name: string;
-  slug: string;
-};
-
-export type ComponentRow = {
-  id: string;
-  name: string;
-  image_url: string | null;
-  sub_category_id: string;
-  component_code: string;
-  demo_url: string | null;
-  prompt: string | null;
-  chain_id: string | null;
-  created_at: string;
-};
-
-export async function getCategories(): Promise<Category[]> {
+export async function getTemplates(): Promise<TemplateRow[]> {
   const supabase = await createServerClient();
   const { data, error } = await supabase
-    .from("categories")
-    .select("id, name, slug")
-    .order("name");
+    .from("pdf_templates")
+    .select(TEMPLATE_FIELDS)
+    .order("name", { ascending: true });
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data ?? []) as TemplateRow[];
 }
 
-export async function getSubCategories(): Promise<SubCategory[]> {
+export async function getTemplate(id: string): Promise<TemplateRow | null> {
   const supabase = await createServerClient();
   const { data, error } = await supabase
-    .from("sub_categories")
-    .select("id, category_id, name, slug")
-    .order("name");
+    .from("pdf_templates")
+    .select(TEMPLATE_FIELDS)
+    .eq("id", id)
+    .maybeSingle();
   if (error) throw new Error(error.message);
-  return data ?? [];
-}
-
-export async function getComponents(): Promise<ComponentRow[]> {
-  const supabase = await createServerClient();
-  const { data, error } = await supabase
-    .from("components")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data as TemplateRow | null) ?? null;
 }

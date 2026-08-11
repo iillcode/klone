@@ -12,7 +12,7 @@ export default function LoginForm() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-3xl bg-panel border border-white/5 p-8">
-        <h1 className="text-xl font-semibold text-white mb-1">DevLibrary Admin</h1>
+        <h1 className="text-xl font-semibold text-white mb-1">Klone Admin</h1>
         <p className="text-sm text-zinc-500 mb-6">Sign in to your admin account.</p>
 
         <form action={loginAction} className="space-y-3">
