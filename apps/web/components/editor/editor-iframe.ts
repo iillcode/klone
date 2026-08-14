@@ -2057,14 +2057,20 @@ document.addEventListener('mousedown',function(e){
 // user-authored HTML), so the same code works for both.
 function getScrollState(){
   var wrap=getContentContainer();
-  var isBody=(wrap===document.body);
-  var el=isBody?document.documentElement:wrap;
+  // User templates host their A4 page sheet inside the body and <html> is
+  // the canvas scroller (see SYSTEM_RESET_CSS in lib/data/templates.ts), so
+  // scroll state must be read from the documentElement — not the
+  // .scroll-wrapper page sheet (overflow:visible, does not scroll) nor body.
+  // Default/blank templates keep the .scroll-wrapper as scroller.
+  var isUserTpl=!!document.querySelector('.klone-render-space');
+  var useHtml=isUserTpl;
+  var el=useHtml?document.documentElement:wrap;
   return {
     el:el,
-    useBody:isBody,
-    scrollTop:isBody?(window.pageYOffset||el.scrollTop||0):el.scrollTop,
-    clientH:isBody?window.innerHeight:el.clientHeight,
-    scrollH:isBody?document.documentElement.scrollHeight:el.scrollHeight
+    useBody:false,
+    scrollTop:useHtml?(window.pageYOffset||el.scrollTop||0):el.scrollTop,
+    clientH:useHtml?window.innerHeight:el.clientHeight,
+    scrollH:useHtml?document.documentElement.scrollHeight:el.scrollHeight
   };
 }
 
