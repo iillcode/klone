@@ -1,15 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import type { Document } from '@/lib/types';
-import type { UserProfile } from '@/lib/data/users';
-import { TEMPLATE_META } from '@/lib/data/template-meta';
-import { createDocumentFromTemplate } from '@/app/actions/documents';
-import { SettingsModal } from '@/components/settings/SettingsModal';
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import type { Document } from "@/lib/types";
+import type { UserProfile } from "@/lib/data/users";
+import type { TemplateRow } from "@/lib/data/template-db-types";
+import { createDocumentFromTemplate } from "@/app/actions/documents";
+import { SettingsModal } from "@/components/settings/SettingsModal";
 import {
   ChevronRight,
-  Clock,
   FileText,
   Library,
   Loader2,
@@ -17,13 +16,14 @@ import {
   Search,
   Settings,
   Zap,
-} from 'lucide-react';
+} from "lucide-react";
 
 const itemClass =
-  'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px] font-medium text-[#a1a1aa] transition-colors hover:bg-[#1c1c1c] hover:text-[#e4e4e7] disabled:cursor-wait disabled:opacity-60';
+  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px] font-medium text-[#a1a1aa] transition-colors hover:bg-[#1c1c1c] hover:text-[#e4e4e7] disabled:cursor-wait disabled:opacity-60";
 
 interface SidebarProps {
   documents: Document[];
+  templates: TemplateRow[];
   query: string;
   onQueryChange: (q: string) => void;
   profile: UserProfile | null;
@@ -34,7 +34,13 @@ interface SidebarProps {
  * back + title, a search box, primary nav, "start from a template" shortcuts,
  * a Klone MCP promo card, and an account button that opens the settings modal.
  */
-export function Sidebar({ documents, query, onQueryChange, profile }: SidebarProps) {
+export function Sidebar({
+  documents,
+  templates,
+  query,
+  onQueryChange,
+  profile,
+}: SidebarProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [, startTransition] = useTransition();
@@ -42,9 +48,9 @@ export function Sidebar({ documents, query, onQueryChange, profile }: SidebarPro
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const scrollTo = (id: string) => {
-    onQueryChange('');
+    onQueryChange("");
     requestAnimationFrame(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
     });
   };
 
@@ -53,7 +59,7 @@ export function Sidebar({ documents, query, onQueryChange, profile }: SidebarPro
     startTransition(async () => {
       const result = await createDocumentFromTemplate(slug);
       setCreating(null);
-      if ('id' in result) {
+      if ("id" in result) {
         router.push(`/preview/${result.id}`);
       }
     });
@@ -64,7 +70,7 @@ export function Sidebar({ documents, query, onQueryChange, profile }: SidebarPro
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (
-        e.key === '/' &&
+        e.key === "/" &&
         !(e.target instanceof HTMLInputElement) &&
         !(e.target instanceof HTMLTextAreaElement)
       ) {
@@ -74,21 +80,25 @@ export function Sidebar({ documents, query, onQueryChange, profile }: SidebarPro
     };
     let hints = true;
     try {
-      hints = JSON.parse(localStorage.getItem('klone:setting:keyboard-hints') ?? 'true') !== false;
+      hints =
+        JSON.parse(
+          localStorage.getItem("klone:setting:keyboard-hints") ?? "true",
+        ) !== false;
     } catch {
       // default to on
     }
     if (!hints) return;
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const displayName = profile?.full_name || profile?.email?.split('@')[0] || 'Account';
+  const displayName =
+    profile?.full_name || profile?.email?.split("@")[0] || "Account";
   const initials = displayName
     .split(/\s+/)
     .map((p) => p[0])
     .slice(0, 2)
-    .join('')
+    .join("")
     .toUpperCase();
 
   return (
@@ -108,33 +118,38 @@ export function Sidebar({ documents, query, onQueryChange, profile }: SidebarPro
 
       {/* Nav */}
       <nav className="flex-1 min-h-0 overflow-y-auto px-2 pb-2.5 [scrollbar-color:#3f3f46_#161617] [scrollbar-width:thin]">
-        <button className={itemClass} onClick={() => scrollTo('documents-section')}>
+        <button
+          className={itemClass}
+          onClick={() => scrollTo("documents-section")}
+        >
           <Rocket className="h-4 w-4 text-[#a1a1aa]" />
           Featured
-          <span className="ml-auto text-xs text-[#a1a1aa]">{documents.length}</span>
+          <span className="ml-auto text-xs text-[#a1a1aa]">
+            {documents.length}
+          </span>
         </button>
-        <button className={itemClass} onClick={() => scrollTo('documents-section')}>
-          <Clock className="h-4 w-4 text-[#a1a1aa]" />
-          Newest
-        </button>
-        <button className={itemClass} onClick={() => scrollTo('templates-section')}>
+        <button
+          className={itemClass}
+          onClick={() => scrollTo("templates-section")}
+        >
           <Library className="h-4 w-4 text-[#a1a1aa]" />
           Templates
-          <span className="ml-auto text-xs text-[#a1a1aa]">{TEMPLATE_META.length}</span>
+          <span className="ml-auto text-xs text-[#a1a1aa]">
+            {templates.length}
+          </span>
         </button>
 
-        <p className="px-2.5 pb-1.5 pt-3 text-[12.5px] text-[#8f8f8f]">Start from a template</p>
-        {TEMPLATE_META.map((t) => (
+        {templates.map((t) => (
           <button
             key={t.id}
             className={itemClass}
-            onClick={() => handleCreate(t.id)}
+            onClick={() => handleCreate(t.slug)}
             disabled={creating !== null}
           >
             <FileText className="h-4 w-4 text-[#a1a1aa]" />
             {t.name}
             <span className="ml-auto flex-none">
-              {creating === t.id ? (
+              {creating === t.slug ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-[#a1a1aa]" />
               ) : (
                 <ChevronRight className="h-3.5 w-3.5 text-[#a1a1aa]" />
@@ -151,10 +166,11 @@ export function Sidebar({ documents, query, onQueryChange, profile }: SidebarPro
           <Zap className="h-4 w-4 text-[#22c55e]" />
         </div>
         <p className="mt-1.5 text-xs leading-5 text-[#a1a1aa]">
-          Connect any coding agent — Claude, Cursor — to author polished PDFs for you.
+          Connect any coding agent — Claude, Cursor — to author polished PDFs
+          for you.
         </p>
         <button
-          onClick={() => handleCreate('blank')}
+          onClick={() => handleCreate("blank")}
           disabled={creating !== null}
           className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] text-[13px] font-semibold text-[#e4e4e7] transition-colors hover:border-[#3d3d3d] hover:bg-[#202020] disabled:cursor-wait disabled:opacity-60"
         >
@@ -172,9 +188,11 @@ export function Sidebar({ documents, query, onQueryChange, profile }: SidebarPro
           {initials}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-semibold text-[#e4e4e7]">{displayName}</span>
+          <span className="block truncate text-[13px] font-semibold text-[#e4e4e7]">
+            {displayName}
+          </span>
           <span className="block truncate text-[11.5px] text-[#a1a1aa]">
-            {profile?.plan === 'pro' ? 'Pro plan' : 'Hobby plan'}
+            {profile?.plan === "pro" ? "Pro plan" : "Hobby plan"}
           </span>
         </span>
         <Settings className="h-4 w-4 flex-none text-[#a1a1aa]" />
@@ -184,7 +202,6 @@ export function Sidebar({ documents, query, onQueryChange, profile }: SidebarPro
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         profile={profile}
-        documentCount={documents.length}
       />
     </aside>
   );

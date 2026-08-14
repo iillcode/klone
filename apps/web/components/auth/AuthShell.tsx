@@ -1,7 +1,5 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
-import { useTheme } from "@/components/ui/theme-provider";
 import { ReviewWall } from "./ReviewWall";
 
 /** Klone K monogram — sized by CSS (.auth-page .logo svg: 52x36). */
@@ -15,30 +13,14 @@ export function KloneLogo() {
   );
 }
 
-function ThemeToggleFloating() {
-  const { theme, toggleTheme } = useTheme();
-  return (
-    <button
-      type="button"
-      onClick={toggleTheme}
-      aria-label="Toggle theme"
-      className="theme-toggle"
-    >
-      {theme === "dark" ? <Sun /> : <Moon />}
-    </button>
-  );
-}
-
 interface AuthShellProps {
   title: string;
-  footer: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function AuthShell({ title, footer, children }: AuthShellProps) {
+export function AuthShell({ title, children }: AuthShellProps) {
   return (
     <div className="auth-page">
-      <ThemeToggleFloating />
       <ReviewWall />
       <div className="panel">
         <div className="auth">
@@ -56,7 +38,6 @@ export function AuthShell({ title, footer, children }: AuthShellProps) {
             </a>
             .
           </p>
-          <p className="swap fx">{footer}</p>
         </div>
       </div>
     </div>

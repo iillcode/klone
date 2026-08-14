@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
 import { getDocument, listDocuments } from "@/lib/data/documents";
 import { getProfile } from "@/lib/data/users";
-import { isTemplateSlug } from "@/lib/data/templates";
+import {
+  isTemplateSlug,
+  getTemplateBySlug,
+  listTemplates,
+} from "@/lib/data/templates-db";
+import type { TemplateRow } from "@/lib/data/template-db-types";
 import {
   getTemplateComponentsByTemplateId,
   getTemplateComponentsBySlug,
@@ -17,20 +22,26 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
 
   // The dashboard-style sidebar (search, nav, templates, account) is reused
   // inside the preview editor, so load the same data the home page uses.
-  const [documents, profile] = await Promise.all([
+  const [documents, profile, templates] = await Promise.all([
     listDocuments(),
     getProfile(),
+    listTemplates(),
   ]);
 
   // Template slugs (backward-compat direct visits like /preview/blank)
   // render as an unsaved draft that the user can Save as a new document.
   // Components come from the matching template (by slug).
-  if (isTemplateSlug(id)) {
-    const componentGroups = await getTemplateComponentsBySlug(id);
+  if (await isTemplateSlug(id)) {
+    const [componentGroups, tpl] = await Promise.all([
+      getTemplateComponentsBySlug(id),
+      getTemplateBySlug(id),
+    ]);
     return (
       <PreviewEditor
         initialTemplateSlug={id}
+        initialHtml={tpl?.preview_html ?? null}
         documents={documents}
+        templates={templates}
         profile={profile}
         componentGroups={componentGroups}
       />
@@ -52,9 +63,9 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
     <PreviewEditor
       initialDocument={doc}
       documents={documents}
+      templates={templates}
       profile={profile}
       componentGroups={componentGroups}
     />
   );
 }
-

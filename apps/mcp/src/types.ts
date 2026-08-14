@@ -16,10 +16,18 @@ export interface PdfTemplatePage {
   format: string;
   /** Editor/PDF content width, e.g. "794px". */
   content_width: string;
+  /** Total page width (CSS size), e.g. "210mm". */
+  width: string;
+  /** Total page height (CSS size), e.g. "297mm". */
+  height: string;
   /** Page margin, e.g. "2.5rem". */
   margin: string;
+  /** Page padding, e.g. "2.5rem". */
+  padding: string;
   /** Document body background, e.g. "#ffffff". */
   body_background: string;
+  /** Optional raw page CSS pasted by the author (applied to html/body). */
+  css: string;
 }
 
 /** One section of a legacy v1 template outline (guidance-only). */
@@ -84,6 +92,8 @@ export interface PdfTemplate {
   description: string | null;
   category: string | null;
   blueprint: PdfTemplateBlueprint | Record<string, unknown>;
+  /** Self-contained sample HTML built from the template's components. */
+  preview_html: string | null;
   tags: string[] | null;
   is_active: boolean;
   created_at: string;

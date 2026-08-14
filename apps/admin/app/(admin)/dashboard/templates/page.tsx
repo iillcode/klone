@@ -4,6 +4,7 @@ import { getTemplates } from "@/lib/data";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { buttonVariants } from "@repo/ui/button";
+import { Plus } from "lucide-react";
 import { Badge } from "@repo/ui/badge";
 import {
   Table,
@@ -19,7 +20,7 @@ export default async function TemplatesPage() {
   const templates = await getTemplates();
 
   return (
-    <div className="mx-auto w-full lg:w-3/4">
+    <div className="mx-auto w-full max-w-6xl">
       <PageHeader
         title="Templates"
         description={`${templates.length} template${templates.length === 1 ? "" : "s"} in the library`}
@@ -42,6 +43,9 @@ export default async function TemplatesPage() {
               </TableHead>
               <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">
                 Blocks
+              </TableHead>
+              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">
+                Preview
               </TableHead>
               <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">
                 Status
@@ -89,6 +93,13 @@ export default async function TemplatesPage() {
                     {blocks}
                   </TableCell>
                   <TableCell>
+                    {t.preview_html ? (
+                      <Badge variant="secondary">Sample</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {t.is_active ? (
                       <Badge>Active</Badge>
                     ) : (
@@ -115,6 +126,15 @@ export default async function TemplatesPage() {
           <EmptyState
             title="No templates yet."
             description="Create your first template to get started."
+            action={
+              <Link
+                href="/dashboard/templates/new"
+                className={buttonVariants()}
+              >
+                <Plus className="size-4" />
+                New template
+              </Link>
+            }
           />
         )}
       </div>

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthShell } from "@/components/auth/AuthShell";
 
@@ -10,15 +9,7 @@ export const metadata: Metadata = {
 
 export default function RegisterPage() {
   return (
-    <AuthShell
-      title="Create your account"
-      footer={
-        <>
-          Already have an account?{" "}
-          <Link href="/login">Log in</Link>
-        </>
-      }
-    >
+    <AuthShell title="Create your account">
       <AuthCard mode="signup" />
     </AuthShell>
   );

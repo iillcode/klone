@@ -1,26 +1,33 @@
 "use server";
 
-import { createDocument, updateDocumentContent } from "@/lib/data/documents";
-import { getTemplate } from "@/lib/data/templates";
+import {
+  createDocument,
+  deleteDocument,
+  updateDocumentContent,
+} from "@/lib/data/documents";
+import { getTemplateBySlug } from "@/lib/data/templates-db";
 
 export type CreateDocumentResult = { id: string } | { error: string };
 export type SaveDocumentResult = { ok: true } | { error: string };
+export type DeleteDocumentResult = { ok: true } | { error: string };
 
 /**
  * Create a new persisted document seeded with a starter template's HTML.
  * Used by the dashboard's "New document" button and the template cards.
+ * `templateId` is the template slug (used by the landing page / sidebar).
  */
 export async function createDocumentFromTemplate(
   templateId: string,
 ): Promise<CreateDocumentResult> {
-  const template = getTemplate(templateId);
+  const template = await getTemplateBySlug(templateId);
   if (!template) {
     return { error: `Unknown template '${templateId}'.` };
   }
 
   const doc = await createDocument({
     title: template.name,
-    html_code: template.html,
+    html_code: template.preview_html ?? "",
+    template_slug: template.slug,
   });
 
   if (!doc) {
@@ -44,6 +51,24 @@ export async function saveDocumentContent(
   const updated = await updateDocumentContent(docId, html);
   if (!updated) {
     return { error: "Could not save document." };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Delete a document the current user owns. Returns success or an error.
+ */
+export async function deleteDocumentAction(
+  docId: string,
+): Promise<DeleteDocumentResult> {
+  if (!docId) {
+    return { error: "Missing document id." };
+  }
+
+  const ok = await deleteDocument(docId);
+  if (!ok) {
+    return { error: "Could not delete document." };
   }
 
   return { ok: true };

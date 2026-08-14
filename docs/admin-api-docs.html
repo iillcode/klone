@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Klone Admin — API Reference</title>
+  <style>
+    body {
+      background-color: #525659;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 40px 20px;
+      min-height: 100vh;
+      color: var(--text-main);
+    }
+
+    :root {
+      --paper-color: #ffffff;
+      --text-main: #111827;
+      --text-secondary: #4b5563;
+      --accent-color: #2563eb;
+      --border-dark: #d1d5db;
+      --border-faded: #e5e7eb; /* Lighter/faded border color */
+      --code-bg: #f9fafb;
+      --pdf-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    }
+
+    .page-container {
+      width: 210mm;
+      min-height: 297mm;
+      background-color: var(--paper-color);
+      padding: 25mm;
+      box-shadow: var(--pdf-shadow);
+      position: relative;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--text-main);
+      letter-spacing: -0.5px;
+      margin-bottom: 5px;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-top: 30px;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--accent-color);
+    }
+
+    h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    h4 {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      margin-top: 15px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      font-size: 11pt;
+      line-height: 1.6;
+      margin-bottom: 12px;
+      color: var(--text-secondary);
+      text-align: justify;
+    }
+
+    ul.dotted-list {
+      list-style-type: circle;
+      margin-left: 20px;
+      margin-bottom: 20px;
+      color: var(--text-secondary);
+    }
+
+    ul.dotted-list li {
+      font-size: 10.5pt;
+      margin-bottom: 6px;
+      padding-left: 5px;
+      line-height: 1.5;
+    }
+
+    header {
+      margin-bottom: 35px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 1px solid var(--border-dark);
+      padding-bottom: 20px;
+    }
+
+    .doc-meta {
+      text-align: right;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .version-badge {
+      background: var(--accent-color);
+      color: white;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 10px;
+      display: inline-block;
+      margin-top: 5px;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+
+    .card {
+      border: 1px solid var(--border-faded);
+      border-radius: 6px;
+      padding: 15px;
+    }
+
+    .method {
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 9pt;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-right: 8px;
+    }
+
+    .method.get { background: #dbeafe; color: #1e40af; }
+    .method.post { background: #dcfce7; color: #166534; }
+
+    table.full-bordered {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 25px;
+      font-size: 10pt;
+      /* Outer border is also faded */
+      border: 1px solid var(--border-faded);
+    }
+
+    table.full-bordered th,
+    table.full-bordered td {
+      /* Inner borders are faded */
+      border: 1px solid var(--border-faded);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    table.full-bordered th {
+      background-color: #f9fafb;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    table.full-bordered td code {
+      background: #fff;
+      border: 1px solid var(--border-faded);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 9pt;
+      color: #be185d;
+    }
+
+    .required-tag {
+      color: #dc2626;
+      font-size: 8pt;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    code.inline {
+      background: #fff;
+      border: 1px solid var(--border-faded);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 9pt;
+      color: #be185d;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <header>
+      <div class="logo-area">
+        <h1>Klone<span style="color:var(--accent-color)">Admin</span></h1>
+        <div style="font-size: 12px; color: #666; margin-top: 4px;">Administration &amp; Template Management API</div>
+      </div>
+      <div class="doc-meta">
+        <div>Document Ref: KX-ADMIN-2026</div>
+        <div>Last Updated: Aug 12, 2026</div>
+        <span class="version-badge">v2.0 STABLE</span>
+      </div>
+    </header>
+
+    <h2>1. Overview</h2>
+    <p>
+      The Klone Admin API powers the internal administration console
+      (<code class="inline">apps/admin</code>). It is implemented as a set of
+      Next.js <strong>Server Actions</strong> rather than a traditional REST
+      surface — each action is invoked from a React Server Component or
+      client component via the <code class="inline">"use server"</code> entry
+      points in <code class="inline">app/actions</code>. All actions execute in
+      a Supabase-authenticated server context and are protected by
+      <code class="inline">middleware.ts</code>, which requires a valid session
+      for any <code class="inline">/dashboard/*</code> route.
+    </p>
+
+    <h3>1.1 Core Responsibilities</h3>
+    <ul class="dotted-list">
+      <li>Authenticate admin users via Supabase Auth (email + password).</li>
+      <li>Create, update and read reusable PDF document templates.</li>
+      <li>Persist template blueprints to <code class="inline">public.pdf_templates</code>.</li>
+      <li>Validate and coerce the JSON blueprint submitted from the editor.</li>
+    </ul>
+
+    <h2>2. Authentication</h2>
+    <p>
+      Every admin action runs in a session established by Supabase Auth. The
+      <code class="inline">verifySession()</code> helper in
+      <code class="inline">lib/auth.ts</code> reads the current user and
+      redirects unauthenticated requests to <code class="inline">/login</code>.
+      Actions below assume a valid cookie-based session is present.
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div style="margin-bottom:8px;">
+          <span class="method post">ACTION</span>
+          <strong>login</strong>
+        </div>
+        <div style="font-size: 9pt; color: #666;">Sign in with email &amp; password; redirects to /dashboard on success.</div>
+      </div>
+      <div class="card">
+        <div style="margin-bottom:8px;">
+          <span class="method post">ACTION</span>
+          <strong>logout</strong>
+        </div>
+        <div style="font-size: 9pt; color: #666;">Sign out the current session; redirects to /login.</div>
+      </div>
+    </div>
+
+    <h3>2.1 <code class="inline">login(email, password)</code></h3>
+    <p>
+      Defined in <code class="inline">app/actions/auth.ts</code>. Accepts a
+      <code class="inline">FormData</code> payload, authenticates with
+      <code class="inline">signInWithPassword</code>, and redirects to
+      <code class="inline">/dashboard</code> on success or returns an
+      <code class="inline">{ error }</code> state on failure.
+    </p>
+    <table class="full-bordered">
+      <thead>
+        <tr>
+          <th style="width: 22%;">Field</th>
+          <th style="width: 15%;">Type</th>
+          <th style="width: 12%;">Required</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>email</code></td>
+          <td>string</td>
+          <td><span class="required-tag">Yes</span></td>
+          <td>Admin account email. Coerced to string from the form field.</td>
+        </tr>
+        <tr>
+          <td><code>password</code></td>
+          <td>string</td>
+          <td><span class="required-tag">Yes</span></td>
+          <td>Account password passed to Supabase Auth.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>2.2 <code class="inline">logout()</code></h3>
+    <p>
+      Defined in <code class="inline">app/actions/auth.ts</code>. Calls
+      <code class="inline">supabase.auth.signOut()</code> and redirects to
+      <code class="inline">/login</code>. Returns <code class="inline">void</code>.
+    </p>
+
+    <h2>3. Template Management</h2>
+    <p>
+      Templates are stored in <code class="inline">public.pdf_templates</code>
+      as JSON blueprints (page constraints + reusable component blocks) that the
+      MCP server later serves to AI agents. The actions below live in
+      <code class="inline">app/actions/templates.ts</code> and share a
+      <code class="inline">TemplateState</code> return type:
+      <code class="inline">{ error?: string; ok?: boolean }</code>.
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div style="margin-bottom:8px;">
+          <span class="method post">ACTION</span>
+          <strong>createTemplate</strong>
+        </div>
+        <div style="font-size: 9pt; color: #666;">Insert a new pdf_templates row from form data.</div>
+      </div>
+      <div class="card">
+        <div style="margin-bottom:8px;">
+          <span class="method post">ACTION</span>
+          <strong>updateTemplate</strong>
+        </div>
+        <div style="font-size: 9pt; color: #666;">Update an existing template by id.</div>
+      </div>
+    </div>
+
+    <h3>3.1 <code class="inline">createTemplate(formData)</code></h3>
+    <p>
+      Reads common fields via <code class="inline">readCommon()</code>, validates
+      the name and blueprint, then inserts into
+      <code class="inline">pdf_templates</code>. On success it calls
+      <code class="inline">revalidatePath("/dashboard/templates")</code> and
+      returns <code class="inline">{ ok: true }</code>.
+    </p>
+    <table class="full-bordered">
+      <thead>
+        <tr>
+          <th style="width: 22%;">Field</th>
+          <th style="width: 15%;">Type</th>
+          <th style="width: 12%;">Required</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>name</code></td>
+          <td>string</td>
+          <td><span class="required-tag">Yes</span></td>
+          <td>Human-readable template name. Also used to derive the slug.</td>
+        </tr>
+        <tr>
+          <td><code>slug</code></td>
+          <td>string</td>
+          <td>No</td>
+          <td>URL-safe identifier. Auto-generated from <code class="inline">name</code> if omitted.</td>
+        </tr>
+        <tr>
+          <td><code>description</code></td>
+          <td>string</td>
+          <td>No</td>
+          <td>Optional summary of the template's purpose.</td>
+        </tr>
+        <tr>
+          <td><code>category</code></td>
+          <td>enum</td>
+          <td>No</td>
+          <td>One of <code class="inline">TEMPLATE_CATEGORIES</code> (General, Reports, Business, Technical, Education, Legal, Personal).</td>
+        </tr>
+        <tr>
+          <td><code>tags</code></td>
+          <td>string</td>
+          <td>No</td>
+          <td>Comma-separated list; split into the <code class="inline">text[]</code> column.</td>
+        </tr>
+        <tr>
+          <td><code>is_active</code></td>
+          <td>boolean</td>
+          <td>No</td>
+          <td><code class="inline">"on"</code> or <code class="inline">"true"</code> enables the template.</td>
+        </tr>
+        <tr>
+          <td><code>blueprint</code></td>
+          <td>JSON string</td>
+          <td><span class="required-tag">Yes</span></td>
+          <td>Raw <code class="inline">TemplateBlueprint</code> JSON, validated by <code class="inline">parseBlueprint()</code>.</td>
+        </tr>
+        <tr>
+          <td><code>preview_html</code></td>
+          <td>string</td>
+          <td>No</td>
+          <td>Self-contained sample HTML assembled from the template's components.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>3.2 <code class="inline">updateTemplate(formData)</code></h3>
+    <p>
+      Same field set as <code class="inline">createTemplate</code> plus a
+      required <code class="inline">id</code>. Updates the matching row and
+      revalidates both the list and detail paths.
+    </p>
+    <table class="full-bordered">
+      <thead>
+        <tr>
+          <th style="width: 22%;">Field</th>
+          <th style="width: 15%;">Type</th>
+          <th style="width: 12%;">Required</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>id</code></td>
+          <td>string (uuid)</td>
+          <td><span class="required-tag">Yes</span></td>
+          <td>Primary key of the template to update.</td>
+        </tr>
+        <tr>
+          <td colspan="3"><em>All fields from createTemplate</em></td>
+          <td>Re-applied to the existing row (name, slug, blueprint, etc.).</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>4. Data Layer (Server Reads)</h2>
+    <p>
+      The server-only helpers in <code class="inline">lib/data.ts</code>
+      provide direct, read-only access to <code class="inline">pdf_templates</code>.
+      They are consumed by dashboard pages and are not exposed as standalone
+      endpoints.
+    </p>
+    <table class="full-bordered">
+      <thead>
+        <tr>
+          <th style="width: 30%;">Function</th>
+          <th style="width: 20%;">Returns</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>getTemplates()</code></td>
+          <td><code>TemplateRow[]</code></td>
+          <td>All templates ordered by name.</td>
+        </tr>
+        <tr>
+          <td><code>getTemplate(id)</code></td>
+          <td><code>TemplateRow | null</code></td>
+          <td>Single template by id, or <code class="inline">null</code> if not found.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>5. Blueprint Schema</h2>
+    <p>
+      The <code class="inline">blueprint</code> JSON field conforms to
+      <code class="inline">TemplateBlueprint</code> (see
+      <code class="inline">lib/template-types.ts</code>). It is validated and
+      coerced by <code class="inline">parseBlueprint()</code> before persistence.
+    </p>
+    <table class="full-bordered">
+      <thead>
+        <tr>
+          <th style="width: 24%;">Property</th>
+          <th style="width: 18%;">Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>version</code></td>
+          <td>number</td>
+          <td>Blueprint schema version (currently <code class="inline">2</code>).</td>
+        </tr>
+        <tr>
+          <td><code>page</code></td>
+          <td>object</td>
+          <td>Page constraints: <code class="inline">format</code>, <code class="inline">content_width</code>, <code class="inline">margin</code>, <code class="inline">body_background</code>.</td>
+        </tr>
+        <tr>
+          <td><code>structure</code></td>
+          <td>string</td>
+          <td>HTML scaffold containing a <code class="inline">&lt;!--content--&gt;</code> placeholder.</td>
+        </tr>
+        <tr>
+          <td><code>components</code></td>
+          <td>array</td>
+          <td>Reusable blocks, each with <code class="inline">key</code>, <code class="inline">name</code>, <code class="inline">html</code>, <code class="inline">css</code>, <code class="inline">guidance</code>, <code class="inline">required</code>, <code class="inline">tags</code>.</td>
+        </tr>
+        <tr>
+          <td><code>requirements</code></td>
+          <td>array</td>
+          <td>Global assembly constraints for the final document.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Error Responses</h4>
+    <ul class="dotted-list">
+      <li><code class="inline">{ error: "Template name is required." }</code> — name missing.</li>
+      <li><code class="inline">{ error: "Blueprint JSON is invalid." }</code> — parse or shape failure.</li>
+      <li><code class="inline">{ error: "Missing template id." }</code> — update with no id.</li>
+      <li><code class="inline">{ error: "&lt;supabase message&gt;" }</code> — database insert/update failure.</li>
+    </ul>
+  </div>
+</body>
+</html>

@@ -10,7 +10,12 @@ import {
 } from "react";
 import { useTheme } from "@/components/ui/theme-provider";
 import { getEditorScript } from "./editor-iframe";
-import { buildHtml, dark, light } from "@/lib/data/templates";
+import {
+  buildHtml,
+  dark,
+  light,
+  normalizeTemplateHtml,
+} from "@/lib/data/templates";
 
 /* Colors/dark/light/buildHtml live in lib/data/templates.ts (shared with the
    template library + document creation). */
@@ -204,191 +209,216 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
     // Serialize the current iframe document into clean, PDF-ready HTML by
     // cloning the live DOM (inline styles preserved) and stripping editor
     // overlays/scripts/clipping. Shared by exportPdf and getFullHtml.
-    const serializeCleanHtml = useCallback(async (
-      forExport = false,
-    ): Promise<string | null> => {
-      const iframe = iframeRef.current;
-      if (!iframe || !iframe.contentWindow) {
-        console.error("[serialize] No iframe ref or contentWindow");
-        return null;
-      }
+    const serializeCleanHtml = useCallback(
+      async (forExport = false): Promise<string | null> => {
+        const iframe = iframeRef.current;
+        if (!iframe || !iframe.contentWindow) {
+          console.error("[serialize] No iframe ref or contentWindow");
+          return null;
+        }
 
-      // Let any pending editor messages (e.g. set-text restoring element
-      // visibility) flush to the iframe before snapshotting the DOM.
-      await new Promise((r) => setTimeout(r, 50));
-      const doc = iframe.contentDocument;
-      if (!doc) {
-        console.error("[serialize] No contentDocument — check sandbox");
-        return null;
-      }
+        // Let any pending editor messages (e.g. set-text restoring element
+        // visibility) flush to the iframe before snapshotting the DOM.
+        await new Promise((r) => setTimeout(r, 50));
+        const doc = iframe.contentDocument;
+        if (!doc) {
+          console.error("[serialize] No contentDocument — check sandbox");
+          return null;
+        }
 
-      const clone = doc.documentElement.cloneNode(true) as HTMLElement;
+        const clone = doc.documentElement.cloneNode(true) as HTMLElement;
 
-      // Remove editor overlays from the clone
-      clone
-        .querySelectorAll("#el-overlay, #hover-overlay, [data-editor-ui]")
-        .forEach((el) => el.remove());
-      clone.querySelectorAll("script").forEach((el) => el.remove());
-      clone
-        .querySelectorAll("[data-editor-capture]")
-        .forEach((el) => el.remove());
+        // Remove editor overlays from the clone
+        clone
+          .querySelectorAll("#el-overlay, #hover-overlay, [data-editor-ui]")
+          .forEach((el) => el.remove());
+        clone.querySelectorAll("script").forEach((el) => el.remove());
+        clone
+          .querySelectorAll("[data-editor-capture]")
+          .forEach((el) => el.remove());
 
-      // Strip editor chrome that lives as INLINE styles on content elements:
-      // the hover/selection outlines (purple, set by editor-iframe). They are
-      // never user-authored (the properties sidebar has no outline control),
-      // so removing exactly those values never changes the design - but saves
-      // a dashed purple box around the last hovered/selected element.
-      clone
-        .querySelectorAll("[style]")
-        .forEach((el) => {
+        // Strip editor chrome that lives as INLINE styles on content elements:
+        // the hover/selection outlines (purple, set by editor-iframe). They are
+        // never user-authored (the properties sidebar has no outline control),
+        // so removing exactly those values never changes the design - but saves
+        // a dashed purple box around the last hovered/selected element.
+        clone.querySelectorAll("[style]").forEach((el) => {
           const s = (el as HTMLElement).style;
           const o = s.outline || "";
-          if (
-            o.indexOf("8b5cf6") !== -1 ||
-            o.indexOf("139, 92, 246") !== -1
-          ) {
+          if (o.indexOf("8b5cf6") !== -1 || o.indexOf("139, 92, 246") !== -1) {
             s.outline = "";
             s.outlineOffset = "";
           }
         });
 
-      // The editor wraps template documents in a system frame (.klone-frame,
-      // created by editor-iframe) so the page frame is sticky. That frame is
-      // editor-only chrome - unwrap it here so saved/exported HTML keeps the
-      // authored body > .scroll-wrapper structure.
-      clone
-        .querySelectorAll(".klone-frame[data-klone-system-frame]")
-        .forEach((frame) => {
-          const inner = frame.firstElementChild;
-          if (inner && inner.classList.contains("scroll-wrapper")) {
-            frame.replaceWith(inner);
-          } else {
-            frame.remove();
-          }
-        });
+        // The editor wraps template documents in a system frame (.klone-frame,
+        // created by editor-iframe) so the page frame is sticky. That frame is
+        // editor-only chrome - unwrap it here so saved/exported HTML keeps the
+        // authored body > .scroll-wrapper structure.
+        clone
+          .querySelectorAll(".klone-frame[data-klone-system-frame]")
+          .forEach((frame) => {
+            const inner = frame.firstElementChild;
+            if (inner && inner.classList.contains("scroll-wrapper")) {
+              frame.replaceWith(inner);
+            } else {
+              frame.remove();
+            }
+          });
 
-      // Keep the document's own CSS intact. The editor writes its changes as
-      // inline styles, which cloneNode preserves. Serializing computed styles
-      // here would freeze a partial, iframe-sized layout and can override CSS
-      // features that were never included in the export property list.
+        // Keep the document's own CSS intact. The editor writes its changes as
+        // inline styles, which cloneNode preserves. Serializing computed styles
+        // here would freeze a partial, iframe-sized layout and can override CSS
+        // features that were never included in the export property list.
 
-      // In the preview the body's background is ALWAYS forced to Klone's
-      // canvas colour (see editor-iframe). Restore the document's OWN
-      // background - captured by the editor script when the preview loaded
-      // - and fall back to Klone's canvas colour only when the authored
-      // body had no background at all. This runs for BOTH save and export:
-      // a saved document keeps its authored body colour, never the editor's
-      // canvas colour.
-      const bodyEl = clone.querySelector("body") as HTMLElement | null;
-      const authoredBodyBg = (
-        doc.body as HTMLElement & { __kloneAuthoredBg?: string }
-      ).__kloneAuthoredBg;
+        // In the preview the body's background is ALWAYS forced to Klone's
+        // canvas colour (see editor-iframe). Restore the document's OWN
+        // background - captured by the editor script when the preview loaded
+        // - and fall back to Klone's canvas colour only when the authored
+        // body had no background at all. This runs for BOTH save and export:
+        // a saved document keeps its authored body colour, never the editor's
+        // canvas colour.
+        const bodyEl = clone.querySelector("body") as HTMLElement | null;
+        const authoredBodyBg = (
+          doc.body as HTMLElement & { __kloneAuthoredBg?: string }
+        ).__kloneAuthoredBg;
 
-      if (bodyEl) {
-        // Strip the forced preview canvas background so the document's own
-        // body colour is used (PDF) / preserved (save).
-        const bodyStyle = bodyEl.getAttribute("style") || "";
-        const strippedStyle = bodyStyle
-          .split(";")
-          .map((s) => s.trim())
-          .filter((s) => s && !/^background(?:-color)?\s*:/.test(s))
-          .join("; ");
-        if (strippedStyle) bodyEl.setAttribute("style", strippedStyle);
-        else bodyEl.removeAttribute("style");
-        // Ensure body fills the full page width and centers the
-        // scroll-wrapper (which uses margin:0 auto) - without this
-        // syncComputedStyles may bake in the iframe's pixel width
-        // (e.g. 1198px) which breaks centering in the PDF viewport.
-        bodyEl.style.backgroundColor = authoredBodyBg || "rgb(30, 30, 30)";
-      }
-
-      // Keep the markers when saving so the user can reopen and move them.
-      // Only the export clone turns each into a print-only CSS page break.
-      if (forExport) {
-        // --- Strip clipping styles so Puppeteer renders the full document ---
-        // The default HTML has overflow:hidden + height:100% on html/body and
-        // height:100%; overflow-y:auto on .scroll-wrapper - these clip content
-        // when Puppeteer renders the page. Remove them for PDF output ONLY:
-        // baking them into saved HTML would override the template's scroll
-        // layout and make a reopened document unscrollable.
-        const htmlEl = clone.querySelector("html") as HTMLElement | null;
-        const scrollEl = clone.querySelector(
-          ".scroll-wrapper",
+        // For user templates the authored page background lives on the
+        // .klone-render-space element (their `body{}` rules were remapped onto
+        // that class). Restore it there as well so the exported/saved page
+        // keeps its own colour, never the editor canvas colour.
+        const renderSpaceEl = clone.querySelector(
+          ".klone-render-space",
         ) as HTMLElement | null;
-        if (htmlEl) {
-          htmlEl.style.overflow = "visible";
-          htmlEl.style.height = "auto";
-        }
+
         if (bodyEl) {
-          bodyEl.style.overflow = "visible";
-          bodyEl.style.height = "auto";
+          // Strip the forced preview canvas background so the document's own
+          // body colour is used (PDF) / preserved (save).
+          const bodyStyle = bodyEl.getAttribute("style") || "";
+          const strippedStyle = bodyStyle
+            .split(";")
+            .map((s) => s.trim())
+            .filter((s) => s && !/^background(?:-color)?\s*:/.test(s))
+            .join("; ");
+          if (strippedStyle) bodyEl.setAttribute("style", strippedStyle);
+          else bodyEl.removeAttribute("style");
+          // Ensure body fills the full page width and centers the
+          // scroll-wrapper (which uses margin:0 auto) - without this
+          // syncComputedStyles may bake in the iframe's pixel width
+          // (e.g. 1198px) which breaks centering in the PDF viewport.
+          bodyEl.style.backgroundColor = authoredBodyBg || "rgb(30, 30, 30)";
         }
-        if (scrollEl) {
-          // Only remove scroll-clipping - keep ALL original styles
-          // (padding, max-width, margin:auto) so the PDF looks identical
-          scrollEl.style.overflow = "visible";
-          scrollEl.style.height = "auto";
-          scrollEl.style.maxHeight = "none";
+
+        if (renderSpaceEl) {
+          // The render space carries the user template's page-level
+          // background; restore the authored one if present.
+          renderSpaceEl.style.backgroundColor = authoredBodyBg || "";
         }
-        // querySelectorAll keeps document order, and the clone preserves it,
-        // so clone[i] corresponds to live[i] for computed-style lookups.
-        const liveSplitEls = Array.from(
-          doc.querySelectorAll("[data-klone-page-break]"),
-        );
-        const cloneSplitEls = Array.from(
-          clone.querySelectorAll("[data-klone-page-break]"),
-        );
-        cloneSplitEls.forEach((el, i) => {
-          el.removeAttribute("data-klone-page-break");
-          const live = liveSplitEls[i];
-          if (!live) return;
-          // Never break the template structure: the split is applied as a
-          // print CSS property ON the marked element itself - no element is
-          // inserted, so nesting inside ul/table/p/etc. stays valid.
-          if (isFirstElementInBody(live)) return; // would only blank page 1
-          const style = el as HTMLElement;
-          style.style.breakBefore = "page";
-          style.style.pageBreakBefore = "always";
-          // Inline elements ignore break-before in Chromium; forcing a block
-          // box (export clone only) makes the split actually happen while the
-          // authored HTML stays untouched.
-          const display = getComputedStyle(live).display;
-          if (display === "inline" || display === "inline-block") {
-            style.style.display = "block";
+
+        // Keep the markers when saving so the user can reopen and move them.
+        // Only the export clone turns each into a print-only CSS page break.
+        if (forExport) {
+          // --- Strip clipping styles so Puppeteer renders the full document ---
+          // The default HTML has overflow:hidden + height:100% on html/body and
+          // height:100%; overflow-y:auto on .scroll-wrapper - these clip content
+          // when Puppeteer renders the page. Remove them for PDF output ONLY:
+          // baking them into saved HTML would override the template's scroll
+          // layout and make a reopened document unscrollable.
+          const htmlEl = clone.querySelector("html") as HTMLElement | null;
+          const scrollEl = clone.querySelector(
+            ".scroll-wrapper",
+          ) as HTMLElement | null;
+          if (htmlEl) {
+            htmlEl.style.overflow = "visible";
+            htmlEl.style.height = "auto";
           }
-        });
+          if (bodyEl) {
+            bodyEl.style.overflow = "visible";
+            bodyEl.style.height = "auto";
+          }
+          if (scrollEl) {
+            // Only remove scroll-clipping when the .scroll-wrapper actually
+            // carries the OLD editor-generated clipping (height:100% /
+            // overflow-y:auto). For USER templates the .scroll-wrapper IS the
+            // page box (min-height:1123px; padding:94px; margin:40px auto) —
+            // stripping its height/max-height would destroy the A4 page, so we
+            // leave those authored values intact and only neutralise an
+            // explicit overflow:auto if present.
+            const cs = getComputedStyle(scrollEl);
+            if (cs.height === "100%" || scrollEl.style.height === "100%") {
+              scrollEl.style.height = "auto";
+            }
+            if (
+              cs.overflowY === "auto" ||
+              cs.overflowY === "hidden" ||
+              scrollEl.style.overflowY === "auto"
+            ) {
+              scrollEl.style.overflow = "visible";
+              scrollEl.style.overflowY = "visible";
+            }
+            scrollEl.style.maxHeight = "none";
+          }
+          // querySelectorAll keeps document order, and the clone preserves it,
+          // so clone[i] corresponds to live[i] for computed-style lookups.
+          const liveSplitEls = Array.from(
+            doc.querySelectorAll("[data-klone-page-break]"),
+          );
+          const cloneSplitEls = Array.from(
+            clone.querySelectorAll("[data-klone-page-break]"),
+          );
+          cloneSplitEls.forEach((el, i) => {
+            el.removeAttribute("data-klone-page-break");
+            const live = liveSplitEls[i];
+            if (!live) return;
+            // Never break the template structure: the split is applied as a
+            // print CSS property ON the marked element itself - no element is
+            // inserted, so nesting inside ul/table/p/etc. stays valid.
+            if (isFirstElementInBody(live)) return; // would only blank page 1
+            const style = el as HTMLElement;
+            style.style.breakBefore = "page";
+            style.style.pageBreakBefore = "always";
+            // Inline elements ignore break-before in Chromium; forcing a block
+            // box (export clone only) makes the split actually happen while the
+            // authored HTML stays untouched.
+            const display = getComputedStyle(live).display;
+            if (display === "inline" || display === "inline-block") {
+              style.style.display = "block";
+            }
+          });
 
-        // Editor pages: every data-klone-page-boundary is a page-sized
-        // CONTAINER holding that page's content, so each one starts a new
-        // PDF page. The on-screen page height is editor chrome (it makes an
-        // empty page visible) — in the PDF the printed page provides the
-        // height, so min-height is dropped to avoid pushing content onto an
-        // extra sheet. Containers stay in saved HTML (reopenable) and are
-        // converted only in the export clone.
-        const liveBoundaryEls = Array.from(
-          doc.querySelectorAll("[data-klone-page-boundary]"),
-        );
-        const cloneBoundaryEls = Array.from(
-          clone.querySelectorAll("[data-klone-page-boundary]"),
-        );
-        cloneBoundaryEls.forEach((el, i) => {
-          el.removeAttribute("data-klone-page-boundary");
-          const live = liveBoundaryEls[i];
-          if (!live) return;
-          const style = el as HTMLElement;
-          style.style.minHeight = "0";
-          style.style.height = "auto";
-          // A page container as the very first content element means page 1
-          // has no content — a break there would only blank the first page.
-          if (isFirstElementInBody(live)) return;
-          style.style.breakBefore = "page";
-          style.style.pageBreakBefore = "always";
-        });
-      }
+          // Editor pages: every data-klone-page-boundary is a page-sized
+          // CONTAINER holding that page's content, so each one starts a new
+          // PDF page. The on-screen page height is editor chrome (it makes an
+          // empty page visible) — in the PDF the printed page provides the
+          // height, so min-height is dropped to avoid pushing content onto an
+          // extra sheet. Containers stay in saved HTML (reopenable) and are
+          // converted only in the export clone.
+          const liveBoundaryEls = Array.from(
+            doc.querySelectorAll("[data-klone-page-boundary]"),
+          );
+          const cloneBoundaryEls = Array.from(
+            clone.querySelectorAll("[data-klone-page-boundary]"),
+          );
+          cloneBoundaryEls.forEach((el, i) => {
+            el.removeAttribute("data-klone-page-boundary");
+            const live = liveBoundaryEls[i];
+            if (!live) return;
+            const style = el as HTMLElement;
+            style.style.minHeight = "0";
+            style.style.height = "auto";
+            // A page container as the very first content element means page 1
+            // has no content — a break there would only blank the first page.
+            if (isFirstElementInBody(live)) return;
+            style.style.breakBefore = "page";
+            style.style.pageBreakBefore = "always";
+          });
+        }
 
-      // Serialize the full HTML document
-      return "<!DOCTYPE html>\n" + clone.outerHTML;
-    }, []);
+        // Serialize the full HTML document
+        return "<!DOCTYPE html>\n" + clone.outerHTML;
+      },
+      [],
+    );
 
     useImperativeHandle(ref, () => ({
       applyStyleMulti: (property: string, value: string) => {
@@ -616,7 +646,9 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       );
     }, [splitMode]);
 
-    const srcDoc = html ? injectEditorScript(html) : defaultHtml;
+    const srcDoc = html
+      ? injectEditorScript(normalizeTemplateHtml(html))
+      : defaultHtml;
     const bg = editState?.styles.backgroundColor ?? "";
     const hasBg = bg && bg !== "transparent" && bg !== "rgba(0, 0, 0, 0)";
 

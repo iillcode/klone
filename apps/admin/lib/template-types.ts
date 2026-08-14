@@ -35,10 +35,18 @@ export type TemplatePageSettings = {
   format: string;
   /** Editor/PDF content width, e.g. "794px". */
   content_width: string;
+  /** Total page width (CSS size), e.g. "210mm". */
+  width: string;
+  /** Total page height (CSS size), e.g. "297mm". */
+  height: string;
   /** Page margin, e.g. "2.5rem". */
   margin: string;
+  /** Page padding, e.g. "2.5rem". */
+  padding: string;
   /** Document body background, e.g. "#ffffff". */
   body_background: string;
+  /** Optional raw page CSS pasted by the author (applied to html/body). */
+  css: string;
 };
 
 /** The outline blueprint stored on a pdf_template row. */
@@ -62,6 +70,8 @@ export type TemplateRow = {
   description: string | null;
   category: string | null;
   blueprint: TemplateBlueprint;
+  /** Self-contained sample HTML built from the template's components. */
+  preview_html: string | null;
   tags: string[] | null;
   is_active: boolean;
   created_at: string;
@@ -81,7 +91,7 @@ export const TEMPLATE_CATEGORIES = [
 
 /** Columns fetched from pdf_templates by the server data layer. */
 export const TEMPLATE_FIELDS =
-  "id, slug, name, description, category, blueprint, tags, is_active, created_at, updated_at";
+  "id, slug, name, description, category, blueprint, preview_html, tags, is_active, created_at, updated_at";
 
 /** Default response structure used when a template defines none. */
 export const DEFAULT_STRUCTURE = `<!DOCTYPE html>

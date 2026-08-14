@@ -28,7 +28,18 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
     <div className="toast show" role="status">
       <i />
       <span>{message}</span>
-      <button type="button" onClick={onClose} aria-label="Dismiss" style={{ background: "none", border: 0, color: "#fff", cursor: "pointer", marginLeft: 4 }}>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Dismiss"
+        style={{
+          background: "none",
+          border: 0,
+          color: "#fff",
+          cursor: "pointer",
+          marginLeft: 4,
+        }}
+      >
         ×
       </button>
     </div>
@@ -36,8 +47,14 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 }
 
 export function AuthCard({ mode, urlError }: AuthCardProps) {
-  const [loginState, loginAction, loginPending] = useActionState<AuthState, FormData>(login, undefined);
-  const [registerState, registerAction, registerPending] = useActionState<RegisterResult, FormData>(register, undefined);
+  const [loginState, loginAction, loginPending] = useActionState<
+    AuthState,
+    FormData
+  >(login, undefined);
+  const [registerState, registerAction, registerPending] = useActionState<
+    RegisterResult,
+    FormData
+  >(register, undefined);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -50,10 +67,15 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
   const [resetMode, setResetMode] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetPending, setResetPending] = useState(false);
-  const [resetState, setResetState] = useState<{ ok: boolean; error?: string } | null>(null);
+  const [resetState, setResetState] = useState<{
+    ok: boolean;
+    error?: string;
+  } | null>(null);
 
   // Inline per-field errors (client-side validation).
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<"name" | "email" | "password", string>>>({});
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<"name" | "email" | "password", string>>
+  >({});
   // Global err slot — used for server/auth errors that aren't field-specific.
   const [errMsg, setErrMsg] = useState("");
 
@@ -69,7 +91,9 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
   // outside this card's own DOM.
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement).closest("a[data-doc]") as HTMLAnchorElement | null;
+      const target = (e.target as HTMLElement).closest(
+        "a[data-doc]",
+      ) as HTMLAnchorElement | null;
       if (target) {
         e.preventDefault();
         showToast(`Opening ${target.dataset.doc}… (demo)`);
@@ -130,7 +154,7 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
         firstInvalid = firstInvalid ?? "name";
       }
       if (badEmail) {
-        errors.email = "Hmm, that email doesn't look right.";
+        errors.email = "Please enter a valid email address.";
         firstInvalid = firstInvalid ?? "email";
       }
       if (!PASSWORD_PATTERN.test(password)) {
@@ -139,7 +163,7 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
         firstInvalid = firstInvalid ?? "password";
       }
     } else if (badEmail) {
-      errors.email = "Hmm, that email doesn't look right.";
+      errors.email = "Please enter a valid email address.";
       firstInvalid = "email";
     }
 
@@ -171,7 +195,10 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
     e.preventDefault();
     const emailVal = resetEmail.trim();
     if (!EMAIL_PATTERN.test(emailVal)) {
-      setResetState({ ok: false, error: "Hmm, that email doesn't look right." });
+      setResetState({
+        ok: false,
+        error: "Please enter a valid email address.",
+      });
       return;
     }
     setResetPending(true);
@@ -215,7 +242,9 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
                   onInput={() => setResetState(null)}
-                  error={resetState && !resetState.ok ? resetState.error : undefined}
+                  error={
+                    resetState && !resetState.ok ? resetState.error : undefined
+                  }
                   className={resetState && !resetState.ok ? "bad" : ""}
                 />
               </div>
@@ -230,11 +259,22 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
                 </button>
               </div>
               <div className="err" id="errMsg">
-                {!resetState?.ok ? "" : resetState?.error ?? errMsg}
+                {!resetState?.ok ? "" : (resetState?.error ?? errMsg)}
               </div>
               <p className="swap fx">
                 Remembered it?{" "}
-                <button type="button" onClick={exitReset} style={{ background: "none", border: 0, color: "#fff", fontWeight: 700, textDecoration: "underline", cursor: "pointer" }}>
+                <button
+                  type="button"
+                  onClick={exitReset}
+                  style={{
+                    background: "none",
+                    border: 0,
+                    color: "#fff",
+                    fontWeight: 700,
+                    textDecoration: "underline",
+                    cursor: "pointer",
+                  }}
+                >
                   Back to login
                 </button>
               </p>
@@ -253,7 +293,11 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
     <div className="panel-body">
       <div className="auth-body" ref={authBodyRef}>
         <div className="fx">
-          <GoogleButton label={mode === "signup" ? "Sign up with Google" : "Continue with Google"} />
+          <GoogleButton
+            label={
+              mode === "signup" ? "Sign up with Google" : "Continue with Google"
+            }
+          />
         </div>
 
         <div className="divider fx">or</div>
@@ -301,7 +345,9 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
               ref={passRef}
               name="password"
               placeholder={mode === "signup" ? "Create a password" : "Password"}
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              autoComplete={
+                mode === "signup" ? "new-password" : "current-password"
+              }
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onInput={() => clearError("password")}
@@ -311,7 +357,11 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
           </div>
 
           <div className="fx">
-            <button type="submit" className={`submit${pending ? " loading" : ""}`} id="submitBtn">
+            <button
+              type="submit"
+              className={`submit${pending ? " loading" : ""}`}
+              id="submitBtn"
+            >
               {pending ? "" : submitLabel}
             </button>
           </div>
@@ -321,7 +371,14 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
         </form>
 
         {mode === "signin" && (
-          <button type="button" className="forgot fx" onClick={() => { clearError(); setResetMode(true); }}>
+          <button
+            type="button"
+            className="forgot fx"
+            onClick={() => {
+              clearError();
+              setResetMode(true);
+            }}
+          >
             Forgot password?
           </button>
         )}

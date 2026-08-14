@@ -6,10 +6,10 @@ import type { PdfTemplate } from "./types";
 
 /** Template rows returned by list (metadata only — no blueprint). */
 const LIST_FIELDS =
-  "id, slug, name, description, category, tags, is_active, created_at, updated_at";
+  "id, slug, name, description, category, preview_html, tags, is_active, created_at, updated_at";
 /** Full row including the blueprint, returned by get. */
 const FULL_FIELDS =
-  "id, slug, name, description, category, blueprint, tags, is_active, created_at, updated_at";
+  "id, slug, name, description, category, blueprint, preview_html, tags, is_active, created_at, updated_at";
 
 export function registerTemplateTools(
   server: McpServer,
@@ -83,6 +83,7 @@ export function registerTemplateTools(
           name: t.name,
           description: t.description,
           category: t.category,
+          preview_html: t.preview_html,
           tags: t.tags,
           is_active: t.is_active,
         })),

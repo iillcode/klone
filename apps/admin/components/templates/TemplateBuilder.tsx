@@ -15,11 +15,6 @@ import {
   type TemplatePageSettings,
   type TemplateRow,
 } from "@/lib/template-types";
-import {
-  CATALOG_COMPONENTS,
-  CATALOG_GROUPS,
-  catalogSnapshot,
-} from "@/lib/template-components";
 import { cn } from "@/lib/utils";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
@@ -40,8 +35,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleCheck,
-  Copy,
-  ExternalLink,
   Eye,
   FileText,
   Info,
@@ -61,7 +54,13 @@ type Props = {
   template?: TemplateRow | null;
 };
 
-type View = "details" | "page" | "components" | "structure" | "requirements";
+type View =
+  | "details"
+  | "page"
+  | "components"
+  | "structure"
+  | "requirements"
+  | "preview";
 
 const VIEWS: { id: View; label: string; icon: typeof FileText }[] = [
   { id: "details", label: "Details", icon: FileText },
@@ -69,6 +68,7 @@ const VIEWS: { id: View; label: string; icon: typeof FileText }[] = [
   { id: "components", label: "Components", icon: Blocks },
   { id: "structure", label: "Structure", icon: Braces },
   { id: "requirements", label: "Requirements", icon: ListChecks },
+  { id: "preview", label: "Preview sample", icon: Eye },
 ];
 
 const GROUP_COLORS: Record<string, string> = {
@@ -86,8 +86,12 @@ const PAGE_FORMATS = ["A4", "Letter", "Legal", "A5"];
 const DEFAULT_PAGE: TemplatePageSettings = {
   format: "A4",
   content_width: "794px",
+  width: "210mm",
+  height: "297mm",
   margin: "2.5rem",
+  padding: "2.5rem",
   body_background: "#ffffff",
+  css: "",
 };
 
 function slugify(value: string): string {
@@ -101,46 +105,25 @@ function slugify(value: string): string {
 }
 
 /**
- * Normalize a stored component list to the fixed catalog: every catalog block
- * is present (falling back to its catalog defaults), in catalog order, with
- * any unknown/leftover blocks appended at the end. Indices line up with the
- * displayed (grouped) list so patches by index are safe.
+ * Normalize a stored component list so each entry has a stable `key` and a
+ * `tags` array. This is a pure pass-through (no fixed catalog) — users supply
+ * their own components and order.
  */
 function normalizeComponents(list: TemplateComponent[]): TemplateComponent[] {
-  const byKey = new Map<string, TemplateComponent>();
-  for (const c of list) byKey.set(c.key, c);
-
-  const merged = new Map<string, TemplateComponent>();
-  for (const cat of CATALOG_COMPONENTS) {
-    const stored = byKey.get(cat.key);
-    merged.set(
-      cat.key,
-      stored
-        ? { ...stored, tags: [...(stored.tags ?? [])] }
-        : { ...cat, tags: [...cat.tags], required: false },
-    );
-  }
-  for (const c of list) {
-    if (!merged.has(c.key)) merged.set(c.key, { ...c, tags: [...(c.tags ?? [])] });
-  }
-
-  const known = CATALOG_COMPONENTS.map((cat) => merged.get(cat.key)!).filter(
-    Boolean,
-  );
-  const leftovers = Array.from(merged.values()).filter(
-    (c) => !CATALOG_COMPONENTS.some((cat) => cat.key === c.key),
-  );
-  return [...known, ...leftovers];
+  return list.map((c) => ({
+    ...c,
+    key: c.key || slugify(c.name || `block-${list.indexOf(c) + 1}`),
+    tags: Array.isArray(c.tags) ? [...c.tags] : [],
+  }));
 }
 
-/** Build the initial blueprint — new templates ship the full fixed catalog. */
+/** Build the initial blueprint — new templates start with NO components. */
 function initialBlueprint(template?: TemplateRow | null): TemplateBlueprint {
   const bp = template?.blueprint;
-  const page = bp?.page ?? DEFAULT_PAGE;
-  const components =
-    Array.isArray(bp?.components) && bp.components.length
-      ? normalizeComponents(bp.components)
-      : catalogSnapshot();
+  const page = { ...DEFAULT_PAGE, ...(bp?.page ?? {}) };
+  const components = Array.isArray(bp?.components)
+    ? normalizeComponents(bp.components)
+    : [];
 
   return {
     version: 2,
@@ -154,11 +137,25 @@ function initialBlueprint(template?: TemplateRow | null): TemplateBlueprint {
 /** Assemble a preview document from the blueprint + component blocks. */
 function buildPreviewHtml(bp: TemplateBlueprint): string {
   const page = bp.page;
-  const css = bp.components.map((c) => c.css).filter(Boolean).join("\n\n");
-  const html = bp.components.map((c) => c.html).filter(Boolean).join("\n");
+  const css = bp.components
+    .map((c) => c.css)
+    .filter(Boolean)
+    .join("\n\n");
+  const html = bp.components
+    .map((c) => c.html)
+    .filter(Boolean)
+    .join("\n");
   let doc = bp.structure.trim() || DEFAULT_STRUCTURE;
 
-  const ambient = `body { background: ${page.body_background}; }`;
+  const pageCss = page.css?.trim() || "";
+
+  const ambient = [
+    `html { width: ${page.width || "auto"}; height: ${page.height || "auto"}; }`,
+    `body { background: ${page.body_background}; margin: ${page.margin}; padding: ${page.padding}; }`,
+    pageCss,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   if (/<style[\s>]/i.test(doc)) {
     doc = doc.replace(/(<style[^>]*>)/i, `$1\n${ambient}\n${css}`);
@@ -178,7 +175,6 @@ function buildPreviewHtml(bp: TemplateBlueprint): string {
   return doc;
 }
 
-/** A single block rendered on its own for a quick per-component preview. */
 function buildBlockPreview(c: TemplateComponent): string {
   const css = c.css || "";
   const html = c.html || "";
@@ -210,7 +206,9 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+      <Label className="text-xs font-medium text-muted-foreground">
+        {label}
+      </Label>
       {children}
       {hint && <p className="text-xs text-muted-foreground/60">{hint}</p>}
     </div>
@@ -418,159 +416,120 @@ function BlockPreview({ c }: { c: TemplateComponent }) {
   );
 }
 
-function ComponentCard({
+/** Full editor for a single component (detail pane). */
+function ComponentEditor({
   c,
   index,
   onPatch,
-  color,
-  defaultOpen,
 }: {
   c: TemplateComponent;
   index: number;
   onPatch: (index: number, patch: Partial<TemplateComponent>) => void;
-  color: string;
-  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(Boolean(defaultOpen));
-  const [pane, setPane] = useState<"guidance" | "markup">("guidance");
   const [preview, setPreview] = useState(false);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-background/40 transition-colors focus-within:border-border">
-      <div className="flex items-center gap-2 p-2.5">
-        <button
-          type="button"
-          aria-label={open ? "Collapse block" : "Expand block"}
-          onClick={() => setOpen((o) => !o)}
-          className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <ChevronRight
-            className={cn("size-4 transition-transform", open && "rotate-90")}
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="size-2.5 shrink-0 rounded-full bg-primary" />
+          <Input
+            value={c.name}
+            onChange={(e) => onPatch(index, { name: e.target.value })}
+            placeholder="Block name"
+            className="h-9 w-48 text-sm font-medium"
           />
-        </button>
-        <span
-          className="size-2 shrink-0 rounded-full"
-          style={{ background: color }}
-        />
-        <span className="shrink-0 rounded border border-border bg-muted px-1.5 py-px font-mono text-[11px] leading-4 text-muted-foreground">
-          {c.key}
-        </span>
-        <Input
-          value={c.name}
-          onChange={(e) => onPatch(index, { name: e.target.value })}
-          placeholder="Block name"
-          className="h-8 min-w-0 flex-1 text-sm"
-        />
-        <Switch
-          checked={c.required}
-          onCheckedChange={(v) => onPatch(index, { required: v })}
-          label="Required for agents"
-        />
+          <span className="hidden shrink-0 rounded border border-border bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground sm:inline">
+            {c.key || "no key"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={c.required}
+            onCheckedChange={(v) => onPatch(index, { required: v })}
+            label="Required for agents"
+          />
+          <span className="text-xs text-muted-foreground">Required</span>
+        </div>
       </div>
 
-      {!open && (
-        <p className="line-clamp-1 px-11 pb-2.5 pr-3 text-xs text-muted-foreground/60">
-          {c.description || "No description yet."}
-        </p>
-      )}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Field label="Tags" hint="Comma-separated keywords agents search by.">
+          <Input
+            value={c.tags.join(", ")}
+            onChange={(e) =>
+              onPatch(index, {
+                tags: e.target.value
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean),
+              })
+            }
+            className="text-sm"
+            placeholder="h1, heading, title"
+          />
+        </Field>
+        <Field label="Group" hint="Visual grouping in the list.">
+          <Input
+            value={c.group ?? ""}
+            onChange={(e) => onPatch(index, { group: e.target.value })}
+            className="text-sm"
+            placeholder="Typography"
+          />
+        </Field>
+      </div>
 
-      {open && (
-        <>
-          <div className="flex items-center justify-between gap-2 border-t border-border/70 px-2.5 py-2">
-            <Segmented
-              value={pane}
-              onChange={setPane}
-              options={[
-                { value: "guidance", label: "Guidance" },
-                { value: "markup", label: "HTML / CSS" },
-              ]}
-            />
-            <span className="hidden text-[11px] text-muted-foreground/60 sm:inline">
-              {c.tags.length} tags
-            </span>
-          </div>
-          <div className="space-y-3 border-t border-border/70 p-3 pt-3">
-            {pane === "guidance" ? (
-              <>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <Field label="Tags">
-                    <Input
-                      value={c.tags.join(", ")}
-                      onChange={(e) =>
-                        onPatch(index, {
-                          tags: e.target.value
-                            .split(",")
-                            .map((t) => t.trim())
-                            .filter(Boolean),
-                        })
-                      }
-                      className="h-7 text-xs"
-                      placeholder="h1, heading, title"
-                    />
-                  </Field>
-                  <Field label="Description (for agents)">
-                    <Textarea
-                      value={c.description}
-                      onChange={(e) =>
-                        onPatch(index, { description: e.target.value })
-                      }
-                      rows={2}
-                      className="text-xs"
-                      placeholder="What this component is for…"
-                    />
-                  </Field>
-                </div>
-                <Field label="Guidance (for agents)">
-                  <Textarea
-                    value={c.guidance}
-                    onChange={(e) =>
-                      onPatch(index, { guidance: e.target.value })
-                    }
-                    rows={3}
-                    className="text-xs"
-                    placeholder="How to author this block…"
-                  />
-                </Field>
-              </>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <Field label="HTML structure">
-                    <CodeEditor
-                      language="html"
-                      value={c.html}
-                      onChange={(v) => onPatch(index, { html: v })}
-                      placeholder="<h1>Document title</h1>"
-                    />
-                  </Field>
-                  <Field label="CSS design">
-                    <CodeEditor
-                      language="css"
-                      value={c.css}
-                      onChange={(v) => onPatch(index, { css: v })}
-                      placeholder="h1 { font-size: 2rem; }"
-                    />
-                  </Field>
-                </div>
-                <div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPreview((p) => !p)}
-                  >
-                    <Eye className="size-3.5" />
-                    {preview ? "Hide preview" : "Preview this block"}
-                  </Button>
-                  {preview && <div className="mt-3">
-                    <BlockPreview c={c} />
-                  </div>}
-                </div>
-              </>
-            )}
-          </div>
-        </>
-      )}
+      <Field label="Description" hint="What this component is for.">
+        <Textarea
+          value={c.description}
+          onChange={(e) => onPatch(index, { description: e.target.value })}
+          rows={2}
+          className="text-sm"
+          placeholder="What this component is for…"
+        />
+      </Field>
+
+      <Field label="Guidance" hint="Concrete authoring guidance for the agent.">
+        <Textarea
+          value={c.guidance}
+          onChange={(e) => onPatch(index, { guidance: e.target.value })}
+          rows={3}
+          className="text-sm"
+          placeholder="How to author this block…"
+        />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Field label="HTML structure">
+          <CodeEditor
+            language="html"
+            value={c.html}
+            onChange={(v) => onPatch(index, { html: v })}
+            placeholder="<h1>Document title</h1>"
+          />
+        </Field>
+        <Field label="CSS design">
+          <CodeEditor
+            language="css"
+            value={c.css}
+            onChange={(v) => onPatch(index, { css: v })}
+            placeholder="h1 { font-size: 2rem; }"
+          />
+        </Field>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setPreview((p) => !p)}
+        >
+          <Eye className="size-3.5" />
+          {preview ? "Hide block preview" : "Preview block"}
+        </Button>
+        {preview && <BlockPreview c={c} />}
+      </div>
     </div>
   );
 }
@@ -594,19 +553,16 @@ export default function TemplateBuilder({ template }: Props) {
   const [category, setCategory] = useState(template?.category ?? "");
   const [tagsText, setTagsText] = useState(template?.tags?.join(", ") ?? "");
   const [isActive, setIsActive] = useState(template?.is_active ?? true);
+  const [previewSampleHtml, setPreviewSampleHtml] = useState(
+    template?.preview_html ?? "",
+  );
   const [blueprint, setBlueprint] = useState<TemplateBlueprint>(() =>
     initialBlueprint(template),
   );
 
   const [view, setView] = useState<View>("details");
   const [query, setQuery] = useState("");
-  const [openGroups, setOpenGroups] = useState<Set<string>>(
-    () => new Set(CATALOG_GROUPS.length ? [CATALOG_GROUPS[0]] : []),
-  );
-  const [showJson, setShowJson] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [zoom, setZoom] = useState(100);
-  const [pvKey, setPvKey] = useState(0);
+  const [selected, setSelected] = useState<number | null>(null);
   const [toast, setToast] = useState<{
     tone: "success" | "error";
     text: string;
@@ -617,7 +573,6 @@ export default function TemplateBuilder({ template }: Props) {
     [blueprint.components],
   );
 
-  const previewHtml = useMemo(() => buildPreviewHtml(blueprint), [blueprint]);
   const blueprintJson = useMemo(
     () => JSON.stringify(blueprint, null, 2),
     [blueprint],
@@ -632,9 +587,19 @@ export default function TemplateBuilder({ template }: Props) {
         category,
         tagsText,
         isActive,
+        previewSampleHtml,
         blueprint,
       }),
-    [name, slug, description, category, tagsText, isActive, blueprint],
+    [
+      name,
+      slug,
+      description,
+      category,
+      tagsText,
+      isActive,
+      previewSampleHtml,
+      blueprint,
+    ],
   );
   const baselineRef = useRef(snapshot);
   const dirty = snapshot !== baselineRef.current;
@@ -680,9 +645,6 @@ export default function TemplateBuilder({ template }: Props) {
     if (!slug) setSlug(slugify(value));
   };
 
-  const patchPage = (patch: Partial<TemplatePageSettings>) =>
-    setBlueprint((b) => ({ ...b, page: { ...b.page, ...patch } }));
-
   const patchComponent = (index: number, patch: Partial<TemplateComponent>) =>
     setBlueprint((b) => ({
       ...b,
@@ -690,6 +652,40 @@ export default function TemplateBuilder({ template }: Props) {
         i === index ? { ...c, ...patch } : c,
       ),
     }));
+
+  const patchPage = (patch: Partial<TemplatePageSettings>) =>
+    setBlueprint((b) => ({ ...b, page: { ...b.page, ...patch } }));
+
+  const addComponent = () => {
+    setBlueprint((b) => ({
+      ...b,
+      components: [
+        ...b.components,
+        {
+          key: "",
+          name: "",
+          description: "",
+          guidance: "",
+          required: false,
+          html: "",
+          css: "",
+          tags: [],
+          group: "Custom",
+        },
+      ],
+    }));
+    setSelected(components.length);
+  };
+
+  const removeComponent = (index: number) => {
+    setBlueprint((b) => ({
+      ...b,
+      components: b.components.filter((_, i) => i !== index),
+    }));
+    setSelected((cur) =>
+      cur === index ? null : cur === null ? null : cur > index ? cur - 1 : cur,
+    );
+  };
 
   const patchRequirement = (index: number, value: string) =>
     setBlueprint((b) => ({
@@ -706,44 +702,21 @@ export default function TemplateBuilder({ template }: Props) {
       requirements: b.requirements.filter((_, i) => i !== index),
     }));
 
-  const copyJson = async () => {
-    try {
-      await navigator.clipboard.writeText(blueprintJson);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard unavailable — ignore.
-    }
-  };
-
   const back = () => router.push("/dashboard/templates");
 
-  const openPreviewTab = async () => {
-    try {
-      const blob = new Blob([previewHtml], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener");
-    } catch {
-      // Ignore popup blockers.
-    }
-  };
-
-  /** Group the normalized fixed components by catalog group. */
+  /** Group the user-supplied components by their own `group` (default "Custom"). */
   const groups = useMemo(() => {
-    const list: { group: string; items: TemplateComponent[] }[] = [];
-    for (const group of CATALOG_GROUPS) {
-      const keys = CATALOG_COMPONENTS.filter((c) => c.group === group).map(
-        (c) => c.key,
-      );
-      const items = keys
-        .map((key) => components.find((c) => c.key === key))
-        .filter((c): c is TemplateComponent => Boolean(c));
-      if (items.length) list.push({ group, items });
+    const order: string[] = [];
+    const byGroup = new Map<string, TemplateComponent[]>();
+    for (const c of components) {
+      const group = c.group || "Custom";
+      if (!byGroup.has(group)) {
+        byGroup.set(group, []);
+        order.push(group);
+      }
+      byGroup.get(group)!.push(c);
     }
-    const known = new Set(CATALOG_COMPONENTS.map((c) => c.key));
-    const others = components.filter((c) => !known.has(c.key));
-    if (others.length) list.push({ group: "Other", items: others });
-    return list;
+    return order.map((group) => ({ group, items: byGroup.get(group)! }));
   }, [components]);
 
   const searching = query.trim().length > 0;
@@ -757,21 +730,12 @@ export default function TemplateBuilder({ template }: Props) {
     if (!searching) return groups;
     const q = query.trim().toLowerCase();
     return groups
-      .map((g) => ({ ...g, items: g.items.filter((c) => matchesComponent(c, q)) }))
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((c) => matchesComponent(c, q)),
+      }))
       .filter((g) => g.items.length);
   }, [groups, query, searching]);
-
-  const toggleGroup = (group: string) =>
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(group)) next.delete(group);
-      else next.add(group);
-      return next;
-    });
-
-  const allOpen = groups.length > 0 && groups.every((g) => openGroups.has(g.group));
-  const toggleAllGroups = () =>
-    setOpenGroups(allOpen ? new Set() : new Set(groups.map((g) => g.group)));
 
   const requiredCount = components.filter((c) => c.required).length;
   const onFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
@@ -782,15 +746,21 @@ export default function TemplateBuilder({ template }: Props) {
   };
 
   return (
-    <form
-      action={formAction}
-      onKeyDown={onFormKeyDown}
-      className="w-full"
-    >
+    <form action={formAction} onKeyDown={onFormKeyDown} className="w-full">
       <input type="hidden" name="id" value={template?.id ?? ""} />
       <input type="hidden" name="category" value={category} />
-      <input type="hidden" name="is_active" value={isActive ? "true" : "false"} />
+      <input
+        type="hidden"
+        name="is_active"
+        value={isActive ? "true" : "false"}
+      />
       <input type="hidden" name="blueprint" value={JSON.stringify(blueprint)} />
+      <input type="hidden" name="preview_html" value={previewSampleHtml} />
+      {/* Always-present so saves work from any tab (panels unmount per view). */}
+      <input type="hidden" name="name" value={name} />
+      <input type="hidden" name="slug" value={slug} />
+      <input type="hidden" name="description" value={description} />
+      <input type="hidden" name="tags" value={tagsText} />
 
       {/* Sticky action bar */}
       <div className="sticky top-0 z-20 -mx-6 mb-6 border-b border-border/60 bg-background/85 px-6 py-3 backdrop-blur-sm">
@@ -858,554 +828,467 @@ export default function TemplateBuilder({ template }: Props) {
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[190px_minmax(0,1fr)_340px]">
-        {/* Section navigation rail */}
-        <aside className="hidden xl:block">
-          <nav className="sticky top-16 space-y-1">
-            {VIEWS.map((v) => {
-              const Icon = v.icon;
-              const active = view === v.id;
-              const badge =
-                v.id === "components"
-                  ? components.length
-                  : v.id === "requirements"
-                    ? blueprint.requirements.length
-                    : undefined;
-              return (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => setView(v.id)}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
-                    active
-                      ? "bg-primary/10 font-medium text-foreground"
-                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "size-4",
-                      active ? "text-primary" : "text-muted-foreground",
-                    )}
-                  />
-                  <span className="flex-1 text-left">{v.label}</span>
-                  {badge !== undefined && (
-                    <span
-                      className={cn(
-                        "rounded-full px-1.5 py-px text-[10px] font-medium",
-                        active
-                          ? "bg-primary/15 text-primary"
-                          : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-
-            <div className="rounded-xl border border-border bg-card p-3 pt-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Blocks</span>
-                <span className="font-semibold">{components.length}</span>
-              </div>
-              <div className="mt-1.5 flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Required</span>
-                <span className="font-semibold text-primary">{requiredCount}</span>
-              </div>
-              <div className="mt-1.5 flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Groups</span>
-                <span>{groups.length}</span>
-              </div>
-              <div className="mt-1.5 flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Status</span>
-                <span
-                  className={
-                    isActive ? "font-medium text-emerald-400" : "text-muted-foreground"
-                  }
-                >
-                  {isActive ? "Active" : "Inactive"}
-                </span>
-              </div>
-            </div>
-          </nav>
-        </aside>
-
-        {/* Main editor content */}
-        <div className="min-w-0 space-y-5">
-          {/* Mobile tab strip */}
-          <div className="mb-1 flex items-center gap-1 overflow-x-auto pb-1 xl:hidden">
-            {VIEWS.map((v) => {
-              const Icon = v.icon;
-              const active = view === v.id;
-              return (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => setView(v.id)}
-                  className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
-                    active
-                      ? "bg-primary/10 text-foreground"
-                      : "text-muted-foreground hover:bg-muted/60",
-                  )}
-                >
-                  <Icon className="size-3.5" />
-                  {v.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {view === "details" && (
-            <Panel
-              title="Template details"
-              hint="Metadata, classification and publish state. The name and slug identify the template; tags help agents search for it."
-            >
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Name">
-                  <Input
-                    name="name"
-                    value={name}
-                    onChange={(e) => handleName(e.target.value)}
-                    placeholder="Business report"
-                  />
-                </Field>
-                <Field label="Slug">
-                  <Input
-                    name="slug"
-                    value={slug}
-                    onChange={(e) => setSlug(slugify(e.target.value))}
-                    placeholder="business-report"
-                  />
-                </Field>
-              </div>
-              <Field label="Description">
-                <Textarea
-                  name="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  placeholder="What is this template for?"
-                />
-              </Field>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Category">
-                  <Select
-                    value={category}
-                    onValueChange={(v) => setCategory(v ?? "")}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue>
-                        {(value) =>
-                          value ? String(value) : "Select a category…"
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TEMPLATE_CATEGORIES.map((c) => (
-                        <SelectItem key={c} value={c} label={c}>
-                          {c}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Tags">
-                  <Input
-                    name="tags"
-                    value={tagsText}
-                    onChange={(e) => setTagsText(e.target.value)}
-                    placeholder="report, business, analytics"
-                  />
-                </Field>
-              </div>
-              <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-background/40 p-4">
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Active template
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground/70">
-                    Visible and selectable by agents when generating documents.
-                  </p>
-                </div>
-                <Switch
-                  checked={isActive}
-                  onCheckedChange={setIsActive}
-                  label="Active template"
-                />
-              </div>
-            </Panel>
-          )}
-
-          {view === "page" && (
-            <Panel
-              title="Page design"
-              hint="Global page constraints applied to the generated document — format, available width, margins and the document background."
-            >
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Format">
-                  <Select
-                    value={blueprint.page.format}
-                    onValueChange={(v) => patchPage({ format: v ?? "A4" })}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue>
-                        {(value) => (value ? String(value) : "A4")}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAGE_FORMATS.map((f) => (
-                        <SelectItem key={f} value={f} label={f}>
-                          {f}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Content width">
-                  <Input
-                    value={blueprint.page.content_width}
-                    onChange={(e) =>
-                      patchPage({ content_width: e.target.value })
-                    }
-                    placeholder="794px"
-                  />
-                </Field>
-                <Field label="Margin">
-                  <Input
-                    value={blueprint.page.margin}
-                    onChange={(e) => patchPage({ margin: e.target.value })}
-                    placeholder="2.5rem"
-                  />
-                </Field>
-                <Field label="Body background">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={blueprint.page.body_background}
-                      onChange={(e) =>
-                        patchPage({ body_background: e.target.value })
-                      }
-                      className="h-9 w-12 cursor-pointer rounded-md border border-input bg-transparent p-1"
-                    />
-                    <Input
-                      value={blueprint.page.body_background}
-                      onChange={(e) =>
-                        patchPage({ body_background: e.target.value })
-                      }
-                      placeholder="#ffffff"
-                    />
-                  </div>
-                </Field>
-              </div>
-            </Panel>
-          )}
-
-          {view === "components" && (
-            <Panel
-              title="Component blocks"
-              hint="Fixed reusable blocks every template ships with. Each block carries an HTML structure, CSS design and guidance so agents know when — and how — to use it."
-            >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search blocks by name, tag or key…"
-                    className="pl-8"
-                  />
-                  {query && (
-                    <button
-                      type="button"
-                      aria-label="Clear search"
-                      onClick={() => setQuery("")}
-                      className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleAllGroups}
-                  disabled={searching}
-                >
-                  {allOpen && !searching ? "Collapse all" : "Expand all"}
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span>{components.length} blocks</span>
-                <span className="text-border">•</span>
-                <span>{requiredCount} required</span>
-                <span className="text-border">•</span>
-                <span>{groups.length} groups</span>
-              </div>
-
-              <div className="space-y-3 pt-1">
-                {filteredGroups.map(({ group, items }) => (
-                  <div
-                    key={group}
-                    className={cn(
-                      "overflow-hidden rounded-2xl border border-border bg-card",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(group)}
-                      className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-accent/40"
-                    >
-                      <span
-                        className="size-2 shrink-0 rounded-full"
-                        style={{
-                          background:
-                            GROUP_COLORS[group] ?? GROUP_COLORS.Other,
-                        }}
-                      />
-                      <span className="text-sm font-semibold">{group}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {items.length} blocks
-                        {items.some((c) => c.required) &&
-                          ` · ${items.filter((c) => c.required).length} required`}
-                      </span>
-                      <ChevronDown
-                        className={cn(
-                          "ml-auto size-4 text-muted-foreground transition-transform",
-                          (searching || openGroups.has(group)) && "rotate-180",
-                        )}
-                      />
-                    </button>
-                    {(searching || openGroups.has(group)) && (
-                      <div className="space-y-2.5 border-t border-border/70 p-2.5">
-                        {items.map((c) => {
-                          const index = components.indexOf(c);
-                          return (
-                            <ComponentCard
-                              key={c.key}
-                              c={c}
-                              index={index}
-                              onPatch={patchComponent}
-                              color={
-                                GROUP_COLORS[group] ?? GROUP_COLORS.Other
-                              }
-                              defaultOpen={group === CATALOG_GROUPS[0]}
-                            />
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {searching && filteredGroups.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-border p-6 text-center">
-                    <Search className="mx-auto size-5 text-muted-foreground/50" />
-                    <p className="mt-2 text-sm font-medium text-foreground">
-                      No blocks match “{query}”
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground/70">
-                      Try a tag, name or key like “card” or “h1”.
-                    </p>
-                  </div>
+      <div className="space-y-5">
+        {/* Section tab strip */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+          {VIEWS.map((v) => {
+            const Icon = v.icon;
+            const active = view === v.id;
+            const badge =
+              v.id === "components"
+                ? components.length
+                : v.id === "requirements"
+                  ? blueprint.requirements.length
+                  : undefined;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setView(v.id)}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-primary/10 text-foreground"
+                    : "text-muted-foreground hover:bg-muted/60",
                 )}
-              </div>
-
-              <p className="flex items-start gap-1.5 pt-1 text-xs text-muted-foreground/70">
-                <Info className="mt-0.5 size-3.5 shrink-0" />
-                This is the fixed component set — all {components.length} blocks
-                are included in every template. Keys stay stable so saved
-                documents keep working; edit designs per template.
-              </p>
-            </Panel>
-          )}
-
-          {view === "structure" && (
-            <Panel
-              title="Response structure"
-              hint="The overall HTML document agents use to assemble their response. Put a <!--content--> placeholder where the component blocks get injected."
-            >
-              <CodeEditor
-                language="html"
-                viewportClass="h-72"
-                value={blueprint.structure}
-                onChange={(v) =>
-                  setBlueprint({ ...blueprint, structure: v })
-                }
-                placeholder="<!DOCTYPE html>…"
-              />
-            </Panel>
-          )}
-
-          {view === "requirements" && (
-            <Panel
-              title="Requirements"
-              hint="Global constraints the agent must follow when assembling the document — fonts, dependencies, tone, structure rules."
-            >
-              {blueprint.requirements.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border p-6 text-center">
-                  <ListChecks className="mx-auto size-5 text-muted-foreground/50" />
-                  <p className="mt-2 text-sm font-medium text-foreground">
-                    No requirements yet
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground/70">
-                    Add rules the agent must always follow, e.g. no external
-                    fonts or network dependencies.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {blueprint.requirements.map((r, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <Input
-                        value={r}
-                        onChange={(e) => patchRequirement(i, e.target.value)}
-                        className="flex-1"
-                        placeholder="e.g. No external fonts or network dependencies"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => removeRequirement(i)}
-                        aria-label="Remove requirement"
-                        className="shrink-0 text-destructive"
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <Button type="button" variant="outline" onClick={addRequirement}>
-                <Plus className="size-3.5" /> Add requirement
-              </Button>
-            </Panel>
-          )}
+              >
+                <Icon className="size-4" />
+                {v.label}
+                {badge !== undefined && (
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-px text-[10px] font-medium",
+                      active
+                        ? "bg-primary/15 text-primary"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Live preview rail */}
-        <aside className="space-y-4 xl:sticky xl:top-16 xl:self-start">
-          <div className="overflow-hidden rounded-2xl border border-border bg-card">
-            <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Live preview
-              </span>
-              <div className="flex items-center gap-1">
-                <select
-                  value={zoom}
-                  onChange={(e) => setZoom(Number(e.target.value))}
-                  aria-label="Preview zoom"
-                  className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs text-muted-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  {[50, 75, 100, 125, 150].map((z) => (
-                    <option key={z} value={z}>
-                      {z}%
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setPvKey((k) => k + 1)}
-                  aria-label="Refresh preview"
-                  className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <RotateCw className="size-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={openPreviewTab}
-                  aria-label="Open preview in new tab"
-                  className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <ExternalLink className="size-3.5" />
-                </button>
-              </div>
+        {/* Main editor content */}
+        {view === "details" && (
+          <Panel
+            title="Template details"
+            hint="Metadata, classification and publish state. The name and slug identify the template; tags help agents search for it."
+          >
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Name">
+                <Input
+                  name="name"
+                  value={name}
+                  onChange={(e) => handleName(e.target.value)}
+                  placeholder="Business report"
+                />
+              </Field>
+              <Field label="Slug">
+                <Input
+                  name="slug"
+                  value={slug}
+                  onChange={(e) => setSlug(slugify(e.target.value))}
+                  placeholder="business-report"
+                />
+              </Field>
             </div>
-            <div
-              className="overflow-auto bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.05)_1px,transparent_0)] bg-[size:16px_16px]"
-              style={{ height: Math.round((540 * zoom) / 100) }}
+            <Field label="Description">
+              <Textarea
+                name="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                placeholder="What is this template for?"
+              />
+            </Field>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Category">
+                <Select
+                  value={category}
+                  onValueChange={(v) => setCategory(v ?? "")}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {(value) =>
+                        value ? String(value) : "Select a category…"
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TEMPLATE_CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c} label={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Tags">
+                <Input
+                  name="tags"
+                  value={tagsText}
+                  onChange={(e) => setTagsText(e.target.value)}
+                  placeholder="report, business, analytics"
+                />
+              </Field>
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-background/40 p-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Active template
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground/70">
+                  Visible and selectable by agents when generating documents.
+                </p>
+              </div>
+              <Switch
+                checked={isActive}
+                onCheckedChange={setIsActive}
+                label="Active template"
+              />
+            </div>
+          </Panel>
+        )}
+
+        {view === "page" && (
+          <Panel
+            title="Page design"
+            hint="Global page constraints applied to the generated document. Set the format and content width above, then paste any custom page CSS (width, height, margin, padding, background) into the box below — it is saved to the template and applied to the generated document."
+          >
+            <div className="space-y-6">
+              <section className="space-y-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Page metrics
+                </h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Format">
+                    <Select
+                      value={blueprint.page.format}
+                      onValueChange={(v) => patchPage({ format: v ?? "A4" })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue>
+                          {(value) => (value ? String(value) : "A4")}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAGE_FORMATS.map((f) => (
+                          <SelectItem key={f} value={f} label={f}>
+                            {f}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Content width">
+                    <Input
+                      value={blueprint.page.content_width}
+                      onChange={(e) =>
+                        patchPage({ content_width: e.target.value })
+                      }
+                      placeholder="794px"
+                    />
+                  </Field>
+                </div>
+              </section>
+
+              <section className="space-y-4 border-t border-border pt-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Page CSS
+                </h3>
+                <Field
+                  label="Page styles"
+                  hint="Paste raw CSS applied to the page (html/body) — width, height, margin, padding, background, etc. Saved to the template and applied to the generated document."
+                >
+                  <Textarea
+                    value={blueprint.page.css}
+                    onChange={(e) => patchPage({ css: e.target.value })}
+                    placeholder={"html {\n  width: 210mm;\n  height: 297mm;\n}\nbody {\n  margin: 0;\n  padding: 2.5rem;\n  background: #ffffff;\n  color: #1f2937;\n}"}
+                    className="min-h-40 font-mono text-xs"
+                    spellCheck={false}
+                  />
+                </Field>
+              </section>
+            </div>
+          </Panel>
+        )}
+
+        {view === "components" && (
+          <Panel
+            title="Component blocks"
+            hint="Reusable building blocks the template ships with. Select a block below to edit it — each carries an HTML structure, CSS design and guidance so agents know when and how to use it."
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search blocks by name, tag or key…"
+                  className="pl-8"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => setQuery("")}
+                    className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
+              </div>
+              <Button type="button" size="sm" onClick={addComponent}>
+                <Plus className="size-3.5" /> Add block
+              </Button>
+            </div>
+
+            {filteredGroups.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-10 text-center">
+                <Blocks className="mx-auto size-7 text-muted-foreground/50" />
+                <p className="mt-3 text-sm font-medium text-foreground">
+                  {searching ? "No blocks match" : "No blocks yet"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground/70">
+                  {searching
+                    ? `Try a tag, name or key like “card”.`
+                    : "Add your first block to get started."}
+                </p>
+                {!searching && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                    onClick={addComponent}
+                  >
+                    <Plus className="size-3.5" /> Add block
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-5">
+                {/* Block grid */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredGroups.flatMap(({ group, items }) =>
+                    items.map((c) => {
+                      const index = components.indexOf(c);
+                      const color = GROUP_COLORS[group] ?? GROUP_COLORS.Other;
+                      return (
+                        <div
+                          key={`${group}-${index}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setSelected(index)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setSelected(index);
+                            }
+                          }}
+                          className={cn(
+                            "group flex cursor-pointer flex-col gap-2 rounded-xl border p-3.5 transition-colors",
+                            selected === index
+                              ? "border-primary/50 bg-primary/10"
+                              : "border-border bg-background/40 hover:border-border hover:bg-muted/40",
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="size-2 shrink-0 rounded-full"
+                              style={{ background: color }}
+                            />
+                            <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                              {c.name || "Untitled block"}
+                            </p>
+                            <button
+                              type="button"
+                              aria-label="Remove block"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeComponent(index);
+                              }}
+                              className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                            >
+                              <X className="size-3.5" />
+                            </button>
+                          </div>
+                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                            {c.key || "—"}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {c.required && (
+                              <span className="rounded-full bg-emerald-400/10 px-1.5 py-px text-[10px] font-medium text-emerald-400">
+                                Required
+                              </span>
+                            )}
+                            {c.tags.slice(0, 3).map((t) => (
+                              <span
+                                key={t}
+                                className="rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground"
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }),
+                  )}
+                </div>
+
+                {/* Selected block editor (full width) */}
+                <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+                  <div className="mb-4 flex items-center gap-2 border-b border-border pb-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Editing block
+                    </span>
+                    {selected !== null && components[selected] && (
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {components[selected].name || "Untitled block"}
+                      </span>
+                    )}
+                  </div>
+                  {selected !== null && components[selected] ? (
+                    <ComponentEditor
+                      c={components[selected]}
+                      index={selected}
+                      onPatch={patchComponent}
+                    />
+                  ) : (
+                    <div className="flex min-h-[200px] flex-col items-center justify-center text-center">
+                      <LayoutTemplate className="size-7 text-muted-foreground/40" />
+                      <p className="mt-3 text-sm font-medium text-foreground">
+                        Select a block
+                      </p>
+                      <p className="mt-1 max-w-xs text-xs text-muted-foreground/70">
+                        Choose a block above to edit its content, design and
+                        agent guidance.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </Panel>
+        )}
+
+        {view === "structure" && (
+          <Panel
+            title="Response structure"
+            hint="The overall HTML document agents use to assemble their response. Put a <!--content--> placeholder where the component blocks get injected."
+          >
+            <CodeEditor
+              language="html"
+              viewportClass="h-72"
+              value={blueprint.structure}
+              onChange={(v) => setBlueprint({ ...blueprint, structure: v })}
+              placeholder="<!DOCTYPE html>…"
+            />
+          </Panel>
+        )}
+
+        {view === "requirements" && (
+          <Panel
+            title="Requirements"
+            hint="Global constraints the agent must follow when assembling the document — fonts, dependencies, tone, structure rules."
+          >
+            {blueprint.requirements.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-6 text-center">
+                <ListChecks className="mx-auto size-5 text-muted-foreground/50" />
+                <p className="mt-2 text-sm font-medium text-foreground">
+                  No requirements yet
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground/70">
+                  Add rules the agent must always follow, e.g. no external fonts
+                  or network dependencies.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {blueprint.requirements.map((r, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input
+                      value={r}
+                      onChange={(e) => patchRequirement(i, e.target.value)}
+                      className="flex-1"
+                      placeholder="e.g. No external fonts or network dependencies"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => removeRequirement(i)}
+                      aria-label="Remove requirement"
+                      className="shrink-0 text-destructive"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button type="button" variant="outline" onClick={addRequirement}>
+              <Plus className="size-3.5" /> Add requirement
+            </Button>
+          </Panel>
+        )}
+
+        {view === "preview" && (
+          <Panel
+            title="Preview sample"
+            hint="A self-contained sample HTML document assembled from this template's components. Shown in the admin library and exposed to the MCP server so users can preview the template before generating a document."
+          >
+            <Field
+              label="Sample HTML"
+              hint="Full HTML document (with embedded <style>). If left blank, the live blueprint preview on the right is used as the template's sample."
             >
-              <div
-                style={{
-                  width: `${10000 / zoom}%`,
-                  transform: `scale(${zoom / 100})`,
-                  transformOrigin: "top left",
-                }}
+              <Textarea
+                name="preview_html"
+                value={previewSampleHtml}
+                onChange={(e) => setPreviewSampleHtml(e.target.value)}
+                rows={10}
+                className="font-mono text-xs"
+                placeholder={"<!DOCTYPE html>\n<html>…</html>"}
+              />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setPreviewSampleHtml(buildPreviewHtml(blueprint))
+                }
               >
+                <Sparkles className="size-3.5" /> Generate from blueprint
+              </Button>
+              {previewSampleHtml && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPreviewSampleHtml("")}
+                >
+                  <X className="size-3.5" /> Clear
+                </Button>
+              )}
+            </div>
+            {previewSampleHtml && (
+              <div className="mt-1 overflow-hidden rounded-xl border border-border">
                 <iframe
-                  key={pvKey}
-                  title="Template preview"
-                  srcDoc={previewHtml}
-                  className="h-[540px] w-full bg-card"
+                  title="Sample preview"
+                  srcDoc={previewSampleHtml}
+                  className="h-[420px] w-full bg-white"
                   sandbox=""
                 />
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-3 py-2">
-              {[
-                blueprint.page.format,
-                blueprint.page.content_width,
-                blueprint.page.margin,
-                `${components.length} blocks`,
-              ].map((chip, i) => (
-                <span
-                  key={i}
-                  className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-                >
-                  {chip}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-card">
-            <div className="flex items-center justify-between border-b border-border px-3 py-2">
-              <button
-                type="button"
-                onClick={() => setShowJson((s) => !s)}
-                className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <Braces className="size-3.5" />
-                Blueprint JSON
-                <ChevronDown
-                  className={cn(
-                    "size-3.5 transition-transform",
-                    showJson && "rotate-180",
-                  )}
-                />
-              </button>
-              {showJson && (
-                <span className="flex items-center gap-2">
-                  {copied && (
-                    <span className="text-[11px] font-medium text-emerald-400">
-                      Copied!
-                    </span>
-                  )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={copyJson}
-                    aria-label="Copy blueprint JSON"
-                  >
-                    <Copy className="size-3.5" />
-                  </Button>
-                </span>
-              )}
-            </div>
-            {showJson && (
-              <pre className="max-h-72 overflow-auto bg-background/60 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
-                {blueprintJson}
-              </pre>
             )}
-          </div>
-        </aside>
+          </Panel>
+        )}
       </div>
 
       {/* Toast */}

@@ -12,8 +12,8 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import type { UserProfile } from "@/lib/data/users";
 import { PropertiesSidebar } from "./PropertiesSidebar";
 import { BottomComponentDock } from "./BottomComponentDock";
-import { getTemplate } from "@/lib/data/templates";
 import type { ComponentGroup } from "@/lib/data/types";
+import type { TemplateRow } from "@/lib/data/template-db-types";
 import {
   saveDocumentContent,
   createDocumentFromHtml,
@@ -23,7 +23,10 @@ import type { Document } from "@/lib/types";
 interface PreviewEditorProps {
   initialDocument?: Document | null;
   initialTemplateSlug?: string | null;
+  /** Initial HTML for a template draft (the template's preview_html). */
+  initialHtml?: string | null;
   documents?: Document[];
+  templates?: TemplateRow[];
   profile?: UserProfile | null;
   /** Grouped template components loaded from the database. */
   componentGroups?: ComponentGroup[];
@@ -32,7 +35,9 @@ interface PreviewEditorProps {
 export function PreviewEditor({
   initialDocument = null,
   initialTemplateSlug = null,
+  initialHtml = null,
   documents = [],
+  templates = [],
   profile = null,
   componentGroups = [],
 }: PreviewEditorProps) {
@@ -48,17 +53,11 @@ export function PreviewEditor({
     initialDocument?.id ?? null,
   );
   // Title is fixed per loaded document (no inline rename in this scope).
-  const [docTitle] = useState<string>(
-    initialDocument?.title ??
-      getTemplate(initialTemplateSlug ?? "")?.name ??
-      "Untitled",
-  );
+  const [docTitle] = useState<string>(initialDocument?.title ?? "Untitled");
   // HTML source is fixed per load; edits live inside the iframe and are
   // captured on Save via getFullHtml().
   const [html] = useState<string | null>(
-    initialDocument?.html_code ??
-      getTemplate(initialTemplateSlug ?? "")?.html ??
-      null,
+    initialDocument?.html_code ?? initialHtml ?? null,
   );
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -434,6 +433,7 @@ export function PreviewEditor({
           <div className="w-60 h-full border-r border-[#2d2d2d]">
             <Sidebar
               documents={documents}
+              templates={templates}
               query={query}
               onQueryChange={setQuery}
               profile={profile}

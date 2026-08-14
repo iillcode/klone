@@ -593,28 +593,141 @@ const EMAIL_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-export interface Template {
-  id: string;
-  name: string;
-  html: string;
+/**
+ * NOTE: The starter templates previously hardcoded in this file
+ * (`TEMPLATES`) have been replaced by real `pdf_templates` rows loaded from
+ * the database (see `lib/data/templates-db.ts`). The editor still uses the
+ * `buildHtml` / `dark` / `light` exports below to render an empty-canvas
+ * fallback, which is why this module still exists.
+ */
+
+/* ── User template → system shell normalization ──
+ * A user template (e.g. a `pdf_templates.preview_html` row) is a COMPLETE
+ * HTML document authored with its own <html>/<head>/<body> chrome. The Klone
+ * editor only knows how to render inside its COMMON render space — a
+ * non-selectable `.scroll-wrapper` page frame sitting on the editor canvas.
+ * So when loading a user template we TRIM the user's document wrapper and
+ * re-host their actual design (their <style>/<link> + body content) inside
+ * our shared system shell. The shell (html/head/body/.scroll-wrapper) is
+ * editor chrome and is never selectable/draggable; only the user content
+ * under it is editable, and only in inspect mode. */
+
+/** Canvas + scroll-wrapper base shared by every rendered document.
+ *  The `.scroll-wrapper` is the SCROLL CONTAINER (the editor reads its
+ *  scrollTop/scrollHeight via getScrollState). It must be height:100% +
+ *  overflow-y:auto so the canvas can scroll to the bottom of a tall page.
+ *  A user template's own page box (min-height:1123px; padding:94px;
+ *  margin:40px auto) lives on the inner .klone-render-space, which is
+ *  remapped from the template's `body{}` rule — so it stays a full A4 page
+ *  INSIDE the scroll container instead of being clipped, and scrolls. */
+const SYSTEM_RESET_CSS = `
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { overflow: hidden; height: 100%; }
+  body { background: #161617; font-family: system-ui, -apple-system, sans-serif; }
+  .scroll-wrapper { height: 100%; overflow-y: auto; }
+  .scroll-wrapper::-webkit-scrollbar { width: 10px; }
+  .scroll-wrapper::-webkit-scrollbar-track { background: transparent; }
+  .scroll-wrapper::-webkit-scrollbar-thumb { background-color: #3f3f46; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+`;
+
+/** Rewrite standalone `body` selectors so a user template's page-level
+ *  <body> styling (width, padding, background, position, …) applies to our
+ *  system render space (.klone-render-space) instead of the editor canvas
+ *  <body>. `html`/`.klone-render-space` rules and everything else are left
+ *  untouched — class/element names containing "body" (e.g. `.body-text`)
+ *  are never matched. Pure string/RegExp (no DOM) so it produces identical
+ *  output on the server and the client (avoids a hydration mismatch). */
+function remapBodySelector(css: string): string {
+  return css
+    .split("}")
+    .map((rule) => {
+      const brace = rule.indexOf("{");
+      if (brace === -1) return rule; // not a real rule (e.g. trailing text)
+      const sel = rule.slice(0, brace);
+      const rest = rule.slice(brace);
+      const newSel = sel.replace(
+        /(^|[\s,>+~(])(body)(?=[\s,>+~)]|$)/gi,
+        "$1.klone-render-space",
+      );
+      return newSel + rest;
+    })
+    .join("}");
 }
 
-/** Templates keyed by their route slug (used by LandingCards + preview/[id]). */
-export const TEMPLATES: Record<string, Template> = {
-  blank: { id: "blank", name: "Blank HTML", html: BLANK_HTML },
-  "api-docs": { id: "api-docs", name: "API Docs", html: buildHtml(dark) },
-  "landing-page": {
-    id: "landing-page",
-    name: "Landing Page",
-    html: LANDING_HTML,
-  },
-  email: { id: "email", name: "Email Template", html: EMAIL_HTML },
-};
+/**
+ * Normalize a raw user-template HTML document for the Klone editor:
+ *  - strips the user's <html>/<head>/<body> wrapper,
+ *  - keeps their <style>/<link> + body content (so the design renders),
+ *  - hosts it inside our common, non-selectable `.scroll-wrapper` shell.
+ * The shell (html/head/body/.scroll-wrapper) is editor chrome and is never
+ * selectable/draggable; only the user content under it is editable, and
+ * only in inspect mode.
+ *
+ * Uses pure string parsing (no DOMParser) so the SAME normalized HTML is
+ * produced on the server and the client — the iframe `srcDoc` is therefore
+ * identical before and after hydration, and the editor renders the trimmed
+ * template from the very first paint.
+ *
+ * Idempotent: a document that is already our system shell is returned
+ * unchanged (prevents nested wrappers on reload/save round-trips).
+ */
+export function normalizeTemplateHtml(rawHtml: string): string {
+  if (!rawHtml || !rawHtml.trim()) return rawHtml;
 
-export function getTemplate(slug: string): Template | undefined {
-  return TEMPLATES[slug];
-}
+  // Already wrapped in our system shell — don't double-wrap.
+  if (
+    /<body[^>]*>\s*<div[^>]*class="[^"]*\bscroll-wrapper\b[\s\S]*?<\/body>/i.test(
+      rawHtml,
+    ) ||
+    /data-klone-system-frame/i.test(rawHtml)
+  ) {
+    return rawHtml;
+  }
 
-export function isTemplateSlug(slug: string): boolean {
-  return Object.prototype.hasOwnProperty.call(TEMPLATES, slug);
+  // Extract <head> inner content (inline <style> + <link> stylesheets).
+  // Tolerant of missing/truncated closing tags: if there's no </head>, take
+  // everything from <head> up to the first <body> (the head always precedes
+  // the body). User template HTML saved without closing tags (e.g. a
+  // truncated `html_code` row) is parsed the same way.
+  let headInner = "";
+  const headOpen = rawHtml.match(/<head[^>]*>/i);
+  if (headOpen) {
+    const start = headOpen.index! + headOpen[0].length;
+    const end = rawHtml.indexOf("</head>", start);
+    const bodyAt = rawHtml.indexOf("<body", start);
+    const stop = end !== -1 ? end : bodyAt !== -1 ? bodyAt : rawHtml.length;
+    headInner = rawHtml.slice(start, stop);
+  }
+  const headAssets =
+    headInner
+      .match(/<style[\s\S]*?<\/style>|<link\b[^>]*>/gi) // inline styles + external links
+      ?.join("\n") ?? "";
+  const remappedHead = remapBodySelector(headAssets);
+
+  // Extract the user's <body> inner content (their actual design). Tolerant
+  // of a missing </body>: if absent (truncated template HTML), everything
+  // after <body> to the end of the string is the content.
+  const bodyOpen = rawHtml.match(/<body[^>]*>/i);
+  if (!bodyOpen) return rawHtml; // no body → nothing to render
+  const bodyStart = bodyOpen.index! + bodyOpen[0].length;
+  const bodyEnd = rawHtml.indexOf("</body>", bodyStart);
+  const bodyContent =
+    bodyEnd !== -1
+      ? rawHtml.slice(bodyStart, bodyEnd)
+      : rawHtml.slice(bodyStart);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>${SYSTEM_RESET_CSS}</style>
+  ${remappedHead}
+</head>
+<body>
+  <div class="scroll-wrapper klone-render-space" data-klone-system-frame>
+${bodyContent}
+  </div>
+</body>
+</html>`;
 }

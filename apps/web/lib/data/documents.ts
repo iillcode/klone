@@ -63,13 +63,14 @@ export async function createDocument(input: {
   const session = await getSession();
   if (!session) return null;
 
+  const supabase = await createServerClient();
+
   // Resolve the template id from the slug when only a slug is known (e.g. a
   // direct /preview/<slug> visit being saved as a new document). This keeps
-  // the document linked to its template so the editor can later load that
-  // template's component blocks.
+  // the component blocks.
   let templateId = input.template_id ?? null;
   if (!templateId && input.template_slug) {
-    const { data: tpl } = await createServerClient()
+    const { data: tpl } = await supabase
       .from("pdf_templates")
       .select("id")
       .eq("slug", input.template_slug)
@@ -77,7 +78,6 @@ export async function createDocument(input: {
     templateId = (tpl?.id as string | undefined) ?? null;
   }
 
-  const supabase = await createServerClient();
   const { data, error } = await supabase
     .from("visual_implementations")
     .insert({
@@ -115,6 +115,26 @@ export async function updateDocumentContent(
 
   if (error) {
     console.error("[documents] updateDocumentContent:", error.message);
+    return false;
+  }
+
+  return true;
+}
+
+/** Delete a document owned by the current user. Returns success. */
+export async function deleteDocument(id: string): Promise<boolean> {
+  const session = await getSession();
+  if (!session) return false;
+
+  const supabase = await createServerClient();
+  const { error } = await supabase
+    .from("visual_implementations")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", session.userId);
+
+  if (error) {
+    console.error("[documents] deleteDocument:", error.message);
     return false;
   }
 

@@ -254,6 +254,9 @@ function getPageBoundaryEls(){
 }
 
 function getContentContainer(){
+  // Prefer the rendered user content space (user templates host their
+  // design inside a .scroll-wrapper.klone-render-space; default/blank
+  // templates use a plain .scroll-wrapper). Falls back to the document body.
   var wrap=document.querySelector('.scroll-wrapper');
   return wrap||document.body;
 }
@@ -963,6 +966,7 @@ function isSystemFrame(el){
   if(el.classList){
     if(el.classList.contains('scroll-wrapper'))return true;
     if(el.classList.contains('klone-frame'))return true;
+    if(el.classList.contains('klone-render-space'))return true;
   }
   return false;
 }
@@ -1425,11 +1429,11 @@ function ensureSystemFrame(){
   var frame=document.createElement('div');
   frame.className='klone-frame';
   frame.setAttribute('data-klone-system-frame','');
-  // Same width as the template frame; centered and full height so the inner
-  // scroller's height:100% keeps scrolling exactly as authored. Width is
-  // re-fitted by syncSystemFrameSize() after every layout change (initial
-  // layout, late CSS, canvas resize).
-  frame.style.cssText='width:100%;max-width:100%;height:100%;margin:0 auto;overflow:hidden;';
+  // Fill the canvas height so the inner .scroll-wrapper (height:100%) has a
+  // real viewport to scroll within. The frame itself is click-through and
+  // does NOT clip: the .scroll-wrapper is the scroll container, so a tall
+  // user page scrolls to its bottom instead of being cut off.
+  frame.style.cssText='width:100%;max-width:100%;height:100%;margin:0 auto;overflow:visible;';
   parent.insertBefore(frame,wrap);
   frame.appendChild(wrap);
   syncSystemFrameSize();
@@ -2546,11 +2550,14 @@ requestAnimationFrame(function(){
 
 // ── Preview canvas colour ──
 // Always keep Klone's canvas colour on the preview <body> so a document's
-// own body background (e.g. a light email template) can never be inherited
-// into the editor preview. The document's OWN background is captured first
-// (and stored on the element) so PDF export can restore it.
-if(document.body){
-  var __kloneComputedBg=getComputedStyle(document.body).backgroundColor;
+// own background can never be inherited into the editor preview. For default
+// templates the document background lives on the <body>; for USER templates
+// it lives on the .klone-render-space element (we remap their body rules
+// onto that class). Capture whichever one carries the authored background
+// (stored on the element) so PDF export can restore it.
+var __kloneAuthoredBgEl=document.querySelector('.klone-render-space')||document.body;
+if(__kloneAuthoredBgEl){
+  var __kloneComputedBg=getComputedStyle(__kloneAuthoredBgEl).backgroundColor;
   document.body.__kloneAuthoredBg=(__kloneComputedBg&&__kloneComputedBg!=='transparent'&&__kloneComputedBg!=='rgba(0, 0, 0, 0)')?__kloneComputedBg:'';
   document.body.style.setProperty('background-color','#161617','important');
 }

@@ -33,8 +33,12 @@ function parseBlueprint(raw: string): TemplateBlueprint | null {
       page: {
         format: strFrom(bp.page.format) || "A4",
         content_width: strFrom(bp.page.content_width) || "794px",
+        width: strFrom(bp.page.width) || "210mm",
+        height: strFrom(bp.page.height) || "297mm",
         margin: strFrom(bp.page.margin) || "2.5rem",
+        padding: strFrom(bp.page.padding) || "2.5rem",
         body_background: strFrom(bp.page.body_background) || "#ffffff",
+        css: strFrom(bp.page.css),
       },
       structure: strFrom(bp.structure) || "",
       components: (Array.isArray(bp.components) ? bp.components : [])
@@ -86,14 +90,24 @@ function readCommon(formData: FormData) {
     formData.get("is_active") === "on" ||
     formData.get("is_active") === "true";
   const blueprint = parseBlueprint(str(formData.get("blueprint")));
-  return { name, slug, description, category, tags, isActive, blueprint };
+  const previewHtml = str(formData.get("preview_html")) || null;
+  return {
+    name,
+    slug,
+    description,
+    category,
+    tags,
+    isActive,
+    blueprint,
+    previewHtml,
+  };
 }
 
 export async function createTemplate(
   _prev: TemplateState,
   formData: FormData
 ): Promise<TemplateState> {
-  const { name, slug, description, category, tags, isActive, blueprint } =
+  const { name, slug, description, category, tags, isActive, blueprint, previewHtml } =
     readCommon(formData);
 
   if (!name) return { error: "Template name is required." };
@@ -106,6 +120,7 @@ export async function createTemplate(
     description,
     category,
     blueprint,
+    preview_html: previewHtml,
     tags,
     is_active: isActive,
   });
@@ -121,7 +136,7 @@ export async function updateTemplate(
   formData: FormData
 ): Promise<TemplateState> {
   const id = str(formData.get("id"));
-  const { name, slug, description, category, tags, isActive, blueprint } =
+  const { name, slug, description, category, tags, isActive, blueprint, previewHtml } =
     readCommon(formData);
 
   if (!id) return { error: "Missing template id." };
@@ -137,6 +152,7 @@ export async function updateTemplate(
       description,
       category,
       blueprint,
+      preview_html: previewHtml,
       tags,
       is_active: isActive,
     })

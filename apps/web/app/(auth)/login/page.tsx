@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthShell } from "@/components/auth/AuthShell";
 
@@ -20,15 +19,7 @@ export default async function LoginPage({
       : undefined;
 
   return (
-    <AuthShell
-      title="Welcome back"
-      footer={
-        <>
-          Don&apos;t have an account?{" "}
-          <Link href="/register">Sign up</Link>
-        </>
-      }
-    >
+    <AuthShell title="Welcome back">
       <AuthCard mode="signin" urlError={urlError} />
     </AuthShell>
   );

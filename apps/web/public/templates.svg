@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <!-- Subtle white glass gradient for gray background -->
+    <linearGradient id="gray-glass" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    
+    <!-- Clip path matching the book shape -->
+    <clipPath id="book-clip">
+      <path d="M20 15 H65 Q80 15 80 30 V70 Q80 85 65 85 H35 Q20 85 20 70 Z" />
+    </clipPath>
+  </defs>
+
+  <!-- Book Base Shape (Medium Gray) -->
+  <path 
+    d="M20 15 H65 Q80 15 80 30 V70 Q80 85 65 85 H35 Q20 85 20 70 Z" 
+    fill="#6B7280" 
+    stroke="#4B5563" 
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+
+  <!-- Template Lines (Representing content/layout) -->
+  <rect x="32" y="30" width="36" height="4" rx="2" fill="#9CA3AF" opacity="0.8"/>
+  <rect x="32" y="42" width="28" height="4" rx="2" fill="#9CA3AF" opacity="0.6"/>
+  <rect x="32" y="54" width="32" height="4" rx="2" fill="#9CA3AF" opacity="0.6"/>
+  
+  <!-- Bookmark / Tab Accent (Darker Gray) -->
+  <path d="M60 15 V40 L67 35 L74 40 V15" fill="#374151" />
+
+  <!-- Animated Glass Glaze -->
+  <g clip-path="url(#book-clip)">
+    <rect x="-100" y="-20" width="50" height="140" fill="url(#gray-glass)" transform="skewX(-20)">
+      <animate 
+        attributeName="x" 
+        values="-100; 150; 150" 
+        keyTimes="0; 0.5; 1" 
+        dur="3.5s" 
+        repeatCount="indefinite" 
+      />
+    </rect>
+  </g>
+</svg>
