@@ -28,6 +28,7 @@ import {
  *  `auto` and the scrollbar is styled exclusively via `::-webkit-scrollbar`
  *  for full control of the width and to hide the buttons. */
 const PREVIEW_SCROLLBAR_STYLE = `<style>
+/* Default/blank templates scroll on .scroll-wrapper: keep it hairline + arrow-less. */
 .scroll-wrapper{scrollbar-width:auto !important;scrollbar-color:auto !important;}
 .scroll-wrapper::-webkit-scrollbar{width:1px !important;height:4px !important;}
 .scroll-wrapper::-webkit-scrollbar-track{background:transparent !important;}
@@ -35,6 +36,20 @@ const PREVIEW_SCROLLBAR_STYLE = `<style>
 .scroll-wrapper::-webkit-scrollbar-corner{background:transparent !important;}
 .scroll-wrapper::-webkit-scrollbar-thumb{background-color:rgba(47, 47, 50, 0.6) !important;border-radius:99px !important;}
 .scroll-wrapper::-webkit-scrollbar-thumb:hover{background-color:rgba(113,113,122,0.85) !important;}
+/* User templates: <html> is the canvas scroller (see SYSTEM_RESET_CSS in
+   lib/data/templates.ts). Style the custom-colored, thin, arrow-less
+   scrollbar on <html> so it renders at the document's own right edge
+   (the iframe clips its far-right edge, but the html scrollbar still
+   paints inside the clip and is fully visible). Match the system chrome
+   scrollbar (apps/web/app/globals.css .custom-scroll): black-ish #3f3f46,
+   hover #52525b. Change --klone-scroll-thumb to recolor. */
+html{--klone-scroll-thumb:#3f3f46;--klone-scroll-thumb-hover:#52525b;scrollbar-width:thin !important;scrollbar-color:var(--klone-scroll-thumb) transparent !important;}
+html::-webkit-scrollbar{width:10px !important;height:10px !important;}
+html::-webkit-scrollbar-track{background:transparent !important;}
+html::-webkit-scrollbar-button{display:none !important;width:0 !important;height:0 !important;}
+html::-webkit-scrollbar-corner{background:transparent !important;}
+html::-webkit-scrollbar-thumb{background-color:var(--klone-scroll-thumb) !important;border-radius:99px !important;}
+html::-webkit-scrollbar-thumb:hover{background-color:var(--klone-scroll-thumb-hover) !important;}
 </style>`;
 
 function injectEditorScript(html: string): string {

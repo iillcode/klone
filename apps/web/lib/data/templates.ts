@@ -613,21 +613,26 @@ const EMAIL_HTML = `<!DOCTYPE html>
  * under it is editable, and only in inspect mode. */
 
 /** Canvas + scroll-wrapper base shared by every rendered document.
- *  The `.scroll-wrapper` is the SCROLL CONTAINER (the editor reads its
- *  scrollTop/scrollHeight via getScrollState). It must be height:100% +
- *  overflow-y:auto so the canvas can scroll to the bottom of a tall page.
- *  A user template's own page box (min-height:1123px; padding:94px;
- *  margin:40px auto) lives on the inner .klone-render-space, which is
- *  remapped from the template's `body{}` rule — so it stays a full A4 page
- *  INSIDE the scroll container instead of being clipped, and scrolls. */
+ *  For USER templates (those re-hosted by normalizeTemplateHtml) the
+ *  `.scroll-wrapper` IS the A4 page sheet itself (authored
+ *  width:794px; min-height:1123px; padding:94px; margin:40px auto — see the
+ *  attached element). It must NOT be forced to a viewport-height, clipped
+ *  scroll container (that clips the bottom of the page). Instead the BODY
+ *  is the canvas scroller so the whole sheet (footer included) is always
+ *  reachable; the page sheet's own width/height/margin come from its
+ *  remapped `.klone-render-space` rule and are left untouched.
+ *  NOTE: default/blank templates (buildHtml) rely on the OLD shell
+ *  (`.scroll-wrapper { height:100%; overflow-y:auto }` + `body { overflow:
+ *  hidden }`) where the wrapper IS an inner scroll viewport — that layout is
+ *  generated separately in buildHtml and is unaffected by this reset. */
 const SYSTEM_RESET_CSS = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { overflow: hidden; height: 100%; }
-  body { background: #161617; font-family: system-ui, -apple-system, sans-serif; }
-  .scroll-wrapper { height: 100%; overflow-y: auto; }
-  .scroll-wrapper::-webkit-scrollbar { width: 10px; }
-  .scroll-wrapper::-webkit-scrollbar-track { background: transparent; }
-  .scroll-wrapper::-webkit-scrollbar-thumb { background-color: #3f3f46; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+  /* User templates: make <html> the canvas scroller (the page sheet lives
+     inside <body> and is taller than the viewport). The custom scrollbar is
+     styled on <html> (see PREVIEW_SCROLLBAR_STYLE in HtmlPreview.tsx). */
+  html { height: 100%; overflow-y: auto; background: #161617; }
+  body { height: auto; min-height: 100%; overflow: visible; font-family: system-ui, -apple-system, sans-serif; }
+  .scroll-wrapper { position: relative; overflow: visible !important; max-height: none !important; }
 `;
 
 /** Rewrite standalone `body` selectors so a user template's page-level
