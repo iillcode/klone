@@ -8,6 +8,7 @@ export function NumberField({
   value,
   onChange,
   prefix,
+  icon,
   suffix = "",
   min,
   max,
@@ -17,6 +18,7 @@ export function NumberField({
   value: string | number;
   onChange: (val: string) => void;
   prefix?: React.ReactNode;
+  icon?: React.ReactNode;
   suffix?: string;
   min?: number;
   max?: number;
@@ -118,11 +120,16 @@ export function NumberField({
 
   return (
     <div
-      className={`flex items-center gap-1.5 bg-[#1e1e1e] rounded-[6px] px-2.5 h-7 min-w-0 border border-transparent transition-colors focus-within:border-[#3b82f6] ${className}`}
+      className={`h-6 min-w-0 w-full flex items-center rounded border border-transparent bg-[#383838] text-[#f0f0f0] outline-none hover:bg-[#404040] focus-within:border-[#3b82f6] focus-within:bg-[#404040] text-[11px] tabular-nums ${className}`}
     >
       {prefix && (
-        <span className="text-[12px] text-[#9b9b9b] shrink-0 select-none flex items-center">
+        <span className="flex shrink-0 items-center justify-center self-stretch px-[5px] text-[#888888] select-none [&>*]:pointer-events-none">
           {prefix}
+        </span>
+      )}
+      {icon && (
+        <span className="flex shrink-0 items-center justify-center self-stretch px-[5px] text-[#888888] select-none [&>*]:pointer-events-none">
+          {icon}
         </span>
       )}
       <input
@@ -153,12 +160,10 @@ export function NumberField({
           onChange(v);
           lastCommitted.current = v;
         }}
-        className="w-full min-w-0 bg-transparent text-[13px] text-[#eaeaea] font-mono text-center focus:outline-none caret-[#3b82f6] disabled:opacity-40 disabled:cursor-not-allowed"
+        className="min-w-0 flex-1 cursor-text border-none bg-transparent pr-1.5 font-[inherit] text-[11px] text-[#f0f0f0] outline-none caret-[#3b82f6] disabled:opacity-40 disabled:cursor-not-allowed"
       />
       {suffix && !disabled && (
-        <span className="text-[12px] text-[#9b9b9b] shrink-0 select-none">
-          {suffix}
-        </span>
+        <span className="shrink-0 pr-1.5 text-[#888888] select-none">{suffix}</span>
       )}
     </div>
   );

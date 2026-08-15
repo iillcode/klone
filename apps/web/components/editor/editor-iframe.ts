@@ -1270,6 +1270,18 @@ function fireSelected(){
         rotate:s.rotate,
         opacity:s.opacity,
         borderRadius:s.borderRadius,
+        visibility:s.visibility,
+        mixBlendMode:s.mixBlendMode,
+        rotate:s.rotate,
+        scaleX:s.scaleX,
+        scaleY:s.scaleY,
+        scale:s.scale,
+        borderTopWidth:s.borderTopWidth,
+        borderRightWidth:s.borderRightWidth,
+        borderBottomWidth:s.borderBottomWidth,
+        borderLeftWidth:s.borderLeftWidth,
+        borderColor:s.borderColor,
+        borderStyle:s.borderStyle,
         transform:s.transform
       }
     });

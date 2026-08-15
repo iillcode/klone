@@ -1,7 +1,28 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { ElementInfo, AlignMode } from "./HtmlPreview";
-import { Keyboard } from "lucide-react";
+import {
+  Keyboard,
+  Undo2,
+  Redo2,
+  AlignStartVertical,
+  AlignCenterVertical,
+  AlignEndVertical,
+  AlignStartHorizontal,
+  AlignCenterHorizontal,
+  AlignEndHorizontal,
+  FlipHorizontal2,
+  FlipVertical2,
+  RotateCwSquare,
+  RotateCw,
+  Plus,
+  Blend,
+  Square,
+  Image as ImageIcon,
+  Trash2,
+  DeleteIcon,
+} from "lucide-react";
 import {
   cssPx,
   parseTranslate,
@@ -11,23 +32,13 @@ import {
   gradientFirstColor,
   isTransparentColor,
 } from "./utils/style-utils";
-import {
-  UndoIcon,
-  RedoIcon,
-  PageBreakIcon,
-  ClearPageBreakIcon,
-  AlignHLeftIcon,
-  AlignHCenterIcon,
-  AlignHRightIcon,
-  AlignVTopIcon,
-  AlignVMiddleIcon,
-  AlignVBottomIcon,
-  DeleteIcon,
-} from "./icons/properties-icons";
 import { NumberField } from "./ui/NumberField";
-import { IconBtn, BtnGroup, SqBtn } from "./ui/IconButton";
-import { FieldBlock, Section, ColorRow } from "./ui/Fields";
+import { ColorRow } from "./ui/Fields";
 import { TypographyPanel } from "./ui/TypographyPanel";
+import { AppearanceSection } from "./ui/AppearanceSection";
+import { StrokeSection } from "./ui/StrokeSection";
+import { EffectsSection } from "./ui/EffectsSection";
+import { LayoutSection } from "./ui/LayoutSection";
 
 /**
  * Keyboard shortcuts available in the Klone editor, shown in the design
@@ -168,6 +179,23 @@ export function PropertiesSidebar({
     : parseRgbToHex(s?.color);
   const txtOpacity = parseColorAlpha(s?.color);
 
+  // Open-pencil fill visibility state (reset whenever the selection changes).
+  const [txtHidden, setTxtHidden] = useState(false);
+  const [bgHidden, setBgHidden] = useState(false);
+  useEffect(() => {
+    setTxtHidden(false);
+    setBgHidden(false);
+  }, [selectedElements]);
+
+  // Rotation / flip helpers (compose with the existing translate transform).
+  const rotation = Math.round(parseFloat(s?.rotate || "0")) || 0;
+  const scaleX = parseFloat(s?.scaleX || "1");
+  const scaleY = parseFloat(s?.scaleY || "1");
+  const applyRotation = (deg: number) => onApplyStyle("rotate", `${deg}deg`);
+  const flipHorizontal = () => onApplyStyle("scaleX", String(scaleX * -1));
+  const flipVertical = () => onApplyStyle("scaleY", String(scaleY * -1));
+  const rotate90 = () => applyRotation((rotation + 90) % 360);
+
   return (
     <div className="w-64 shrink-0 h-full flex flex-col bg-[#161617] select-none overflow-hidden">
       {/* ── Scrollable properties area (panel padding 14px) ── */}
@@ -223,13 +251,24 @@ export function PropertiesSidebar({
                 {count > 1 ? ` · ${count}` : ""}
               </span>
               <div className="flex items-center gap-0.5 shrink-0">
-                <IconBtn title="Undo (⌘Z)" onClick={onUndo}>
-                  <UndoIcon />
-                </IconBtn>
-                <IconBtn title="Redo (⌘⇧Z)" onClick={onRedo}>
-                  <RedoIcon />
-                </IconBtn>
-                <IconBtn
+                <button
+                  type="button"
+                  title="Undo (⌘Z)"
+                  onClick={onUndo}
+                  className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                >
+                  <Undo2 className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Redo (⌘⇧Z)"
+                  onClick={onRedo}
+                  className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                >
+                  <Redo2 className="size-3.5" />
+                </button>
+                <button
+                  type="button"
                   title={
                     splitMode
                       ? "Cancel PDF page break selection"
@@ -238,175 +277,281 @@ export function PropertiesSidebar({
                         : "Add PDF page break"
                   }
                   onClick={onToggleSplitMode}
-                  active={splitMode}
-                  className="relative"
+                  className={`relative flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none p-0 outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0] ${
+                    splitMode ? "text-[#3b82f6]" : "text-[#888888]"
+                  }`}
                 >
-                  <PageBreakIcon />
+                  <svg width="15" height="15" viewBox="0 0 16 16" className="size-3.5">
+                    <path d="M9.5 2.5L13.5 6.5L8 12h-4v-4z M3.5 13.5l3-3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                  </svg>
                   {hasPageBreak && (
                     <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 rounded-full bg-[#18a0fb] text-white text-[9px] leading-[14px] text-center">
                       {pageBreakCount}
                     </span>
                   )}
-                </IconBtn>
+                </button>
                 {hasPageBreak && (
-                  <IconBtn
+                  <button
+                    type="button"
                     title={`Remove all PDF page breaks (${pageBreakCount})`}
                     onClick={onClearPageBreak}
+                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
                   >
-                    <ClearPageBreakIcon />
-                  </IconBtn>
+                    <svg width="15" height="15" viewBox="0 0 16 16" className="size-3.5">
+                      <path d="M3 4.5L13 11.5M13 4.5L3 11.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                    </svg>
+                  </button>
                 )}
               </div>
             </div>
 
             {/* ── Position ── */}
-            <Section title="Position">
-              <FieldBlock label="Alignment">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <BtnGroup>
-                    <SqBtn
-                      title="Align left"
-                      onClick={() => onAlignElements?.("left")}
-                    >
-                      <AlignHLeftIcon />
-                    </SqBtn>
-                    <SqBtn
-                      title="Align center"
-                      onClick={() => onAlignElements?.("center-x")}
-                    >
-                      <AlignHCenterIcon />
-                    </SqBtn>
-                    <SqBtn
-                      title="Align right"
-                      onClick={() => onAlignElements?.("right")}
-                    >
-                      <AlignHRightIcon />
-                    </SqBtn>
-                  </BtnGroup>
-                  <BtnGroup>
-                    <SqBtn
-                      title="Align top"
-                      onClick={() => onAlignElements?.("top")}
-                    >
-                      <AlignVTopIcon />
-                    </SqBtn>
-                    <SqBtn
-                      title="Align middle"
-                      onClick={() => onAlignElements?.("center-y")}
-                    >
-                      <AlignVMiddleIcon />
-                    </SqBtn>
-                    <SqBtn
-                      title="Align bottom"
-                      onClick={() => onAlignElements?.("bottom")}
-                    >
-                      <AlignVBottomIcon />
-                    </SqBtn>
-                  </BtnGroup>
-                </div>
-              </FieldBlock>
+            <div className="py-3.5 border-b border-[#3a3a3a]">
+              <div className="text-[11px] font-semibold text-[#f0f0f0] mb-3">
+                Position
+              </div>
 
-              <FieldBlock label="Position">
-                <div className="flex items-center gap-1.5">
-                  <NumberField
-                    className="flex-1 min-w-0"
-                    prefix="X"
-                    disabled={isContainerSel}
-                    value={fmtNum(translate[0])}
-                    onChange={(v) =>
-                      onApplyStyle(
-                        "transform",
-                        `translate(${v}px, ${translate[1]}px)`,
-                      )
-                    }
-                  />
-                  <NumberField
-                    className="flex-1 min-w-0"
-                    prefix="Y"
-                    disabled={isContainerSel}
-                    value={fmtNum(translate[1])}
-                    onChange={(v) =>
-                      onApplyStyle(
-                        "transform",
-                        `translate(${translate[0]}px, ${v}px)`,
-                      )
-                    }
-                  />
+              <div
+                role="toolbar"
+                aria-label="Align"
+                className="mb-1.5 flex justify-between"
+              >
+                <div className="flex gap-0.5">
+                  <button
+                    type="button"
+                    title="Align left"
+                    onClick={() => onAlignElements?.("left")}
+                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                  >
+                    <AlignStartVertical className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Align center horizontally"
+                    onClick={() => onAlignElements?.("center-x")}
+                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                  >
+                    <AlignCenterVertical className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Align right"
+                    onClick={() => onAlignElements?.("right")}
+                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                  >
+                    <AlignEndVertical className="size-3.5" />
+                  </button>
                 </div>
-              </FieldBlock>
-            </Section>
+                <div className="flex gap-0.5">
+                  <button
+                    type="button"
+                    title="Align top"
+                    onClick={() => onAlignElements?.("top")}
+                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                  >
+                    <AlignStartHorizontal className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Align center vertically"
+                    onClick={() => onAlignElements?.("center-y")}
+                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                  >
+                    <AlignCenterHorizontal className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Align bottom"
+                    onClick={() => onAlignElements?.("bottom")}
+                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                  >
+                    <AlignEndHorizontal className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 items-center gap-1.5">
+                <NumberField
+                  className="flex-1 min-w-0"
+                  prefix="X"
+                  disabled={isContainerSel}
+                  value={fmtNum(translate[0])}
+                  onChange={(v) =>
+                    onApplyStyle(
+                      "transform",
+                      `translate(${v}px, ${translate[1]}px)`,
+                    )
+                  }
+                />
+                <NumberField
+                  className="flex-1 min-w-0"
+                  prefix="Y"
+                  disabled={isContainerSel}
+                  value={fmtNum(translate[1])}
+                  onChange={(v) =>
+                    onApplyStyle(
+                      "transform",
+                      `translate(${translate[0]}px, ${v}px)`,
+                    )
+                  }
+                />
+              </div>
+
+              <div className="mt-1.5 grid grid-cols-2 items-center gap-1.5">
+                <NumberField
+                  icon={<RotateCw className="size-3" />}
+                  suffix="°"
+                  min={-360}
+                  max={360}
+                  value={rotation}
+                  onChange={(v) => applyRotation(parseFloat(v || "0"))}
+                />
+                <div className="flex h-6 items-center justify-end gap-0.5">
+                  <button
+                    type="button"
+                    title="Flip horizontal"
+                    onClick={flipHorizontal}
+                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                  >
+                    <FlipHorizontal2 className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Flip vertical"
+                    onClick={flipVertical}
+                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                  >
+                    <FlipVertical2 className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Rotate 90°"
+                    onClick={rotate90}
+                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                  >
+                    <RotateCwSquare className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
 
             {/* ── Layout ── */}
-            <Section title="Layout">
-              <FieldBlock label="Dimensions">
-                <div className="flex items-center gap-1.5">
-                  <NumberField
-                    className="flex-1 min-w-0"
-                    prefix="W"
-                    disabled={isContainerSel}
-                    value={cssPx(s.width) || 0}
-                    onChange={(v) => onApplyStyle("width", v + "px")}
-                  />
-                  <NumberField
-                    className="flex-1 min-w-0"
-                    prefix="H"
-                    value={cssPx(s.height) || 0}
-                    onChange={(v) => onApplyStyle("height", v + "px")}
-                  />
-                </div>
-              </FieldBlock>
-            </Section>
+            <LayoutSection
+              styles={s}
+              onApplyStyle={onApplyStyle}
+              container={isContainerSel}
+              text={first?.tag === "span" || first?.tag === "p" || first?.tag === "h1" || first?.tag === "button"}
+            />
 
-            {/* ── Color ── */}
-            <Section title="Color">
-              <ColorRow
-                label="Text"
-                color={txtColor}
-                opacity={txtOpacity}
-                onChange={(c) => {
-                  // If the incoming value already carries an alpha (color
-                  // picker alpha slider), use it as-is. Otherwise keep the
-                  // current opacity — unless there is no base color yet,
-                  // in which case the new color shows at full opacity.
-                  const cAlpha = parseColorAlpha(c);
-                  onApplyStyle(
-                    "color",
-                    cAlpha < 1 || !txtColor
-                      ? c
-                      : withColorAlpha(c, txtOpacity),
-                  );
-                }}
-                onOpacityChange={(a) => {
-                  if (!txtColor) return;
-                  onApplyStyle("color", withColorAlpha(txtColor, a));
-                }}
-              />
-              <ColorRow
-                label="Background"
-                color={bgColor}
-                opacity={bgOpacity}
-                onChange={(c) => {
-                  const cAlpha = parseColorAlpha(c);
-                  onApplyStyle(
-                    "backgroundColor",
-                    cAlpha < 1 || !bgColor
-                      ? c
-                      : withColorAlpha(c, bgOpacity),
-                  );
-                }}
-                onOpacityChange={(a) => {
-                  if (!bgColor) return;
-                  onApplyStyle("backgroundColor", withColorAlpha(bgColor, a));
-                }}
-              />
-            </Section>
+            {/* ── Appearance ── */}
+            <AppearanceSection styles={s} onApplyStyle={onApplyStyle} />
+
+            {/* ── Stroke ── */}
+            <StrokeSection styles={s} onApplyStyle={onApplyStyle} />
+
+            {/* ── Fill / Color ── */}
+            <div className="py-3.5 border-b border-[#3a3a3a]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-[#f0f0f0]">
+                  Fill
+                </span>
+                <div className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    title="Add color"
+                    onClick={() => {
+                      if (!txtColor) onApplyStyle("color", "#000000");
+                      if (!bgColor) onApplyStyle("backgroundColor", "#000000");
+                    }}
+                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                  >
+                    <Plus className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  title="Solid"
+                  className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                >
+                  <Square className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Gradient"
+                  className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                >
+                  <Blend className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Image"
+                  className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+                >
+                  <ImageIcon className="size-3.5" />
+                </button>
+              </div>
+
+              <div className="mt-3">
+                <ColorRow
+                  label="Text"
+                  color={txtColor}
+                  opacity={txtOpacity}
+                  hidden={txtHidden}
+                  onChange={(c) => {
+                    const cAlpha = parseColorAlpha(c);
+                    onApplyStyle(
+                      "color",
+                      cAlpha < 1 || !txtColor
+                        ? c
+                        : withColorAlpha(c, txtOpacity),
+                    );
+                  }}
+                  onOpacityChange={(a) => {
+                    if (!txtColor) return;
+                    onApplyStyle("color", withColorAlpha(txtColor, a));
+                  }}
+                  onToggleVisibility={() => setTxtHidden((v) => !v)}
+                  onRemove={() => onApplyStyle("color", "transparent")}
+                />
+                <ColorRow
+                  label="Background"
+                  color={bgColor}
+                  opacity={bgOpacity}
+                  hidden={bgHidden}
+                  onChange={(c) => {
+                    const cAlpha = parseColorAlpha(c);
+                    onApplyStyle(
+                      "backgroundColor",
+                      cAlpha < 1 || !bgColor
+                        ? c
+                        : withColorAlpha(c, bgOpacity),
+                    );
+                  }}
+                  onOpacityChange={(a) => {
+                    if (!bgColor) return;
+                    onApplyStyle("backgroundColor", withColorAlpha(bgColor, a));
+                  }}
+                  onToggleVisibility={() => setBgHidden((v) => !v)}
+                  onRemove={() => onApplyStyle("backgroundColor", "transparent")}
+                />
+              </div>
+            </div>
+
+            {/* ── Effects ── */}
+            <EffectsSection styles={s} onApplyStyle={onApplyStyle} />
 
             {/* ── Typography ── */}
             <TypographyPanel styles={s} onApplyStyle={onApplyStyle} />
 
             {/* ── Pages ── */}
             {onMoveToPage && pageCount > 0 && !isContainerSel && (
-              <Section title="Pages" noBorder>
+              <div className="py-3.5">
+                <div className="text-[11px] font-semibold text-[#f0f0f0] mb-3">
+                  Pages
+                </div>
                 <div className="space-y-2">
                   <span className="block text-[10px] text-[#71717a]">
                     On page {currentPage + 1} of {pageCount}
@@ -464,7 +609,7 @@ export function PropertiesSidebar({
                     </button>
                   </div>
                 </div>
-              </Section>
+              </div>
             )}
 
             {/* ── Delete ── */}

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { Eye, EyeOff, Minus } from "lucide-react";
 import { ColorPicker } from "./ColorPicker";
 import { NumberField } from "./NumberField";
 
-/* .field-block — 11px label + control */
+/* .field-block — 11px label + control (open-pencil tokens) */
 export function FieldBlock({
   label,
   children,
@@ -18,13 +19,13 @@ export function FieldBlock({
 }) {
   return (
     <div className={`${grow ? "flex-1 min-w-0" : ""} ${className}`}>
-      <div className="text-[11px] text-[#9b9b9b] mb-1.5 select-none">{label}</div>
+      <div className="text-[11px] leading-none text-[#888888] mb-1 select-none">{label}</div>
       {children}
     </div>
   );
 }
 
-/* .section — 13px/600 title row (+ optional header actions), 1px divider */
+/* .section — 11px/600 title row (+ optional header actions), open-pencil tokens */
 export function Section({
   title,
   noBorder = false,
@@ -38,40 +39,42 @@ export function Section({
 }) {
   return (
     <div
-      className={`py-3.5 ${noBorder ? "" : "border-b border-[rgba(255,255,255,0.08)]"}`}
+      className={`py-3.5 ${noBorder ? "" : "border-b border-[#3a3a3a]"}`}
     >
       {headerIcons ? (
         <div className="flex items-center justify-between">
-          <span className="text-[13px] font-semibold text-[#ffffff]">
+          <span className="text-[11px] font-semibold text-[#f0f0f0]">
             {title}
           </span>
           <div className="flex items-center gap-0.5">{headerIcons}</div>
         </div>
       ) : (
-        <div className="text-[13px] font-semibold text-[#ffffff]">{title}</div>
+        <div className="text-[11px] font-semibold text-[#f0f0f0]">{title}</div>
       )}
       <div className="mt-3 space-y-3">{children}</div>
     </div>
   );
 }
 
-/* ─── Color row (mock style: 32px field with swatch + hex) ───
-   An empty `color` means transparent: the swatch shows only the checkerboard
-   and the hex input reads "transparent". `opacity` (0..1) drives the inline
-   opacity field next to the hex input; when the base color is transparent
-   the field is disabled (there is nothing to make opaque). */
+/* ─── Color row (open-pencil fill row: PaintField + rail eye/minus) ─── */
 export function ColorRow({
   label,
   color,
   opacity = 1,
+  hidden = false,
   onChange,
   onOpacityChange,
+  onToggleVisibility,
+  onRemove,
 }: {
   label: string;
   color: string;
   opacity?: number;
+  hidden?: boolean;
   onChange: (color: string) => void;
   onOpacityChange?: (opacity: number) => void;
+  onToggleVisibility?: () => void;
+  onRemove?: () => void;
 }) {
   const [hexInput, setHexInput] = useState(() =>
     color ? color.toUpperCase() : "",
@@ -82,7 +85,6 @@ export function ColorRow({
 
   // Sync hex input when color changes externally (empty = transparent)
   useEffect(() => {
-    // Intentional prop→local sync (see comment above).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHexInput(color ? color.toUpperCase() : "");
   }, [color]);
@@ -91,8 +93,8 @@ export function ColorRow({
     const r = swatchRef.current?.getBoundingClientRect();
     if (!r) return;
     const W = 272;
-    const H = 505; // approx height of the picker
-    let left = r.left - W - 8; // pop out to the left (Figma style)
+    const H = 505;
+    let left = r.left - W - 8;
     if (left < 8) left = r.right + 8;
     if (left + W > window.innerWidth - 8)
       left = Math.max(8, window.innerWidth - W - 8);
@@ -107,67 +109,100 @@ export function ColorRow({
   const opacityPct = Math.round((opacity || 0) * 100);
 
   return (
-    <FieldBlock label={label}>
-      <div className="flex items-center gap-1.5">
-        <div className="h-7 flex-1 min-w-0 flex items-center gap-1.5 bg-[#1e1e1e] rounded-[6px] px-2.5 border border-transparent transition-colors focus-within:border-[#3b82f6]">
-          {/* Swatch with transparency checkerboard */}
-          <button
-            type="button"
-            ref={swatchRef}
-            onClick={openPicker}
-            className="relative w-4 h-4 rounded-[4px] overflow-hidden shrink-0 cursor-pointer"
-            style={{
-              background:
-                "conic-gradient(#555555 25%, #3a3a3a 0 50%, #555555 0 75%, #3a3a3a 0) 0 0 / 8px 8px",
-            }}
-            title={`Change ${label.toLowerCase()} color`}
-          >
-            {color ? (
-              <div
-                className="w-full h-full"
-                style={{ backgroundColor: color, opacity: opacity }}
-              />
-            ) : (
-              <div className="w-full h-full border border-white/15" />
-            )}
-          </button>
-          {/* Hex input */}
+    <div
+      data-slot="item-row"
+      className="group grid min-h-6 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-1.5 py-0.5"
+    >
+      {/* content */}
+      <div className="flex min-w-0 items-center gap-1.5" data-slot="content">
+        {/* open-pencil PaintField */}
+        <div
+          className="h-6 min-w-0 flex-1 flex items-center overflow-hidden rounded border border-transparent bg-[#383838] text-[11px] transition-colors hover:bg-[#404040] focus-within:border-[#3b82f6] focus-within:bg-[#404040]"
+          data-slot="paint-field"
+          data-property="paint"
+        >
+          <div className="flex shrink-0 items-center pl-1">
+            <button
+              type="button"
+              ref={swatchRef}
+              onClick={openPicker}
+              className="relative block size-4 overflow-hidden rounded border border-[#3a3a3a] cursor-pointer bg-[#3a3a3a] bg-[image:linear-gradient(45deg,#555_25%,transparent_25%),linear-gradient(-45deg,#555_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#555_75%),linear-gradient(-45deg,transparent_75%,#555_75%)] bg-[size:8px_8px] bg-[position:0_0,0_4px,4px_-4px,-4px_0]"
+              title={`Change ${label.toLowerCase()} color`}
+            >
+              {color ? (
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{ backgroundColor: color, opacity: opacity }}
+                />
+              ) : (
+                <div className="pointer-events-none absolute inset-0 border border-white/15" />
+              )}
+            </button>
+          </div>
           <input
             type="text"
             value={hexInput}
             placeholder="transparent"
+            data-property="color-hex"
+            className="min-w-0 flex-1 border-none bg-transparent font-mono text-[11px] pl-1.5 pr-1 text-[#f0f0f0] outline-none caret-[#3b82f6]"
             onChange={(e) => {
               const val = e.target.value;
               setHexInput(val);
               if (/^#[0-9a-fA-F]{6}$/.test(val)) {
-                // Skip re-typing the current value - no redundant undo entries.
                 if (val.toLowerCase() === (color || "").toLowerCase()) return;
                 onChange(val);
               }
             }}
             onBlur={() => {
-              // Reset to actual color on blur if invalid
               if (hexInput && !/^#[0-9a-fA-F]{6}$/.test(hexInput)) {
                 setHexInput(color ? color.toUpperCase() : "");
               }
             }}
-            className="w-full min-w-0 bg-transparent text-[13px] text-[#eaeaea] font-mono uppercase focus:outline-none caret-[#3b82f6]"
+          />
+          <div className="h-4 w-px shrink-0 bg-[#888888]/40" />
+          <NumberField
+            className="h-full w-12 flex-none shrink-0 rounded-none border-0 bg-transparent shadow-none"
+            suffix="%"
+            min={0}
+            max={100}
+            disabled={!hasBase}
+            value={opacityPct}
+            onChange={(v) => {
+              const n = Math.round(parseFloat(v || "0") * 10) / 10;
+              onOpacityChange?.(Math.min(1, Math.max(0, n / 100)));
+            }}
           />
         </div>
-        {/* Opacity (percent of the current color) */}
-        <NumberField
-          className="w-[64px] shrink-0"
-          suffix="%"
-          min={0}
-          max={100}
-          disabled={!hasBase}
-          value={opacityPct}
-          onChange={(v) => {
-            const n = Math.round(parseFloat(v || "0") * 10) / 10;
-            onOpacityChange?.(Math.min(1, Math.max(0, n / 100)));
-          }}
-        />
       </div>
+
+      {/* rail: eye/eye-off + minus (open-pencil) */}
+      <div className="flex shrink-0 items-center gap-0.5" data-slot="rail">
+        {onToggleVisibility && (
+          <button
+            type="button"
+            title={hidden ? "Show" : "Hide"}
+            aria-label={hidden ? "Show" : "Hide"}
+            onClick={onToggleVisibility}
+            className={`flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0] ${
+              hidden ? "text-[#3b82f6]" : ""
+            }`}
+          >
+            {hidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+          </button>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            title="Remove"
+            aria-label="Remove"
+            onClick={onRemove}
+            className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+          >
+            <Minus className="size-3.5" />
+          </button>
+        )}
+      </div>
+
       {pickerOpen && (
         <ColorPicker
           value={color}
@@ -180,6 +215,6 @@ export function ColorRow({
           onClose={() => setPickerOpen(false)}
         />
       )}
-    </FieldBlock>
+    </div>
   );
 }

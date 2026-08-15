@@ -2,7 +2,7 @@
 
 /* Figma-style toolbar/action buttons (faithful port of the mock's controls). */
 
-/* .icon-btn (square, header actions) */
+/* open-pencil icon-button (size-6, klone tokens: #353535/#888/#3b82f6) */
 export function IconBtn({
   title,
   onClick,
@@ -24,10 +24,10 @@ export function IconBtn({
       title={title}
       onClick={onClick}
       aria-pressed={active}
-      className={`w-8 h-8 shrink-0 flex items-center justify-center rounded-[6px] transition-colors ${
+      className={`size-6 shrink-0 flex items-center justify-center rounded border border-transparent bg-transparent text-[#888888] outline-none transition-colors focus-visible:border-[#3b82f6] ${
         active
-          ? "bg-[#202020] text-[#ffffff] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
-          : "text-[#b8b8b8] hover:bg-[#202020] hover:text-[#ffffff]"
+          ? "border-[#3b82f6] text-[#3b82f6]"
+          : "hover:bg-[#353535] hover:text-[#f0f0f0]"
       } ${className}`}
     >
       <span style={{ width: size, height: size }} className="flex items-center justify-center">

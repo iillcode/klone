@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Square, Blend, Image as ImageIcon } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Custom color editor popover.
@@ -126,11 +127,7 @@ const INITIAL_SWATCHES = [
 const TOOLS = [
   {
     title: "Solid",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 16 16">
-        <rect x="2.6" y="2.6" width="10.8" height="10.8" rx="2.6" fill="none" stroke="currentColor" strokeWidth="1.7" />
-      </svg>
-    ),
+    icon: <Square className="size-3.5" />,
   },
   {
     title: "Pattern",
@@ -161,13 +158,7 @@ const TOOLS = [
   },
   {
     title: "Image",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 16 16">
-        <rect x="2" y="3" width="12" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
-        <circle cx="5.6" cy="6.4" r="1.2" fill="currentColor" />
-        <path d="M4 11l3-3 2 2 3-3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      </svg>
-    ),
+    icon: <ImageIcon className="size-3.5" />,
   },
   {
     title: "Video",
@@ -187,17 +178,8 @@ const TOOLS = [
     ),
   },
   {
-    title: "Droplet",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 16 16">
-        <path
-          d="M8 2.2S4 6.6 4 9.4a4 4 0 008 0C12 6.6 8 2.2 8 2.2z"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        />
-      </svg>
-    ),
+    title: "Gradient",
+    icon: <Blend className="size-3.5" />,
   },
   {
     title: "Color wheel",
@@ -215,7 +197,7 @@ const TOOLS = [
 
 /* ── Shared button class strings (themed to the Klone design system) ── */
 const iconBtnCls =
-  "bg-transparent border-none text-[#a3a3a3] w-[26px] h-[26px] rounded-[5px] cursor-pointer grid place-items-center hover:bg-[#262626] hover:text-[#e4e4e7]";
+  "flex size-6 cursor-pointer items-center justify-center rounded border-none bg-transparent text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]";
 const fieldInputCls =
   "min-w-0 bg-[#1e1e1e] border border-[#262626] rounded-[6px] text-[#e4e4e7] text-xs px-1.5 py-[6px] text-center outline-none focus:border-[#3b82f6]";
 const sliderHandleCls =
@@ -305,7 +287,7 @@ export function ColorPicker({
   const [swatches, setSwatches] = useState<string[]>(INITIAL_SWATCHES);
   const [fieldValues, setFieldValues] = useState<string[]>(() => {
     const [r, g, b] = hsvToRgb(init.hsv.h, init.hsv.s, init.hsv.v);
-    return [rgbToHex(r, g, b)];
+    return rgbToHex(r, g, b).match(/.{2}/g) ?? [];
   });
   const [alphaText, setAlphaText] = useState(String(Math.round(init.alpha * 100)));
 
@@ -333,8 +315,10 @@ export function ColorPicker({
   useEffect(() => {
     const [rr, gg, bb] = hsvToRgb(hsv.h, hsv.s, hsv.v);
     let vals: string[];
-    if (mode === "hex") vals = [rgbToHex(rr, gg, bb)];
-    else if (mode === "rgb") vals = [String(rr), String(gg), String(bb)];
+    if (mode === "hex") {
+      const hexVal = rgbToHex(rr, gg, bb);
+      vals = [hexVal.slice(0, 2), hexVal.slice(2, 4), hexVal.slice(4, 6)];
+    } else if (mode === "rgb") vals = [String(rr), String(gg), String(bb)];
     else {
       const { h, s, l } = rgbToHsl(rr, gg, bb, hsv.h);
       vals = [
@@ -385,15 +369,17 @@ export function ColorPicker({
   const alphaDrag = useDrag((x) => setAlpha(x));
 
   const commitHexFrom = (el: HTMLInputElement) => {
-    const raw = el.value.trim().replace("#", "");
-    if (/^[0-9a-f]{3}$|^[0-9a-f]{6}$/i.test(raw)) {
-      applyRgb(hexToRgb(raw));
-      // Normalize the display to the parsed value
-      setFieldValues((prev) => [raw.toLowerCase()]);
+    const joined =
+      mode === "hex"
+        ? fieldValues.map((v) => v.trim()).join("").replace(/[^0-9a-f]/gi, "")
+        : el.value.trim().replace("#", "");
+    if (/^[0-9a-f]{6}$/i.test(joined)) {
+      applyRgb(hexToRgb(joined));
+      const [rr, gg, bb] = hexToRgb(joined);
+      setFieldValues(rgbToHex(rr, gg, bb).match(/.{2}/g) ?? []);
     } else {
-      // Invalid input: revert to the current model color
       const [rr, gg, bb] = hsvToRgb(hsv.h, hsv.s, hsv.v);
-      setFieldValues((prev) => [rgbToHex(rr, gg, bb)]);
+      setFieldValues(rgbToHex(rr, gg, bb).match(/.{2}/g) ?? []);
     }
   };
 
@@ -435,6 +421,14 @@ export function ColorPicker({
 
   const modeLabels: Record<Mode, string> = { hex: "Hex", rgb: "RGB", hsl: "HSL" };
 
+  /* Channel labels for the active mode */
+  const channelLabels: string[] =
+    mode === "hex"
+      ? ["RR", "GG", "BB"]
+      : mode === "rgb"
+        ? ["R", "G", "B"]
+        : ["H", "S", "L"];
+
   return createPortal(
     <>
       {/* Backdrop: click anywhere outside to close */}
@@ -445,24 +439,20 @@ export function ColorPicker({
         style={{ left: position.left, top: position.top }}
       >
         <div
-          className="w-[272px] h-max bg-[#161617] border border-[#2a2a2a] rounded-[8px] shadow-[0_10px_30px_rgba(0,0,0,0.55)] text-[#e4e4e7] select-none pb-3"
-          style={{
-            fontFamily:
-              'Inter, -apple-system, "Segoe UI", Roboto, sans-serif',
-          }}
+          className="w-[240px] h-max bg-[#2a2a2a] rounded-xl shadow-[0_8px_30px_rgb(0_0_0/0.4)] text-[#f0f0f0] select-none text-[11px]"
         >
           {/* ── Header ── */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-[#262626]">
-            <div className="flex gap-1">
+          <div className="flex items-center justify-between px-2 py-1.5 border-b border-[#3a3a3a]">
+            <div className="flex gap-0.5">
               {(["custom", "libraries"] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setTab(t)}
-                  className={`border-none text-xs font-semibold px-2.5 py-[5px] rounded-[5px] cursor-pointer ${
+                  className={`border-none text-[11px] font-semibold px-2 py-[5px] rounded-[5px] cursor-pointer ${
                     tab === t
-                      ? "bg-[#2a2a2a] text-white"
-                      : "bg-transparent text-[#6f6f6f] hover:text-[#a3a3a3]"
+                      ? "bg-[#404040] text-[#f0f0f0]"
+                      : "bg-transparent text-[#888888] hover:text-[#f0f0f0]"
                   }`}
                 >
                   {t === "custom" ? "Custom" : "Libraries"}
@@ -505,18 +495,18 @@ export function ColorPicker({
 
           {tab === "custom" ? (
             <>
-              {/* ── Fill-type tools ── */}
-              <div className="flex justify-between px-4 pt-2.5 pb-0.5">
+              {/* ── Fill-type tools (open-pencil FillPicker tabs) ── */}
+              <div className="flex items-center gap-0.5 px-2 pt-2 pb-0.5">
                 {TOOLS.map((tool, i) => (
                   <button
                     key={tool.title}
                     type="button"
                     title={tool.title}
                     onClick={() => setToolIdx(i)}
-                    className={`w-[26px] h-6 border-none rounded-[6px] grid place-items-center cursor-pointer ${
+                    className={`flex size-6 cursor-pointer items-center justify-center rounded border-none p-0 text-[#888888] outline-none transition-colors ${
                       toolIdx === i
-                        ? "text-white bg-[#2a2a2a] shadow-[inset_0_0_0_1.5px_#52525b]"
-                        : "bg-transparent text-[#8f8f8f] hover:text-[#e4e4e7]"
+                        ? "bg-[#404040] text-[#f0f0f0]"
+                        : "hover:bg-[#353535] hover:text-[#f0f0f0]"
                     }`}
                   >
                     {tool.icon}
@@ -526,14 +516,14 @@ export function ColorPicker({
 
               {/* ── Saturation / Value square ── */}
               <div
-                className="relative h-[170px] mx-4 mt-2 rounded-[4px] cursor-crosshair touch-none"
+                className="relative h-[140px] w-full mx-2 mt-2 cursor-crosshair overflow-hidden rounded touch-none"
                 style={{
                   background: `linear-gradient(to top,#000,rgba(0,0,0,0)), linear-gradient(to right,#fff,hsl(${hsv.h},100%,50%))`,
                 }}
                 {...svDrag}
               >
                 <div
-                  className="absolute w-[15px] h-[15px] rounded-full border-[2.5px] border-white bg-black -translate-x-1/2 -translate-y-1/2 shadow-[0_0_0_1px_rgba(0,0,0,0.45)] pointer-events-none"
+                  className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-sm"
                   style={{
                     left: `${hsv.s * 100}%`,
                     top: `${(1 - hsv.v) * 100}%`,
@@ -544,7 +534,7 @@ export function ColorPicker({
 
               {/* ── Hue ── */}
               <div
-                className="relative h-[12px] rounded-full mx-4 mt-2.5 cursor-pointer touch-none"
+                className="relative h-3 rounded-full mx-2 mt-2.5 cursor-pointer touch-none"
                 style={{ background: HUE_GRADIENT }}
                 {...hueDrag}
               >
@@ -558,7 +548,7 @@ export function ColorPicker({
               </div>
 
               {/* ── Eyedropper + Alpha ── */}
-              <div className="flex items-center gap-2 mx-4 mt-2.5">
+              <div className="flex items-center gap-2 mx-2 mt-2.5">
                 <button
                   type="button"
                   className={iconBtnCls + " flex-none"}
@@ -592,12 +582,12 @@ export function ColorPicker({
                 </div>
               </div>
 
-              {/* ── Values ── */}
-              <div className="flex items-center gap-2 mx-4 mt-2.5">
+              {/* ── Values (open-pencil 3-cell number grid + alpha) ── */}
+              <div className="mx-2 mt-2.5 flex items-center gap-2">
                 <div className="relative flex items-center gap-[5px]">
                   <button
                     type="button"
-                    className="flex items-center gap-[5px] px-2 py-[6px] border border-[#2a2a2a] rounded-[6px] bg-transparent text-[#e4e4e7] text-xs cursor-pointer hover:border-[#3d3d3d]"
+                    className="flex items-center gap-[5px] px-2 py-[6px] border border-[#3a3a3a] rounded-[6px] bg-transparent text-[#f0f0f0] text-[11px] cursor-pointer hover:border-[#424242]"
                     onClick={(e) => {
                       e.stopPropagation();
                       setMenuOpen((o) => !o);
@@ -615,7 +605,7 @@ export function ColorPicker({
                     </svg>
                   </button>
                   {menuOpen && (
-                    <div className="absolute top-[calc(100%+4px)] left-0 z-20 min-w-[72px] bg-[#1a1a1a] border border-[#262626] rounded-[6px] overflow-hidden flex flex-col">
+                    <div className="absolute top-[calc(100%+4px)] left-0 z-20 min-w-[72px] bg-[#404040] border border-[#3a3a3a] rounded-[6px] overflow-hidden flex flex-col">
                       {(["hex", "rgb", "hsl"] as const).map((m) => (
                         <button
                           key={m}
@@ -624,7 +614,7 @@ export function ColorPicker({
                             setMode(m);
                             setMenuOpen(false);
                           }}
-                          className="bg-transparent border-none text-[#e4e4e7] text-xs text-left px-2.5 py-1.5 cursor-pointer hover:bg-[#262626] hover:text-white"
+                          className="bg-transparent border-none text-[#f0f0f0] text-[11px] text-left px-2.5 py-1.5 cursor-pointer hover:bg-[#353535]"
                         >
                           {modeLabels[m]}
                         </button>
@@ -633,7 +623,8 @@ export function ColorPicker({
                   )}
                 </div>
 
-                <div className="flex-1 flex gap-1.5 min-w-0">
+                {/* open-pencil channel grid */}
+                <div className="grid min-w-0 flex-1 grid-cols-[repeat(3,minmax(0,1fr))] gap-px overflow-hidden rounded border border-[#3a3a3a] bg-[#3a3a3a]">
                   {fieldValues.map((val, i) => (
                     <input
                       key={i}
@@ -641,8 +632,10 @@ export function ColorPicker({
                         fieldRefs.current[i] = el;
                       }}
                       type="text"
+                      inputMode="numeric"
                       spellCheck={false}
                       value={val}
+                      aria-label={channelLabels[i]}
                       onChange={(e) => {
                         const raw = e.target.value;
                         setFieldValues((prev) =>
@@ -657,7 +650,7 @@ export function ColorPicker({
                         if (e.key === "Enter" && mode === "hex")
                           commitHexFrom(e.target as HTMLInputElement);
                       }}
-                      className={"w-full " + fieldInputCls}
+                      className="w-full bg-[#1e1e1e] px-2 py-1 text-[11px] text-[#f0f0f0] outline-none"
                     />
                   ))}
                 </div>
@@ -667,6 +660,7 @@ export function ColorPicker({
                     ref={alphaRef}
                     type="text"
                     inputMode="numeric"
+                    aria-label="Alpha"
                     value={alphaText}
                     onChange={(e) => {
                       const raw = e.target.value;
@@ -674,17 +668,17 @@ export function ColorPicker({
                       const v = parseInt(raw, 10);
                       if (!Number.isNaN(v)) setAlpha(clamp(v, 0, 100) / 100);
                     }}
-                    className={"w-[42px] " + fieldInputCls}
+                    className="w-[42px] bg-[#1e1e1e] border border-[#3a3a3a] rounded-[6px] px-2 py-1 text-[11px] text-[#f0f0f0] text-center outline-none focus:border-[#3b82f6]"
                   />
-                  <span className="text-[#6f6f6f] text-xs">%</span>
+                  <span className="text-[#888888] text-[11px]">%</span>
                 </div>
               </div>
 
               {/* ── Swatches ── */}
-              <div className="mx-4 mt-3">
+              <div className="mx-2 mt-3">
                 <button
                   type="button"
-                  className="w-full flex justify-between items-center px-2.5 py-1.5 bg-transparent border border-[#2a2a2a] rounded-[6px] text-[#e4e4e7] text-xs font-semibold cursor-pointer hover:border-[#3d3d3d]"
+                  className="w-full flex justify-between items-center px-2.5 py-1.5 bg-transparent border border-[#3a3a3a] rounded-[6px] text-[#f0f0f0] text-[11px] font-semibold cursor-pointer hover:border-[#424242]"
                 >
                   On this page
                   <svg width="10" height="6" viewBox="0 0 10 6">
@@ -697,7 +691,7 @@ export function ColorPicker({
                     />
                   </svg>
                 </button>
-                <div className="grid grid-cols-9 gap-[5px] mt-2.5">
+                <div className="grid grid-cols-8 gap-[5px] mt-2.5">
                   {swatches.map((c, i) => (
                     <button
                       key={i}
