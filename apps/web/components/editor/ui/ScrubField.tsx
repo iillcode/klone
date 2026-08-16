@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 /**
  * Display/scrub number control — faithful React port of open-pencil's
@@ -127,13 +128,15 @@ export function ScrubField({
           setEditing(true);
         }
       }}
-      className={`flex h-6 min-w-0 items-center text-[11px] tabular-nums text-[#f0f0f0] outline-none ${
+      className={cn(
+        "flex h-6 min-w-0 items-center text-[11px] tabular-nums text-[#f0f0f0] outline-none",
         disabled
           ? "cursor-not-allowed opacity-60"
           : editing
             ? "cursor-auto"
-            : "cursor-ew-resize"
-      } ${className}`}
+            : "cursor-ew-resize",
+        className,
+      )}
     >
       {editing ? (
         <input

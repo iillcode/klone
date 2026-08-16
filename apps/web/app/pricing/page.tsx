@@ -1,4 +1,3 @@
-import { AnnouncementBar } from "@/components/marketing/landing/AnnouncementBar";
 import { FinalCTA } from "@/components/marketing/landing/FinalCTA";
 import { LandingFooter } from "@/components/marketing/landing/LandingFooter";
 import { LandingNavbar } from "@/components/marketing/landing/LandingNavbar";
@@ -14,7 +13,6 @@ import {
 export default function PricingPage() {
   return (
     <>
-      <AnnouncementBar />
       <LandingNavbar />
       <main>
         <PricingSection />

@@ -10,9 +10,9 @@ export function IsoCube({
   x,
   y,
   size = 36,
-  fill = "#ffffff",
-  stroke = "#c4c4c4",
-  topFill = "#f3f3f3",
+  fill = "#1c1c1d",
+  stroke = "#3f3f42",
+  topFill = "#262628",
 }: {
   x: number;
   y: number;
@@ -54,8 +54,8 @@ export function Cylinder({
   y,
   width = 64,
   height = 96,
-  fill = "#ffffff",
-  stroke = "#b8b8b8",
+  fill = "#1c1c1d",
+  stroke = "#3f3f42",
 }: {
   x: number;
   y: number;
@@ -95,7 +95,7 @@ export function DocPage({
   height = 88,
   lines = 4,
   accent = "#aef637",
-  stroke = "#b8b8b8",
+  stroke = "#3f3f42",
 }: {
   x: number;
   y: number;
@@ -113,13 +113,13 @@ export function DocPage({
     <g>
       <path
         d={`M ${x} ${y} h ${width - fold} l ${fold} ${fold} v ${height - fold} h ${-width} Z`}
-        fill="#ffffff"
+        fill="#1e1e1f"
         stroke={stroke}
         strokeWidth="1"
       />
       <path
         d={`M ${x + width - fold} ${y} v ${fold} h ${fold}`}
-        fill="#f4f4f4"
+        fill="#262628"
         stroke={stroke}
         strokeWidth="1"
       />
@@ -131,7 +131,7 @@ export function DocPage({
           y={lineY0 + i * lineGap}
           width={width - inset * 2 - (i % 2 === 1 ? 10 : 0)}
           height={2.5}
-          fill="#e2e2e2"
+          fill="#3d3d40"
         />
       ))}
     </g>
@@ -159,8 +159,8 @@ export function Label({
         y={y}
         width={width}
         height={20}
-        fill="#ffffff"
-        stroke="#dcdcdc"
+        fill="#1c1c1d"
+        stroke="#3f3f42"
         strokeWidth="1"
       />
       <circle cx={x + 11} cy={y + 10} r={3} fill={dot} />
@@ -169,7 +169,7 @@ export function Label({
         y={y + 13.5}
         fontSize="8.5"
         fontFamily="var(--font-geist-mono), monospace"
-        fill="#525252"
+        fill="#a1a1a6"
       >
         {text}
       </text>
@@ -180,19 +180,21 @@ export function Label({
 /** Dotted connector path. Add className="animate-dash-flow" to animate. */
 export function DottedPath({
   d,
-  stroke = "#c9c9c9",
+  stroke = "#3f3f42",
   animate = false,
+  strokeWidth = 1,
 }: {
   d: string;
   stroke?: string;
   animate?: boolean;
+  strokeWidth?: number;
 }) {
   return (
     <path
       d={d}
       fill="none"
       stroke={stroke}
-      strokeWidth="1"
+      strokeWidth={strokeWidth}
       strokeDasharray="3 4"
       className={animate ? "animate-dash-flow" : undefined}
     />
@@ -271,8 +273,8 @@ export function Person({
   x,
   y,
   scale = 1,
-  stroke = "#9a9a9a",
-  fill = "#ffffff",
+  stroke = "#5a5a5e",
+  fill = "#1c1c1d",
 }: {
   x: number;
   y: number;
@@ -293,8 +295,8 @@ export function Lock({
   x,
   y,
   size = 26,
-  stroke = "#9a9a9a",
-  fill = "#ffffff",
+  stroke = "#5a5a5e",
+  fill = "#1c1c1d",
 }: {
   x: number;
   y: number;
@@ -314,8 +316,8 @@ export function Lock({
         strokeWidth="1.4"
       />
       <rect x={x} y={y} width={bw} height={bh} fill={fill} stroke={stroke} strokeWidth="1" />
-      <circle cx={x + half} cy={y + bh * 0.42} r={2} fill="#0a0a0a" />
-      <rect x={x + half - 1} y={y + bh * 0.42} width={2} height={bh * 0.3} fill="#0a0a0a" />
+      <circle cx={x + half} cy={y + bh * 0.42} r={2} fill="#a1a1a6" />
+      <rect x={x + half - 1} y={y + bh * 0.42} width={2} height={bh * 0.3} fill="#a1a1a6" />
     </g>
   );
 }
@@ -341,8 +343,8 @@ export function Chip({
         y={y}
         width={width}
         height={24}
-        fill="#ffffff"
-        stroke="#d4d4d4"
+        fill="#1c1c1d"
+        stroke="#3f3f42"
         strokeWidth="1"
       />
       <circle cx={x + 13} cy={y + 12} r={3.5} fill={dot} />
@@ -352,7 +354,7 @@ export function Chip({
         fontSize="10"
         fontWeight="600"
         fontFamily="var(--font-geist-sans), sans-serif"
-        fill="#404040"
+        fill="#d4d4d4"
       >
         {text}
       </text>
@@ -360,26 +362,44 @@ export function Chip({
   );
 }
 
-/** Numbered step badge used to narrate a flow (1, 2, 3, 4 …). */
+/** Numbered step badge used to narrate a flow (1, 2, 3, 4 …).
+ *  `shape="square"` renders a node-graph style square badge (React Flow feel). */
 export function StepBadge({
   cx,
   cy,
   n,
   tone = "dark",
+  shape = "circle",
 }: {
   cx: number;
   cy: number;
   n: number;
   tone?: "dark" | "accent";
+  shape?: "circle" | "square";
 }) {
+  const half = 11;
   return (
     <g>
-      <circle
-        cx={cx}
-        cy={cy}
-        r={11}
-        fill={tone === "accent" ? "#aef637" : "#0a0a0a"}
-      />
+      {shape === "square" ? (
+        <rect
+          x={cx - half}
+          y={cy - half}
+          width={half * 2}
+          height={half * 2}
+          fill={tone === "accent" ? "#aef637" : "#2a2a2c"}
+          stroke={tone === "accent" ? "none" : "#3f3f42"}
+          strokeWidth="1"
+        />
+      ) : (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={half}
+          fill={tone === "accent" ? "#aef637" : "#2a2a2c"}
+          stroke={tone === "accent" ? "none" : "#3f3f42"}
+          strokeWidth="1"
+        />
+      )}
       <text
         x={cx}
         y={cy + 4}
@@ -387,7 +407,7 @@ export function StepBadge({
         fontSize="11"
         fontWeight="700"
         fontFamily="var(--font-geist-sans), sans-serif"
-        fill={tone === "accent" ? "#0a0a0a" : "#ffffff"}
+        fill={tone === "accent" ? "#0a0a0a" : "#ededed"}
       >
         {n}
       </text>

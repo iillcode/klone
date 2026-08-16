@@ -2,12 +2,13 @@
 
 import { useState, useRef, useCallback, useEffect, useId } from "react";
 import { createPortal } from "react-dom";
+import { cn } from "@/lib/utils";
 import { ChevronIcon } from "../icons/properties-icons";
 
 /**
  * Compact panel select — faithful React port of open-pencil's `AppSelect`
  * (theme in `src/theme/app-select.ts` + `src/theme/select.ts`):
- *   - trigger: h-6 panel-field (bg #383838, hover #404040, focus #3b82f6),
+ *   - trigger: h-6 panel-field (bg #1e1e1e, hover #262626, focus #3b82f6),
  *     text-[11px], value left-truncated, chevron ml-1 size-3 text-muted
  *   - menu: portal, min-width = trigger width, p-0.5, rounded panel bg
  *     (#2a2a2a), 11px items, h-6 rows, highlight bg (#353535), accent
@@ -144,7 +145,10 @@ export function PanelSelect({
         onKeyDown={onTriggerKeyDown}
         onClick={() => (open ? close() : openMenu())}
         {...(dataProperty ? { "data-property": dataProperty } : {})}
-        className={`flex h-6 min-w-0 items-center justify-between rounded border border-transparent bg-[#383838] px-1.5 text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#404040] focus:border-[#3b82f6] focus:bg-[#404040] focus-visible:border-[#3b82f6] focus-within:border-[#3b82f6] focus-within:bg-[#404040] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer ${className}`}
+        className={cn(
+          "flex h-6 min-w-0 items-center justify-between rounded border border-transparent bg-[#1e1e1e] px-1.5 text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#262626] focus:border-[#3b82f6] focus:bg-[#262626] focus-visible:border-[#3b82f6] focus-within:border-[#3b82f6] focus-within:bg-[#262626] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer",
+          className,
+        )}
       >
         <span
           className="min-w-0 flex-1 truncate text-left"
@@ -172,7 +176,7 @@ export function PanelSelect({
               minWidth: pos.width,
               zIndex: 9999,
             }}
-            className="max-h-56 overflow-auto rounded-md bg-[#2a2a2a] p-0.5 text-[11px] shadow-[0_8px_30px_rgba(0,0,0,0.4)]"
+            className="scrollbar-none max-h-56 overflow-auto rounded-md bg-[#2a2a2a] p-0.5 text-[11px] shadow-[0_8px_30px_rgba(0,0,0,0.4)]"
           >
             {options.map((o, i) => {
               const selected = o.value === value;

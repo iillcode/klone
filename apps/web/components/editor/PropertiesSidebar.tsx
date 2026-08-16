@@ -5,7 +5,6 @@ import type { ElementInfo, AlignMode, LayerNode } from "./HtmlPreview";
 import { PencilRuler, PanelsTopLeft } from "lucide-react";
 import { LayerTree } from "./ui/LayerTree";
 import {
-  Keyboard,
   Undo2,
   Redo2,
   AlignStartVertical,
@@ -23,6 +22,7 @@ import {
 import { parseTranslate } from "./utils/style-utils";
 import { NumberField } from "./ui/NumberField";
 import { TypographyPanel } from "./ui/TypographyPanel";
+import { KloneWordmark } from "@/components/marketing/landing/LandingNavbar";
 import { AppearanceSection } from "./ui/AppearanceSection";
 import { StrokeSection } from "./ui/StrokeSection";
 import { EffectsSection } from "./ui/EffectsSection";
@@ -30,50 +30,13 @@ import { LayoutSection } from "./ui/LayoutSection";
 import { FillSection } from "./ui/FillSection";
 
 /**
- * Keyboard shortcuts available in the Klone editor, shown in the design
- * panel when nothing is selected. `keys` are rendered as small kbd chips;
- * "⌘" means ⌘ on macOS / Ctrl on Windows & Linux.
+ * The three major keyboard shortcuts surfaced in the design panel when
+ * nothing is selected. `keys` are rendered as small kbd chips.
  */
-const SHORTCUT_GROUPS: {
-  title: string;
-  items: { label: string; keys: string[] }[];
-}[] = [
-  {
-    title: "Inspect & select",
-    items: [
-      { label: "Inspect mode", keys: ["V"] },
-      { label: "Select all", keys: ["⌘", "A"] },
-      { label: "Toggle selection", keys: ["⌘", "Click"] },
-      { label: "Additive marquee", keys: ["⇧", "Drag"] },
-      { label: "Clear selection", keys: ["Esc"] },
-    ],
-  },
-  {
-    title: "Editing",
-    items: [
-      { label: "Edit text", keys: ["Double-click"] },
-      { label: "Undo", keys: ["⌘", "Z"] },
-      { label: "Redo", keys: ["⇧", "⌘", "Z"] },
-      { label: "Delete selection", keys: ["⌫"] },
-      { label: "Nudge 1px", keys: ["← ↑ ↓ →"] },
-      { label: "Nudge 10px", keys: ["⇧", "← ↑ ↓ →"] },
-    ],
-  },
-  {
-    title: "Text editing",
-    items: [
-      { label: "Save text", keys: ["Enter"] },
-      { label: "Save (code blocks)", keys: ["⌘", "Enter"] },
-      { label: "Cancel edit", keys: ["Esc"] },
-    ],
-  },
-  {
-    title: "Canvas",
-    items: [
-      { label: "Search documents", keys: ["/"] },
-      { label: "Cancel page break", keys: ["Esc"] },
-    ],
-  },
+const MAJOR_SHORTCUTS: { label: string; keys: string[] }[] = [
+  { label: "Inspect mode", keys: ["V"] },
+  { label: "Edit text", keys: ["Double-click"] },
+  { label: "Clear selection", keys: ["Esc"] },
 ];
 
 interface PropertiesSidebarProps {
@@ -231,56 +194,48 @@ export function PropertiesSidebar({
       {/* ── Scrollable properties area (panel padding 14px) ── */}
       <div
         className={
-          "flex-1 overflow-y-auto custom-scroll px-3.5 py-3.5" +
+          "flex-1 overflow-y-auto scrollbar-none py-2.5" +
           (tab === "layers" ? " hidden" : "")
         }
       >
         {!hasSelection && (
-          <div className="flex h-full flex-col p-3">
-            {/* Keyboard shortcuts */}
-            <div className="mb-3.5 flex items-center gap-2">
-              <Keyboard className="h-3.5 w-3.5 text-[#52525b]" />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#6f6f6f]">
-                Keyboard shortcuts
-              </span>
-            </div>
+          <div className="flex h-full flex-col items-center justify-center p-3">
+            {/* Branding + hint */}
+            <KloneWordmark className="text-[16px]" variant="black" />
+            <p className="mt-2.5 text-center text-[11px] leading-relaxed text-[#8a8a8a]">
+              Click any element on the canvas to select and edit it.
+            </p>
 
-            {SHORTCUT_GROUPS.map((group) => (
-              <div key={group.title} className="mb-4">
-                <p className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[#4a4a4a]">
-                  {group.title}
-                </p>
-                <div className="space-y-[5px]">
-                  {group.items.map((item) => (
-                    <div
-                      key={item.label}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <span className="min-w-0 flex-1 truncate text-[10.5px] text-[#71717a]">
-                        {item.label}
-                      </span>
-                      <span className="flex flex-none items-center gap-[3px]">
-                        {item.keys.map((key, i) => (
-                          <kbd
-                            key={i}
-                            className="rounded-[4px] border border-[#262626] bg-[#1a1a1a] px-[5px] py-[2px] font-mono text-[8.5px] font-medium leading-[12px] text-[#8f8f8f]"
-                          >
-                            {key}
-                          </kbd>
-                        ))}
-                      </span>
-                    </div>
-                  ))}
+            {/* Major shortcuts */}
+            <div className="mt-6 w-full space-y-[5px]">
+              {MAJOR_SHORTCUTS.map((item) => (
+                <div
+                  key={item.label}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[10.5px] text-[#71717a]">
+                    {item.label}
+                  </span>
+                  <span className="flex flex-none items-center gap-[3px]">
+                    {item.keys.map((key, i) => (
+                      <kbd
+                        key={i}
+                        className="rounded-[4px] border border-[#262626] bg-[#1a1a1a] px-[5px] py-[2px] font-mono text-[8.5px] font-medium leading-[12px] text-[#8f8f8f]"
+                      >
+                        {key}
+                      </kbd>
+                    ))}
+                  </span>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
 
         {hasSelection && s && (
           <div className="w-full">
             {/* ── Header: element name + actions ── */}
-            <div className="flex items-center justify-between pb-3">
+            <div className="flex items-center justify-between px-3 pb-3">
               <span className="text-[14px] font-semibold text-[#ffffff] truncate">
                 {elementName}
                 {count > 1 ? ` · ${count}` : ""}
@@ -341,7 +296,7 @@ export function PropertiesSidebar({
             </div>
 
             {/* ── Position ── */}
-            <div className="py-3.5 border-b border-[#3a3a3a]">
+            <div className="px-3 py-2.5 border-b border-[#3a3a3a]">
               <div className="text-[11px] font-semibold text-[#f0f0f0] mb-3">
                 Position
               </div>
@@ -495,7 +450,7 @@ export function PropertiesSidebar({
 
             {/* ── Pages ── */}
             {onMoveToPage && pageCount > 0 && !isContainerSel && (
-              <div className="py-3.5">
+              <div className="px-3 py-2.5">
                 <div className="text-[11px] font-semibold text-[#f0f0f0] mb-3">
                   Pages
                 </div>
@@ -561,7 +516,7 @@ export function PropertiesSidebar({
 
             {/* ── Delete ── */}
             {onDelete && (
-              <div className="pt-3.5 mt-1 border-t border-[rgba(255,255,255,0.08)]">
+              <div className="px-3 pt-3.5 mt-1 border-t border-[rgba(255,255,255,0.08)]">
                 <button
                   type="button"
                   onClick={onDelete}

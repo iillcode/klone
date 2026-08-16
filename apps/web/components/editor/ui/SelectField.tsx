@@ -39,8 +39,8 @@ export function SelectField({
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    // Estimate menu height (option row 32px + padding 8px)
-    const estH = options.length * 32 + 8;
+    // Estimate menu height (option row 24px + padding 4px)
+    const estH = options.length * 24 + 4;
     const spaceBelow = window.innerHeight - r.bottom;
     let top = r.bottom + 4;
     if (spaceBelow < estH && r.top > estH + 4) top = r.top - estH - 4;
@@ -127,31 +127,33 @@ export function SelectField({
 
   return (
     <>
-      <div
-        className={`relative h-7 bg-[#1e1e1e] rounded-[6px] transition-colors hover:bg-[#202020] ${
-          open ? "bg-[#202020]" : ""
-        } ${grow ? "flex-1 min-w-0" : "shrink-0"} ${className}`}
+      <button
+        ref={triggerRef}
+        type="button"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title={title}
+        onClick={() => (open ? close() : openMenu())}
+        onKeyDown={onTriggerKeyDown}
+        className={`flex h-6 items-center justify-between rounded border border-transparent bg-[#1e1e1e] px-1.5 text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#262626] focus:border-[#3b82f6] focus:bg-[#262626] focus-visible:border-[#3b82f6] focus-within:border-[#3b82f6] focus-within:bg-[#262626] cursor-pointer ${
+          grow ? "flex-1 min-w-0" : "w-full min-w-0"
+        } ${className}`}
       >
-        <button
-          ref={triggerRef}
-          type="button"
-          title={title}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          onClick={() => (open ? close() : openMenu())}
-          onKeyDown={onTriggerKeyDown}
-          className="w-full h-full flex items-center pl-2.5 pr-7 text-[13px] text-[#eaeaea] truncate focus:outline-none cursor-pointer"
-        >
-          <span className="truncate">{currentLabel}</span>
-        </button>
         <span
-          className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[#9b9b9b] flex items-center transition-transform ${
+          className="min-w-0 flex-1 truncate text-left"
+          style={{ pointerEvents: "none" }}
+        >
+          {currentLabel}
+        </span>
+        <span
+          className={`ml-1 flex size-3 shrink-0 items-center justify-center text-[#888888] transition-transform ${
             open ? "rotate-180" : ""
           }`}
         >
           <ChevronIcon />
         </span>
-      </div>
+      </button>
 
       {open &&
         pos &&
@@ -166,7 +168,7 @@ export function SelectField({
               minWidth: pos.width,
               zIndex: 9999,
             }}
-            className="py-1 bg-[#1a1a1a] border border-[#3f3f46] rounded-[6px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+            className="max-h-56 overflow-y-auto scrollbar-none rounded-md bg-[#2a2a2a] p-0.5 text-[11px] shadow-[0_8px_30px_rgba(0,0,0,0.4)]"
           >
             {options.map((o, i) => {
               const selected = o.value === value;
@@ -180,17 +182,15 @@ export function SelectField({
                   onMouseEnter={() => setActiveIdx(i)}
                   onClick={() => select(o.value)}
                   style={fontPreview ? { fontFamily: o.value } : undefined}
-                  className={`w-full flex items-center gap-1.5 pl-2 pr-2.5 h-8 text-[13px] text-left truncate transition-colors ${
-                    active
-                      ? "bg-[#202020] text-white"
-                      : selected
-                        ? "text-white"
-                        : "text-[#eaeaea]"
-                  }`}
+                  className={`relative flex h-6 w-full cursor-pointer select-none items-center pl-6 pr-2 text-left text-[#f0f0f0] outline-none transition-colors ${
+                    active ? "bg-[#353535]" : ""
+                  } ${selected ? "font-medium text-white" : ""}`}
                 >
-                  <span className="w-4 shrink-0 flex items-center justify-center">
-                    {selected && <CheckIcon />}
-                  </span>
+                  {selected && (
+                    <span className="absolute left-1.5 text-[#3b82f6]">
+                      <CheckIcon />
+                    </span>
+                  )}
                   <span className="truncate">{o.label}</span>
                 </button>
               );

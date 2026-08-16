@@ -3,59 +3,21 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { KloneWordmark } from "../landing/LandingNavbar";
 
-const NAV_LINKS = [
-  { label: "Templates", href: "#templates" },
-  { label: "How it works", href: "#how" },
-  { label: "Pricing", href: "/pricing" },
-  { label: "Docs", href: "/docs" },
+const DOCS_NAV_LINKS = [
+  { label: "Setup", href: "#setup" },
+  { label: "Tools", href: "#tools" },
+  { label: "Connect a tool", href: "#guides" },
+  { label: "Security", href: "#security" },
+  { label: "FAQ", href: "#faq" },
 ];
 
 /**
- * Klone wordmark used across the landing page.
- * `variant="black"` renders the inverted mark (black tile, lime K).
+ * Sticky docs navigation. Same chrome as the landing navbar but scoped to
+ * docs anchors, with a link back to the marketing site.
  */
-export function KloneWordmark({
-  className,
-  variant = "default",
-}: {
-  className?: string;
-  variant?: "default" | "black";
-}) {
-  const black = variant === "black";
-  return (
-    <span
-      className={cn(
-        "flex items-center gap-2 text-[17px] font-bold tracking-tight text-[#ededed]",
-        className,
-      )}
-    >
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 18 18"
-        fill="none"
-        aria-hidden="true"
-      >
-        <rect x="1" y="1" width="16" height="16" fill={black ? "#0a0a0a" : "#aef637"} />
-        <path
-          d="M6 4v10M6.4 9.4 12.6 4M8.2 8 12.8 14"
-          stroke={black ? "#aef637" : "#0a0a0a"}
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      Klone
-    </span>
-  );
-}
-
-/**
- * Minimal sticky navigation. Gains a translucent dark background and
- * backdrop blur once the page is scrolled past the announcement bar.
- */
-export function LandingNavbar() {
+export function DocsNavbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -76,18 +38,24 @@ export function LandingNavbar() {
       )}
     >
       <nav
-        aria-label="Main navigation"
-        className="relative mx-auto flex h-[68px] w-full max-w-[1200px] items-center justify-between gap-6 px-5 md:px-8 lg:px-10"
+        aria-label="Docs navigation"
+        className="mx-auto flex h-[68px] w-full max-w-[1200px] items-center justify-between gap-6 px-5 md:px-8 lg:px-10"
       >
-        <a
-          href="/home"
-          className="shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#aef637]"
-        >
-          <KloneWordmark />
-        </a>
+        <div className="flex items-center gap-4">
+          <a
+            href="/home"
+            className="shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#aef637]"
+          >
+            <KloneWordmark />
+          </a>
+          <span className="hidden select-none text-[#3f3f42] sm:inline">/</span>
+          <span className="hidden text-[13px] font-medium text-[#8a8a8a] sm:inline">
+            Docs · MCP
+          </span>
+        </div>
 
-        <ul className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 lg:flex">
-          {NAV_LINKS.map((link) => (
+        <ul className="hidden items-center gap-8 lg:flex">
+          {DOCS_NAV_LINKS.map((link) => (
             <li key={link.label}>
               <a
                 href={link.href}
@@ -101,16 +69,10 @@ export function LandingNavbar() {
 
         <div className="hidden items-center gap-6 lg:flex">
           <a
-            href="/login"
-            className="text-[14px] font-medium text-[#a1a1a6] transition-colors duration-150 hover:text-[#ededed] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#aef637]"
-          >
-            Sign in
-          </a>
-          <a
-            href="/register"
+            href="/dashboard"
             className="group flex items-center gap-1.5 bg-[#aef637] px-4 py-2.5 text-[14px] font-medium text-[#0a0a0a] transition-colors duration-150 hover:bg-[#9be22e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
           >
-            Get started
+            Open dashboard
             <ArrowUpRight
               size={14}
               className="transition-transform duration-150 group-hover:translate-x-px group-hover:-translate-y-px"
@@ -132,7 +94,7 @@ export function LandingNavbar() {
       {mobileOpen && (
         <div className="border-t border-[#2a2a2c] bg-[#161617] px-5 py-4 lg:hidden">
           <ul className="flex flex-col gap-1">
-            {NAV_LINKS.map((link) => (
+            {DOCS_NAV_LINKS.map((link) => (
               <li key={link.label}>
                 <a
                   href={link.href}
@@ -144,18 +106,12 @@ export function LandingNavbar() {
               </li>
             ))}
           </ul>
-          <div className="mt-4 flex items-center gap-3 border-t border-[#2a2a2c] pt-4">
+          <div className="mt-4 border-t border-[#2a2a2c] pt-4">
             <a
-              href="/login"
-              className="flex-1 border border-[#2a2a2c] px-4 py-2.5 text-center text-[14px] font-medium text-[#ededed]"
+              href="/dashboard"
+              className="block bg-[#aef637] px-4 py-2.5 text-center text-[14px] font-medium text-[#0a0a0a]"
             >
-              Sign in
-            </a>
-            <a
-              href="/register"
-              className="flex-1 bg-[#aef637] px-4 py-2.5 text-center text-[14px] font-medium text-[#0a0a0a]"
-            >
-              Get started
+              Open dashboard
             </a>
           </div>
         </div>

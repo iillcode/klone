@@ -120,7 +120,7 @@ function FontPicker({
         ref={triggerRef}
         type="button"
         onClick={() => (open ? setOpen(false) : (setOpen(true), updatePos()))}
-        className="flex min-w-0 flex-1 items-center gap-1.5 rounded border border-transparent bg-[#383838] px-2 py-1 text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#404040] focus-visible:border-[#3b82f6]"
+        className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded border border-transparent bg-[#1e1e1e] px-1.5 text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#262626] focus:border-[#3b82f6] focus:bg-[#262626] focus-visible:border-[#3b82f6] focus-within:border-[#3b82f6] focus-within:bg-[#262626]"
         style={{ fontFamily: value || undefined }}
       >
         <span className="truncate">{currentLabel}</span>
@@ -131,7 +131,7 @@ function FontPicker({
       {open && pos && createPortal(
         <div
           style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
-          className="overflow-hidden rounded-[6px] border border-[#3a3a3a] bg-[#2a2a2a] shadow-[0_8px_30px_rgb(0_0_0/0.4)]"
+          className="overflow-hidden rounded-md bg-[#2a2a2a] shadow-[0_8px_30px_rgba(0,0,0,0.4)]"
         >
           <div className="flex items-center gap-1.5 border-b border-[#3a3a3a] px-2 py-1.5">
             <Search className="size-3.5 shrink-0 text-[#888888]" />
@@ -143,7 +143,7 @@ function FontPicker({
               className="min-w-0 flex-1 border-none bg-transparent text-[11px] text-[#f0f0f0] outline-none placeholder:text-[#888888]"
             />
           </div>
-          <div className="max-h-[240px] overflow-y-auto custom-scroll py-1">
+          <div className="max-h-[240px] overflow-y-auto scrollbar-none p-0.5">
             {filtered.map((f) => (
               <button
                 key={f.value}
@@ -153,7 +153,7 @@ function FontPicker({
                   setOpen(false);
                   setQuery("");
                 }}
-                className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#353535]"
+                className="flex h-6 w-full select-none items-center justify-between gap-2 rounded px-2 text-left text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#353535]"
                 style={{ fontFamily: f.value }}
               >
                 <span className="truncate">{f.label}</span>
@@ -183,7 +183,7 @@ function SegmentedControl({
     <div
       role="toolbar"
       aria-label={label}
-      className="inline-flex items-center gap-0.5 rounded bg-[#383838] p-0.5 hover:bg-[#404040]"
+      className="flex w-full items-center gap-0.5 rounded bg-[#1e1e1e] p-0.5 hover:bg-[#262626]"
     >
       {options.map((opt) => {
         const selected = opt.value === value;
@@ -195,9 +195,9 @@ function SegmentedControl({
             aria-label={opt.label}
             aria-pressed={selected}
             onClick={() => onChange(opt.value)}
-            className={`flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none p-0 outline-none transition-colors ${
+            className={`flex h-6 flex-1 cursor-pointer items-center justify-center rounded border-none p-0 outline-none transition-colors ${
               selected
-                ? "bg-[#404040] text-[#f0f0f0]"
+                ? "bg-[#2e2e2e] text-[#f0f0f0]"
                 : "text-[#888888] hover:text-[#f0f0f0]"
             }`}
           >
@@ -241,12 +241,12 @@ export function TypographyPanel({
   };
 
   const fmtBlock =
-    "mb-3 flex items-center gap-0.5 rounded bg-[#383838] p-0.5 hover:bg-[#404040]";
+    "mb-3 flex w-full items-center gap-0.5 rounded bg-[#1e1e1e] p-0.5 hover:bg-[#262626]";
   const fmtBtn =
-    "flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 outline-none transition-colors text-[#888888] hover:text-[#f0f0f0]";
+    "flex h-6 flex-1 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 outline-none transition-colors text-[#888888] hover:text-[#f0f0f0]";
 
   return (
-    <div className="py-3.5 border-b border-[#3a3a3a]">
+    <div className="px-3 py-2.5 border-b border-[#3a3a3a]">
       <div className="text-[11px] font-semibold text-[#f0f0f0] mb-3">Typography</div>
 
       {/* Font + settings row */}

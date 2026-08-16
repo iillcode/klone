@@ -32,7 +32,7 @@ interface GoogleButtonProps {
   label?: string;
 }
 
-/** Google OAuth button styled for the light editorial auth screens. */
+/** Google OAuth button styled for the dark editorial auth screens. */
 export function GoogleButton({ label = "Continue with Google" }: GoogleButtonProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export function GoogleButton({ label = "Continue with Google" }: GoogleButtonPro
     <>
       <button
         type="button"
-        className="flex w-full items-center justify-center gap-2.5 border border-[#e5e5e5] bg-white px-4 py-3 text-[14px] font-medium text-[#0a0a0a] transition-colors duration-150 hover:border-[#c4c4c4] hover:bg-[#fafafa] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a] disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2.5 border border-[#2a2a2c] bg-[#1c1c1d] px-4 py-3 text-[14px] font-medium text-[#ededed] transition-colors duration-150 hover:border-[#3f3f42] hover:bg-[#232324] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637] disabled:opacity-60"
         onClick={handleClick}
         disabled={pending}
       >

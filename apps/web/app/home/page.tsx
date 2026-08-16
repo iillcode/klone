@@ -1,4 +1,3 @@
-import { AnnouncementBar } from "@/components/marketing/landing/AnnouncementBar";
 import { FeatureGridSection } from "@/components/marketing/landing/FeatureGridSection";
 import { FinalCTA } from "@/components/marketing/landing/FinalCTA";
 import { HeroSection } from "@/components/marketing/landing/Hero";
@@ -16,7 +15,6 @@ import { UseCases } from "@/components/marketing/landing/UseCases";
 export default function KloneLandingPage() {
   return (
     <>
-      <AnnouncementBar />
       <LandingNavbar />
       <main>
         <HeroSection />

@@ -40,7 +40,7 @@ export function Section({
 }) {
   return (
     <div
-      className={`py-3.5 ${noBorder ? "" : "border-b border-[#3a3a3a]"}`}
+      className={`px-3 py-3.5 ${noBorder ? "" : "border-b border-[#3a3a3a]"}`}
     >
       {headerIcons ? (
         <div className="flex items-center justify-between">
@@ -149,7 +149,7 @@ export function ColorRow({
       <div className="flex min-w-0 items-center gap-1.5" data-slot="content">
         {/* open-pencil PaintField */}
         <div
-          className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-transparent bg-[#383838] text-[11px] transition-colors hover:bg-[#404040] focus-within:border-[#3b82f6] focus-within:bg-[#404040] w-full flex-none"
+          className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-transparent bg-[#1e1e1e] text-[11px] transition-colors hover:bg-[#262626] focus-within:border-[#3b82f6] focus-within:bg-[#262626] w-full flex-none"
           data-slot="paint-field"
           data-property="paint"
         >

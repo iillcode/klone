@@ -27,7 +27,7 @@ export function StrokeSection({
   const align = styles.strokeAlign || "CENTER";
 
   return (
-    <div className="py-3.5 border-b border-[#3a3a3a]">
+    <div className="px-3 py-2.5 border-b border-[#3a3a3a]">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold text-[#f0f0f0]">Stroke</span>
         <div className="flex items-center gap-0.5">

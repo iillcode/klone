@@ -17,7 +17,7 @@ function BlueprintIllustration() {
       aria-label="One template producing many finished documents: a report, an invoice, and a resume"
       className="h-auto w-full max-w-[500px]"
     >
-      <g stroke="#f0f0f0" strokeWidth="1">
+      <g stroke="#242424" strokeWidth="1">
         {Array.from({ length: 8 }).map((_, i) => (
           <line key={`v${i}`} x1={40 + i * 64} y1={20} x2={40 + i * 64} y2={380} />
         ))}
@@ -31,15 +31,15 @@ function BlueprintIllustration() {
         <g>
           <path
             d="M 220 58 h 82 l 12 12 v 84 h -94 Z"
-            fill="#ffffff"
-            stroke="#9a9a9a"
+            fill="#1c1c1d"
+            stroke="#3f3f42"
             strokeWidth="1"
           />
-          <path d="M 302 58 v 12 h 12" fill="#f4f4f4" stroke="#9a9a9a" strokeWidth="1" />
+          <path d="M 302 58 v 12 h 12" fill="#262628" stroke="#3f3f42" strokeWidth="1" />
           <rect x={232} y={72} width={34} height={4} fill="#aef637" />
-          <rect x={232} y={86} width={70} height={16} fill="none" stroke="#b8b8b8" strokeWidth="1" strokeDasharray="3 3" />
-          <rect x={232} y={108} width={32} height={16} fill="none" stroke="#b8b8b8" strokeWidth="1" strokeDasharray="3 3" />
-          <rect x={270} y={108} width={32} height={16} fill="none" stroke="#b8b8b8" strokeWidth="1" strokeDasharray="3 3" />
+          <rect x={232} y={86} width={70} height={16} fill="none" stroke="#3f3f42" strokeWidth="1" strokeDasharray="3 3" />
+          <rect x={232} y={108} width={32} height={16} fill="none" stroke="#3f3f42" strokeWidth="1" strokeDasharray="3 3" />
+          <rect x={270} y={108} width={32} height={16} fill="none" stroke="#3f3f42" strokeWidth="1" strokeDasharray="3 3" />
         </g>
       </Float>
       <StepBadge cx={220} cy={58} n={1} />
@@ -48,7 +48,7 @@ function BlueprintIllustration() {
       {/* fan paths to the three documents */}
       <DottedPath d="M 250 152 C 196 190 148 220 114 244" animate />
       <DottedPath d="M 260 154 C 260 200 258 240 256 266" animate />
-      <DottedPath d="M 270 152 C 328 190 378 220 408 244" stroke="#dcd6f6" animate />
+      <DottedPath d="M 270 152 C 328 190 378 220 408 244" stroke="#4c4668" animate />
 
       <Packet path="M 250 152 C 196 190 148 220 114 244" dur="3.4s" />
       <Packet path="M 260 154 C 260 200 258 240 256 266" dur="3.8s" begin="1.1s" />
@@ -69,7 +69,7 @@ function BlueprintIllustration() {
       <CheckPop cx={356} cy={290} r={7} />
 
       {/* document titles */}
-      <g fontFamily={SANS} fontSize="10.5" fontWeight="600" fill="#525252" textAnchor="middle">
+      <g fontFamily={SANS} fontSize="10.5" fontWeight="600" fill="#a1a1a6" textAnchor="middle">
         <text x={105} y={352}>
           Report
         </text>
@@ -110,21 +110,21 @@ const CARDS = [
   },
 ];
 
-/** Pale-gray feature block: "One template / a thousand finished documents". */
+/** Feature block: "One template / a thousand finished documents". */
 export function TemplatesSection() {
   return (
-    <section id="templates" aria-label="Ready-made document templates" className="bg-[#fafafa]">
-      <LandingContainer className="py-[90px] md:py-[120px]">
+    <section id="templates" aria-label="Ready-made document templates" className="bg-[#1a1a1b]">
+      <LandingContainer className="py-[64px] md:py-[88px]">
         <div className="max-w-[780px]">
-          <h2 className="text-[40px] font-bold leading-[1.05] tracking-tight text-[#0a0a0a] md:text-[56px]">
+          <h2 className="text-[40px] font-bold leading-[1.05] tracking-tight text-[#ededed] md:text-[56px]">
             One template
           </h2>
-          <h2 className="mt-1 text-[40px] font-bold leading-[1.05] tracking-tight text-[#0a0a0a] md:text-[56px]">
-            <span className="inline-block bg-[#aef637] px-3 py-0.5">
+          <h2 className="mt-1 text-[40px] font-bold leading-[1.05] tracking-tight text-[#ededed] md:text-[56px]">
+            <span className="inline-block bg-[#aef637] px-3 py-0.5 text-[#0a0a0a]">
               a thousand finished documents
             </span>
           </h2>
-          <p className="mt-7 max-w-[540px] text-[16px] leading-[1.65] text-[#525252]">
+          <p className="mt-7 max-w-[540px] text-[16px] leading-[1.65] text-[#a1a1a6]">
             You define a single template — the layout, sections, and rules that
             matter. Every time, the AI produces a document that fits it
             perfectly.
@@ -134,7 +134,7 @@ export function TemplatesSection() {
         {/* split layout */}
         <div className="mt-14 grid grid-cols-1 items-center gap-y-10 lg:grid-cols-12 lg:gap-x-12">
           <div className="lg:col-span-5">
-            <p className="text-[15px] leading-[1.7] text-[#404040]">
+            <p className="text-[15px] leading-[1.7] text-[#c9c9cd]">
               Ask your AI assistant for any document — it fetches the right
               template, then writes a complete, self-contained page for you.
               No fragile forms to fill in; just structure the AI can follow and
@@ -146,7 +146,7 @@ export function TemplatesSection() {
                 "Self-contained documents — no plugins, nothing to install",
                 "Edit every word, font, and color directly in the editor",
               ].map((item) => (
-                <li key={item} className="flex items-start gap-3 text-[14px] text-[#525252]">
+                <li key={item} className="flex items-start gap-3 text-[14px] text-[#a1a1a6]">
                   <span className="mt-[9px] h-1.5 w-1.5 shrink-0 bg-[#aef637]" />
                   {item}
                 </li>
@@ -154,7 +154,7 @@ export function TemplatesSection() {
             </ul>
             <a
               href="#how"
-              className="group mt-8 inline-flex items-center gap-2 text-[14px] font-medium text-[#0a0a0a] hover:text-[#404040] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a]"
+              className="group mt-8 inline-flex items-center gap-2 text-[14px] font-medium text-[#ededed] hover:text-[#a1a1a6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
             >
               See how it works
               <ArrowRight size={15} className="transition-transform duration-200 group-hover:translate-x-1" />
@@ -166,25 +166,25 @@ export function TemplatesSection() {
         </div>
 
         {/* three info cards */}
-        <div className="mt-14 grid grid-cols-1 gap-px border border-[#e5e5e5] bg-[#e5e5e5] md:grid-cols-3">
+        <div className="mt-14 grid grid-cols-1 gap-px border border-[#2a2a2c] bg-[#2a2a2c] md:grid-cols-3">
           {CARDS.map((card) => (
             <article
               key={card.title}
-              className="group bg-white p-7 transition-transform duration-200 hover:-translate-y-1 md:p-9"
+              className="group bg-[#1c1c1d] p-7 transition-transform duration-200 hover:-translate-y-1 md:p-9"
             >
-              <h3 className="text-[18px] font-bold tracking-tight text-[#0a0a0a]">
+              <h3 className="text-[18px] font-bold tracking-tight text-[#ededed]">
                 {card.title}
               </h3>
-              <p className="mt-3 text-[14px] leading-[1.6] text-[#525252]">
+              <p className="mt-3 text-[14px] leading-[1.6] text-[#a1a1a6]">
                 {card.description}
               </p>
-              <div className="mt-8 flex items-center justify-between border-t border-[#f0f0f0] pt-5">
+              <div className="mt-8 flex items-center justify-between border-t border-[#2a2a2c] pt-5">
                 <span className="font-mono text-[11px] text-[#8a8a8a]">
                   {card.meta}
                 </span>
                 <ArrowRight
                   size={15}
-                  className="text-[#8a8a8a] transition-transform duration-200 group-hover:translate-x-1 group-hover:text-[#0a0a0a]"
+                  className="text-[#8a8a8a] transition-transform duration-200 group-hover:translate-x-1 group-hover:text-[#ededed]"
                 />
               </div>
             </article>

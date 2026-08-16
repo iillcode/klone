@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { KloneWordmark } from "@/components/marketing/landing/LandingNavbar";
 import {
@@ -12,14 +15,15 @@ import {
   StepBadge,
   TypingDots,
 } from "@/components/marketing/landing/primitives";
+import { GridLines } from "@/components/marketing/landing/Section";
 
 const SANS = "var(--font-geist-sans), sans-serif";
 const MONO = "var(--font-geist-mono), ui-monospace, monospace";
 
-/** Shared light grid backdrop for the auth story diagrams. */
+/** Shared dark grid backdrop for the auth story diagrams. */
 function DiagramGrid() {
   return (
-    <g stroke="#f0f0f0" strokeWidth="1">
+    <g stroke="#242424" strokeWidth="1">
       {Array.from({ length: 8 }).map((_, i) => (
         <line key={`v${i}`} x1={40 + i * 58} y1={14} x2={40 + i * 58} y2={236} />
       ))}
@@ -50,35 +54,35 @@ function SignupDiagram() {
       {/* 1 · create account */}
       <Float delay={0.2}>
         <g>
-          <rect x={28} y={34} width={128} height={42} fill="#ffffff" stroke="#d4d4d4" strokeWidth="1" />
+          <rect x={28} y={34} width={128} height={42} fill="#1c1c1d" stroke="#3f3f42" strokeWidth="1" />
           <rect x={28} y={34} width={128} height={4} fill="#aef637" />
-          <text x={40} y={55} fontSize="10" fontWeight="600" fontFamily={SANS} fill="#404040">
+          <text x={40} y={55} fontSize="10" fontWeight="600" fontFamily={SANS} fill="#d4d4d4">
             Create a free
           </text>
-          <text x={40} y={68} fontSize="10" fontWeight="600" fontFamily={SANS} fill="#404040">
+          <text x={40} y={68} fontSize="10" fontWeight="600" fontFamily={SANS} fill="#d4d4d4">
             account
           </text>
         </g>
       </Float>
       <StepBadge cx={28} cy={34} n={1} />
       <Person x={92} y={132} scale={1.2} />
-      <text x={92} y={180} textAnchor="middle" fontSize="10.5" fontWeight="600" fontFamily={SANS} fill="#525252">
+      <text x={92} y={180} textAnchor="middle" fontSize="10.5" fontWeight="600" fontFamily={SANS} fill="#a1a1a6">
         You
       </text>
 
       {/* 2 · pick a template */}
       <Float alt delay={0.4}>
         <g>
-          <path d="M 216 76 h 66 l 10 10 v 72 h -76 Z" fill="#ffffff" stroke="#9a9a9a" strokeWidth="1" />
-          <path d="M 282 76 v 10 h 10" fill="#f4f4f4" stroke="#9a9a9a" strokeWidth="1" />
+          <path d="M 216 76 h 66 l 10 10 v 72 h -76 Z" fill="#1c1c1d" stroke="#5a5a5e" strokeWidth="1" />
+          <path d="M 282 76 v 10 h 10" fill="#232324" stroke="#5a5a5e" strokeWidth="1" />
           <rect x={226} y={90} width={28} height={4} fill="#aef637" />
-          <rect x={226} y={102} width={56} height={14} fill="none" stroke="#b8b8b8" strokeWidth="1" strokeDasharray="3 3" />
-          <rect x={226} y={122} width={26} height={14} fill="none" stroke="#b8b8b8" strokeWidth="1" strokeDasharray="3 3" />
-          <rect x={256} y={122} width={26} height={14} fill="none" stroke="#b8b8b8" strokeWidth="1" strokeDasharray="3 3" />
+          <rect x={226} y={102} width={56} height={14} fill="none" stroke="#4b4b4f" strokeWidth="1" strokeDasharray="3 3" />
+          <rect x={226} y={122} width={26} height={14} fill="none" stroke="#4b4b4f" strokeWidth="1" strokeDasharray="3 3" />
+          <rect x={256} y={122} width={26} height={14} fill="none" stroke="#4b4b4f" strokeWidth="1" strokeDasharray="3 3" />
         </g>
       </Float>
       <StepBadge cx={216} cy={76} n={2} tone="accent" />
-      <text x={254} y={180} textAnchor="middle" fontSize="10.5" fontWeight="600" fontFamily={SANS} fill="#525252">
+      <text x={254} y={180} textAnchor="middle" fontSize="10.5" fontWeight="600" fontFamily={SANS} fill="#a1a1a6">
         Pick a template
       </text>
 
@@ -86,15 +90,15 @@ function SignupDiagram() {
       <Float delay={0.6}>
         <g>
           <DocPage x={382} y={74} width={56} height={74} accent="#aef637" lines={4} />
-          <rect x={390} y={154} width={42} height={20} fill="#0a0a0a" />
-          <text x={411} y={168} textAnchor="middle" fontSize="9" fontWeight="700" fontFamily={MONO} fill="#aef637">
+          <rect x={390} y={154} width={42} height={20} fill="#aef637" />
+          <text x={411} y={168} textAnchor="middle" fontSize="9" fontWeight="700" fontFamily={MONO} fill="#0a0a0a">
             PDF
           </text>
         </g>
       </Float>
       <StepBadge cx={382} cy={74} n={3} />
       <TypingDots x={396} y={58} />
-      <text x={410} y={196} textAnchor="middle" fontSize="10.5" fontWeight="600" fontFamily={SANS} fill="#525252">
+      <text x={410} y={196} textAnchor="middle" fontSize="10.5" fontWeight="600" fontFamily={SANS} fill="#a1a1a6">
         Get it written
       </text>
 
@@ -123,12 +127,12 @@ function SigninDiagram() {
       {/* 1 · sign in */}
       <Float delay={0.2}>
         <g>
-          <rect x={28} y={34} width={136} height={42} fill="#ffffff" stroke="#d4d4d4" strokeWidth="1" />
+          <rect x={28} y={34} width={136} height={42} fill="#1c1c1d" stroke="#3f3f42" strokeWidth="1" />
           <rect x={28} y={34} width={136} height={4} fill="#aef637" />
-          <text x={40} y={55} fontSize="10" fontWeight="600" fontFamily={SANS} fill="#404040">
+          <text x={40} y={55} fontSize="10" fontWeight="600" fontFamily={SANS} fill="#d4d4d4">
             Sign in securely
           </text>
-          <text x={40} y={68} fontSize="10" fontWeight="600" fontFamily={SANS} fill="#404040">
+          <text x={40} y={68} fontSize="10" fontWeight="600" fontFamily={SANS} fill="#d4d4d4">
             and pick up where you left off
           </text>
         </g>
@@ -136,22 +140,22 @@ function SigninDiagram() {
       <StepBadge cx={28} cy={34} n={1} />
       <Person x={86} y={132} scale={1.2} />
       <Lock x={116} y={112} size={20} />
-      <text x={96} y={180} textAnchor="middle" fontSize="10.5" fontWeight="600" fontFamily={SANS} fill="#525252">
+      <text x={96} y={180} textAnchor="middle" fontSize="10.5" fontWeight="600" fontFamily={SANS} fill="#a1a1a6">
         You
       </text>
 
       {/* 2 · your documents waiting */}
       <Float alt delay={0.4}>
         <g>
-          <rect x={212} y={70} width={60} height={76} fill="#fafafa" stroke="#d0d0d0" strokeWidth="1" />
-          <rect x={306} y={84} width={7} height={62} fill="#eceafd" stroke="#dcd6f6" strokeWidth="1" />
-          <rect x={316} y={92} width={6} height={54} fill="#e9f9d4" stroke="#d5eeb0" strokeWidth="1" />
+          <rect x={212} y={70} width={60} height={76} fill="#232324" stroke="#3f3f42" strokeWidth="1" />
+          <rect x={306} y={84} width={7} height={62} fill="#2c2842" stroke="#4c4668" strokeWidth="1" />
+          <rect x={316} y={92} width={6} height={54} fill="#354617" stroke="#5c7a2e" strokeWidth="1" />
           <DocPage x={220} y={78} width={60} height={78} accent="#aef637" lines={4} />
         </g>
       </Float>
       <StepBadge cx={212} cy={70} n={2} tone="accent" />
       <PulseDot cx={284} cy={78} r={3.5} delay={0.6} />
-      <text x={260} y={180} textAnchor="middle" fontSize="10.5" fontWeight="600" fontFamily={SANS} fill="#525252">
+      <text x={260} y={180} textAnchor="middle" fontSize="10.5" fontWeight="600" fontFamily={SANS} fill="#a1a1a6">
         Your documents waiting
       </text>
 
@@ -165,7 +169,7 @@ function SigninDiagram() {
       <g>
         <path
           d="M 416 158 v 12 m 0 0 l -6 -7 m 6 7 l 6 -7"
-          stroke="#0a0a0a"
+          stroke="#aef637"
           strokeWidth="1.6"
           fill="none"
           strokeLinecap="round"
@@ -202,29 +206,44 @@ interface AuthShellProps {
 }
 
 /**
- * Light editorial auth layout matching the `/home` landing design: grid
+ * Dark editorial auth layout matching the `/home` landing design: grid
  * guides, oversized heading, and a story diagram on the left; a bordered,
  * square form panel on the right. On mobile only the logo and the form
  * are shown so the fields stay front and center.
  */
 export function AuthShell({ variant, title, lead, children }: AuthShellProps) {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <div
-      className="min-h-screen bg-white font-sans text-[#0a0a0a]"
-      style={{ colorScheme: "light" }}
+      className="min-h-screen bg-[#161617] font-sans text-[#ededed]"
+      style={{ colorScheme: "dark" }}
     >
-      {/* top bar */}
-      <header className="border-b border-[#e5e5e5]">
+      {/* top bar — same sticky chrome as the landing/docs navbars */}
+      <header
+        className={
+          scrolled
+            ? "sticky top-0 z-50 border-b border-[#2a2a2c] bg-[#161617]/85 backdrop-blur-md transition-colors duration-200"
+            : "sticky top-0 z-50 border-b border-transparent bg-[#161617] transition-colors duration-200"
+        }
+      >
         <div className="mx-auto flex h-[68px] w-full max-w-[1200px] items-center justify-between px-5 md:px-8 lg:px-10">
           <a
             href="/home"
-            className="focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0a0a0a]"
+            className="focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#aef637]"
           >
             <KloneWordmark />
           </a>
           <a
             href="/home"
-            className="hidden items-center gap-2 text-[13px] font-medium text-[#525252] transition-colors duration-150 hover:text-[#0a0a0a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a] md:flex"
+            className="hidden items-center gap-2 text-[13px] font-medium text-[#a1a1a6] transition-colors duration-150 hover:text-[#ededed] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637] md:flex"
           >
             <ArrowLeft size={14} />
             Back to home
@@ -233,38 +252,32 @@ export function AuthShell({ variant, title, lead, children }: AuthShellProps) {
       </header>
 
       <div className="relative mx-auto w-full max-w-[1200px] px-5 md:px-8 lg:px-10">
-        {/* visible grid guides */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <div className="grid h-full grid-cols-12 gap-x-4 md:gap-x-6">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="border-l border-[#ededed]" />
-            ))}
-          </div>
-        </div>
+        {/* visible grid guides — shared with the landing so the lines align */}
+        <GridLines />
 
         <main className="relative flex min-h-[calc(100vh-69px)] flex-col items-center justify-center gap-y-12 py-10 lg:grid lg:grid-cols-12 lg:items-stretch lg:justify-items-stretch lg:gap-x-16 lg:py-20">
           {/* Left editorial pane — hidden on mobile so only the logo and form show */}
           <section className="hidden lg:col-span-6 lg:block lg:pr-8">
-            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#737373]">
+            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#8a8a8a]">
               AI Document Studio
             </p>
-            <h1 className="mt-5 text-[44px] font-bold leading-[0.98] tracking-tight text-[#0a0a0a] md:text-[56px]">
+            <h1 className="mt-5 text-[44px] font-bold leading-[0.98] tracking-tight text-[#ededed] md:text-[56px]">
               {title}
             </h1>
-            <p className="mt-5 max-w-[440px] text-[16px] leading-[1.65] text-[#525252]">
+            <p className="mt-5 max-w-[440px] text-[16px] leading-[1.65] text-[#a1a1a6]">
               {lead}
             </p>
 
             <ul className="mt-8 space-y-2.5">
               {FEATURES.map((feature) => (
-                <li key={feature} className="flex items-center gap-3 text-[14px] text-[#404040]">
+                <li key={feature} className="flex items-center gap-3 text-[14px] text-[#d4d4d4]">
                   <span className="h-1.5 w-1.5 shrink-0 bg-[#aef637]" />
                   {feature}
                 </li>
               ))}
             </ul>
 
-            <div className="mt-10 hidden border border-[#e5e5e5] bg-[#fcfcfc] p-5 lg:block">
+            <div className="mt-10 hidden border border-[#2a2a2c] bg-[#1a1a1b] p-5 lg:block">
               {variant === "signup" ? <SignupDiagram /> : <SigninDiagram />}
             </div>
 
@@ -275,31 +288,31 @@ export function AuthShell({ variant, title, lead, children }: AuthShellProps) {
 
           {/* Right form pane */}
           <section className="w-full lg:col-span-6">
-            <div className="mx-auto w-full max-w-[460px] border border-[#e5e5e5] bg-white p-7 md:p-10">
-              <p className="mb-6 text-[11px] font-medium uppercase tracking-[0.2em] text-[#737373]">
+            <div className="mx-auto w-full max-w-[460px] border border-[#2a2a2c] bg-[#1c1c1d] p-7 md:p-10">
+              <p className="mb-6 text-[11px] font-medium uppercase tracking-[0.2em] text-[#8a8a8a]">
                 {variant === "signup" ? "Create account" : "Sign in"}
               </p>
               {children}
 
               {/* toggle between sign in and sign up */}
-              <p className="mt-6 text-center text-[13px] text-[#525252]">
+              <p className="mt-6 text-center text-[13px] text-[#a1a1a6]">
                 {variant === "signup"
                   ? "Already have an account?"
                   : "Don\u2019t have an account yet?"}{" "}
                 <a
                   href={variant === "signup" ? "/login" : "/register"}
-                  className="font-medium text-[#0a0a0a] underline decoration-[#d4d4d4] underline-offset-2 transition-colors duration-150 hover:decoration-[#0a0a0a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a]"
+                  className="font-medium text-[#ededed] underline decoration-[#3f3f42] underline-offset-2 transition-colors duration-150 hover:text-[#a1a1a6] hover:decoration-[#a1a1a6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
                 >
                   {variant === "signup" ? "Sign in" : "Sign up"}
                 </a>
               </p>
 
-              <p className="mt-8 border-t border-[#f0f0f0] pt-5 text-[11.5px] leading-[1.7] text-[#8a8a8a]">
+              <p className="mt-8 border-t border-[#2a2a2c] pt-5 text-[11.5px] leading-[1.7] text-[#8a8a8a]">
                 By continuing, you agree to Klone&apos;s{" "}
                 <a
                   href="#"
                   data-doc="Terms of Service"
-                  className="underline decoration-[#d4d4d4] underline-offset-2 transition-colors duration-150 hover:text-[#0a0a0a]"
+                  className="underline decoration-[#3f3f42] underline-offset-2 transition-colors duration-150 hover:text-[#ededed]"
                 >
                   Terms of Service
                 </a>{" "}
@@ -307,7 +320,7 @@ export function AuthShell({ variant, title, lead, children }: AuthShellProps) {
                 <a
                   href="#"
                   data-doc="Privacy Policy"
-                  className="underline decoration-[#d4d4d4] underline-offset-2 transition-colors duration-150 hover:text-[#0a0a0a]"
+                  className="underline decoration-[#3f3f42] underline-offset-2 transition-colors duration-150 hover:text-[#ededed]"
                 >
                   Privacy Policy
                 </a>

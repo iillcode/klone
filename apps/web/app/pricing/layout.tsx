@@ -7,9 +7,8 @@ export const metadata: Metadata = {
 };
 
 /**
- * Route layout for the Klone pricing page. Like the landing page it is
- * light-only, so it pins a white surface regardless of the app-wide dark
- * theme.
+ * Route layout for the Klone pricing page. Dark themed to match the
+ * dashboard and editor chrome.
  */
 export default function PricingLayout({
   children,
@@ -18,8 +17,8 @@ export default function PricingLayout({
 }) {
   return (
     <div
-      className="min-h-screen bg-white font-sans text-[#0a0a0a]"
-      style={{ colorScheme: "light" }}
+      className="min-h-screen bg-[#161617] font-sans text-[#ededed]"
+      style={{ colorScheme: "dark" }}
     >
       {children}
     </div>

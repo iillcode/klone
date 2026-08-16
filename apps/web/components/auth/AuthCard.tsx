@@ -23,7 +23,7 @@ interface AuthCardProps {
 }
 
 const SUBMIT_CLASSES =
-  "w-full bg-[#0a0a0a] px-4 py-3 text-[14px] font-medium text-white transition-colors duration-150 hover:bg-[#262626] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a] disabled:opacity-60";
+  "w-full bg-[#aef637] px-4 py-3 text-[14px] font-medium text-[#0a0a0a] transition-colors duration-150 hover:bg-[#9be22e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637] disabled:opacity-60";
 
 /** Fixed bottom toast pill in the landing page's dark style. */
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
@@ -205,17 +205,17 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
       <div>
         {resetState?.ok ? (
           <div className="py-4 text-center">
-            <CheckCircle2 size={40} className="mx-auto text-[#65a30d]" />
-            <h2 className="mt-4 text-[20px] font-bold tracking-tight text-[#0a0a0a]">
+            <CheckCircle2 size={40} className="mx-auto text-[#aef637]" />
+            <h2 className="mt-4 text-[20px] font-bold tracking-tight text-[#ededed]">
               Check your inbox!
             </h2>
-            <p className="mt-2 text-[13.5px] leading-[1.6] text-[#525252]">
+            <p className="mt-2 text-[13.5px] leading-[1.6] text-[#a1a1a6]">
               We sent a password reset link to <b>{resetEmail.trim()}</b>.
             </p>
             <button
               type="button"
               onClick={exitReset}
-              className="mx-auto mt-6 flex items-center gap-2 text-[13px] font-medium text-[#0a0a0a] underline decoration-[#d4d4d4] underline-offset-2 transition-colors duration-150 hover:text-[#404040] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a]"
+              className="mx-auto mt-6 flex items-center gap-2 text-[13px] font-medium text-[#ededed] underline decoration-[#3f3f42] underline-offset-2 transition-colors duration-150 hover:text-[#a1a1a6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
             >
               <ArrowLeft size={14} /> Back to login
             </button>
@@ -246,12 +246,12 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
                 {errMsg}
               </p>
             )}
-            <p className="mt-5 text-[13px] text-[#525252]">
+            <p className="mt-5 text-[13px] text-[#a1a1a6]">
               Remembered it?{" "}
               <button
                 type="button"
                 onClick={exitReset}
-                className="font-semibold text-[#0a0a0a] underline decoration-[#d4d4d4] underline-offset-2 transition-colors duration-150 hover:text-[#404040]"
+                className="font-semibold text-[#ededed] underline decoration-[#3f3f42] underline-offset-2 transition-colors duration-150 hover:text-[#a1a1a6]"
               >
                 Back to login
               </button>
@@ -273,11 +273,11 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
       />
 
       <div className="my-6 flex items-center gap-4">
-        <span className="h-px flex-1 bg-[#ededed]" />
+        <span className="h-px flex-1 bg-[#2a2a2c]" />
         <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#8a8a8a]">
           or
         </span>
-        <span className="h-px flex-1 bg-[#ededed]" />
+        <span className="h-px flex-1 bg-[#2a2a2c]" />
       </div>
 
       <form action={handleFormAction} onSubmit={handleSubmit} noValidate>
@@ -345,7 +345,7 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
               clearError();
               setResetMode(true);
             }}
-            className="text-[13px] font-medium text-[#525252] underline decoration-[#d4d4d4] underline-offset-2 transition-colors duration-150 hover:text-[#0a0a0a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a]"
+            className="text-[13px] font-medium text-[#a1a1a6] underline decoration-[#3f3f42] underline-offset-2 transition-colors duration-150 hover:text-[#ededed] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
           >
             Forgot password?
           </button>

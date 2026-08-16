@@ -4,7 +4,7 @@ import { forwardRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 const INPUT_CLASSES =
-  "w-full border border-[#e5e5e5] bg-white px-4 py-3 text-[14px] text-[#0a0a0a] placeholder:text-[#a3a3a3] transition-colors duration-150 focus:border-[#0a0a0a] focus:outline-none";
+  "w-full border border-[#2a2a2c] bg-[#1c1c1d] px-4 py-3 text-[14px] text-[#ededed] placeholder:text-[#5a5a5e] transition-colors duration-150 focus:border-[#aef637] focus:outline-none";
 
 /** Error message shown under an invalid input. */
 function FieldError({ id, error }: { id: string; error: string }) {
@@ -23,7 +23,7 @@ interface TextFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: string;
 }
 
-/** Text input styled for the redesigned (light, editorial) auth screens. */
+/** Text input styled for the dark editorial auth screens. */
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
   function TextField({ name, className = "", error, ...props }, ref) {
     const errorId = `${name}-error`;
@@ -75,7 +75,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
           />
           <button
             type="button"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8a8a8a] transition-colors duration-150 hover:text-[#0a0a0a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a]"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8a8a8a] transition-colors duration-150 hover:text-[#ededed] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
             onClick={() => setVisible((v) => !v)}
             aria-label={visible ? "Hide password" : "Show password"}
           >

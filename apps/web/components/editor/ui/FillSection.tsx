@@ -71,11 +71,11 @@ export function FillSection({
     <section
       aria-label="Fill"
       data-state="open"
-      className="border-b border-[#3a3a3a] pb-3 text-[#f0f0f0] data-[disabled]:opacity-60"
+      className="border-b border-[#3a3a3a] px-3 py-2.5 text-[#f0f0f0] data-[disabled]:opacity-60"
     >
-      {/* ── Header (open-pencil PanelSection: h-8 grid, 26px actions) ── */}
+      {/* ── Header (compact grid, 26px actions, h-6 rhythm) ── */}
       <div
-        className="grid h-8 min-w-0 grid-cols-[minmax(0,1fr)_26px] items-center gap-1.5"
+        className="grid h-6 min-w-0 grid-cols-[minmax(0,1fr)_26px] items-center gap-1.5"
         data-state="open"
         data-slot="header"
       >
@@ -89,7 +89,7 @@ export function FillSection({
           </span>
         </div>
         <div
-          className="flex h-7 w-[26px] shrink-0 items-center justify-end gap-0.5"
+          className="flex h-6 w-[26px] shrink-0 items-center justify-end gap-0.5"
           data-state="open"
           data-slot="actions"
         >

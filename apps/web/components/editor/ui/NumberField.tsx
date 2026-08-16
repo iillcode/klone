@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-
+import { useState, useRef, useEffect } from "react";import { cn } from "@/lib/utils";
 /* Number field (`.input-field` style: 32px, #3a3a3a, radius 6)
    Keeps Figma-style scrub / ↑↓ nudge behavior */
 export function NumberField({
@@ -120,7 +119,10 @@ export function NumberField({
 
   return (
     <div
-      className={`h-6 min-w-0 w-full flex items-center rounded border border-transparent bg-[#383838] text-[#f0f0f0] outline-none hover:bg-[#404040] focus-within:border-[#3b82f6] focus-within:bg-[#404040] text-[11px] tabular-nums ${className}`}
+      className={cn(
+        "h-6 min-w-0 w-full flex items-center rounded border border-transparent bg-[#1e1e1e] text-[#f0f0f0] outline-none hover:bg-[#262626] focus-within:border-[#3b82f6] focus-within:bg-[#262626] text-[11px] tabular-nums",
+        className,
+      )}
     >
       {prefix && (
         <span className="flex shrink-0 items-center justify-center self-stretch px-[5px] text-[#888888] select-none [&>*]:pointer-events-none">

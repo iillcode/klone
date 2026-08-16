@@ -25,12 +25,12 @@ function GuidedIllustration() {
       <StepBadge cx={56} cy={102} n={1} />
       {/* prompt bubble */}
       <g>
-        <rect x={20} y={30} width={92} height={40} fill="#ffffff" stroke="#d4d4d4" strokeWidth="1" />
+        <rect x={20} y={30} width={92} height={40} fill="#1c1c1d" stroke="#3f3f42" strokeWidth="1" />
         <rect x={20} y={30} width={92} height={4} fill="#aef637" />
-        <text x={30} y={48} fontSize="8" fontWeight="600" fontFamily={SANS} fill="#404040">
+        <text x={30} y={48} fontSize="8" fontWeight="600" fontFamily={SANS} fill="#d4d4d4">
           “A report about
         </text>
-        <text x={30} y={59} fontSize="8" fontWeight="600" fontFamily={SANS} fill="#404040">
+        <text x={30} y={59} fontSize="8" fontWeight="600" fontFamily={SANS} fill="#d4d4d4">
           sales in Q2”
         </text>
         <TypingDots x={44} y={90} gap={7} />
@@ -38,10 +38,10 @@ function GuidedIllustration() {
       {/* template sketch */}
       <Float delay={0.3}>
         <g>
-          <rect x={132} y={38} width={54} height={48} fill="#ffffff" stroke="#b0b0b0" strokeWidth="1" strokeDasharray="3 3" />
+          <rect x={132} y={38} width={54} height={48} fill="#1c1c1d" stroke="#3f3f42" strokeWidth="1" strokeDasharray="3 3" />
           <rect x={140} y={46} width={20} height={3} fill="#aef637" />
-          <rect x={140} y={56} width={38} height={9} fill="none" stroke="#c9c9c9" strokeWidth="1" />
-          <rect x={140} y={70} width={38} height={4} fill="none" stroke="#c9c9c9" strokeWidth="1" />
+          <rect x={140} y={56} width={38} height={9} fill="none" stroke="#3f3f42" strokeWidth="1" />
+          <rect x={140} y={70} width={38} height={4} fill="none" stroke="#3f3f42" strokeWidth="1" />
         </g>
       </Float>
       <StepBadge cx={132} cy={38} n={2} tone="accent" />
@@ -76,17 +76,17 @@ function CanvasIllustration() {
       </g>
       {/* cursor pointer riding the selection */}
       <g>
-        <path d="M 184 70 l 11 4.5 l -4.5 2.5 l -2.5 4.5 Z" fill="#0a0a0a" />
+        <path d="M 184 70 l 11 4.5 l -4.5 2.5 l -2.5 4.5 Z" fill="#aef637" />
         <animateMotion dur="4.5s" repeatCount="indefinite" path="m 0 0 h 14 m -14 18 h 14" />
       </g>
       {/* floating style toolbar */}
       <Float delay={0.4}>
         <g>
-          <rect x={216} y={40} width={56} height={16} fill="#ffffff" stroke="#dcdcdc" strokeWidth="1" />
+          <rect x={216} y={40} width={56} height={16} fill="#1c1c1d" stroke="#3f3f42" strokeWidth="1" />
           <circle cx={228} cy={48} r={3.2} fill="#aef637" />
           <circle cx={238} cy={48} r={3.2} fill="#c7bff4" />
-          <rect x={247} y={45.5} width={18} height={2.5} fill="#e2e2e2" />
-          <rect x={247} y={50.5} width={12} height={2.5} fill="#e2e2e2" />
+          <rect x={247} y={45.5} width={18} height={2.5} fill="#3d3d40" />
+          <rect x={247} y={50.5} width={12} height={2.5} fill="#3d3d40" />
         </g>
       </Float>
       <Chip x={30} y={128} width={118} text="Click any line" dot="#c7bff4" />
@@ -102,11 +102,11 @@ function AssistantIllustration() {
       {/* chat bubble */}
       <Float delay={0.2}>
         <g>
-          <rect x={22} y={42} width={88} height={40} fill="#ffffff" stroke="#d4d4d4" strokeWidth="1" />
-          <text x={32} y={60} fontSize="8" fontWeight="600" fontFamily={SANS} fill="#404040">
+          <rect x={22} y={42} width={88} height={40} fill="#1c1c1d" stroke="#3f3f42" strokeWidth="1" />
+          <text x={32} y={60} fontSize="8" fontWeight="600" fontFamily={SANS} fill="#d4d4d4">
             “Add an invoice
           </text>
-          <text x={32} y={71} fontSize="8" fontWeight="600" fontFamily={SANS} fill="#404040">
+          <text x={32} y={71} fontSize="8" fontWeight="600" fontFamily={SANS} fill="#d4d4d4">
             for June”
           </text>
           <TypingDots x={52} y={98} gap={7} />
@@ -114,9 +114,9 @@ function AssistantIllustration() {
       </Float>
       {/* Klone doing its thing */}
       <g>
-        <rect x={140} y={46} width={64} height={40} fill="#ffffff" stroke="#9a9a9a" strokeWidth="1" />
+        <rect x={140} y={46} width={64} height={40} fill="#1c1c1d" stroke="#3f3f42" strokeWidth="1" />
         <rect x={140} y={46} width={64} height={4} fill="#aef637" />
-        <text x={172} y={66} textAnchor="middle" fontSize="8.5" fontWeight="700" fontFamily={SANS} fill="#0a0a0a">
+        <text x={172} y={66} textAnchor="middle" fontSize="8.5" fontWeight="700" fontFamily={SANS} fill="#ededed">
           Klone writes it
         </text>
         <PulseDot cx={204} cy={46} r={3} delay={0.6} />
@@ -140,7 +140,7 @@ function PrivateIllustration() {
     <svg viewBox="0 0 300 160" role="img" aria-label="Your document library private and locked to your account" className="h-auto w-full">
       {/* you */}
       <Person x={52} y={92} />
-      <text x={52} y={122} textAnchor="middle" fontSize="8.5" fontWeight="600" fontFamily={SANS} fill="#525252">
+      <text x={52} y={122} textAnchor="middle" fontSize="8.5" fontWeight="600" fontFamily={SANS} fill="#a1a1a6">
         You
       </text>
       {/* lock gate */}
@@ -150,11 +150,11 @@ function PrivateIllustration() {
       <PulseDot cx={141} cy={60} r={3} delay={0.5} color="#c7bff4" />
       {/* your library */}
       <g>
-        <rect x={204} y={48} width={58} height={70} fill="#fafafa" stroke="#e2e2e2" strokeWidth="1" />
+        <rect x={204} y={48} width={58} height={70} fill="#1a1a1b" stroke="#2a2a2c" strokeWidth="1" />
         <DocPage x={212} y={56} width={42} height={54} accent="#aef637" lines={3} />
         <g>
-          <rect x={254} y={58} width={6} height={52} fill="#eceafd" stroke="#dcd6f6" strokeWidth="1" />
-          <rect x={262} y={64} width={5} height={46} fill="#e9f9d4" stroke="#d5eeb0" strokeWidth="1" />
+          <rect x={254} y={58} width={6} height={52} fill="#3a3550" stroke="#57507a" strokeWidth="1" />
+          <rect x={262} y={64} width={5} height={46} fill="#354617" stroke="#5c7a2e" strokeWidth="1" />
         </g>
       </g>
       {/* single private path */}
@@ -163,7 +163,7 @@ function PrivateIllustration() {
       <Packet path="M 78 78 C 96 72 108 68 122 66" dur="2.6s" r={2.5} />
       <Packet path="M 160 70 C 176 70 188 72 202 76" dur="3s" begin="1.3s" r={2.5} color="#c7bff4" />
       <Chip x={46} y={132} width={132} text="Only you can open it" />
-      <Chip x={192} y={128} width={92} text="Private library" dot="#e9f9d4" />
+      <Chip x={192} y={128} width={92} text="Private library" dot="#aef637" />
     </svg>
   );
 }
@@ -206,16 +206,16 @@ const FEATURES = [
 /** Capability section introducing Klone's 2x2 editorial feature grid. */
 export function FeatureGridSection() {
   return (
-    <section id="editor" aria-label="Klone capabilities" className="relative bg-white">
+    <section id="editor" aria-label="Klone capabilities" className="relative bg-[#161617]">
       <GridLines />
-      <LandingContainer className="relative py-[100px] md:py-[130px]">
+      <LandingContainer className="relative py-[64px] md:py-[88px]">
         <div className="mx-auto max-w-[860px] text-center">
-          <h2 className="text-[42px] font-bold leading-[1.02] tracking-tight text-[#0a0a0a] md:text-[60px]">
+          <h2 className="text-[42px] font-bold leading-[1.02] tracking-tight text-[#ededed] md:text-[60px]">
             Great documents take
             <br />
             more than a chat.
           </h2>
-          <p className="mx-auto mt-6 max-w-[560px] text-[16px] leading-[1.65] text-[#525252]">
+          <p className="mx-auto mt-6 max-w-[560px] text-[16px] leading-[1.65] text-[#a1a1a6]">
             Consistent results come from templates you control, an editor you
             can feel, and AI that keeps your documents private.
           </p>
@@ -226,27 +226,27 @@ export function FeatureGridSection() {
             <article
               key={feature.title}
               className={
-                "group flex flex-col border-[#e5e5e5] p-7 transition-colors duration-200 hover:bg-[#fafafa] md:p-10 " +
+                "group flex flex-col border-[#2a2a2c] p-7 transition-colors duration-200 hover:bg-[#1a1a1b] md:p-10 " +
                 (i % 2 === 0 ? "md:border-r " : "") +
                 (i < FEATURES.length - 2 ? "border-b " : "")
               }
             >
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#737373]">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#8a8a8a]">
                 {feature.category}
               </p>
               <div className="mt-3 flex items-start justify-between gap-4">
-                <h3 className="text-[24px] font-bold leading-[1.15] tracking-tight text-[#0a0a0a]">
+                <h3 className="text-[24px] font-bold leading-[1.15] tracking-tight text-[#ededed]">
                   {feature.title}
                 </h3>
                 <span className="mt-1 flex w-40 shrink-0 items-center justify-end gap-1.5 text-right font-mono text-[11px] text-[#8a8a8a]">
                   {feature.meta}
                   <ArrowUpRight
                     size={12}
-                    className="transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-[#0a0a0a]"
+                    className="transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-[#ededed]"
                   />
                 </span>
               </div>
-              <p className="mt-4 max-w-[420px] text-[14px] leading-[1.65] text-[#525252]">
+              <p className="mt-4 max-w-[420px] text-[14px] leading-[1.65] text-[#a1a1a6]">
                 {feature.description}
               </p>
               <div className="mt-auto pt-8">

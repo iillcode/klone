@@ -22,8 +22,12 @@ export function LandingContainer({
 }
 
 /**
- * Visible 12-column guide lines for the technical architectural feeling.
- * Rendered as an inert background layer behind section content.
+ * Visible guide lines for the technical architectural feeling.
+ * Rendered as an inert background layer behind section content. Thirteen
+ * lines are distributed evenly across the content width (12 equal tracks
+ * between 13 lines), so the gaps stay perfectly equal at every viewport
+ * size; the first line aligns with the container's content edge and the
+ * last one closes the grid on the right edge.
  */
 export function GridLines({ className }: { className?: string }) {
   return (
@@ -34,9 +38,13 @@ export function GridLines({ className }: { className?: string }) {
         className,
       )}
     >
-      <div className="mx-5 grid h-full grid-cols-12 gap-x-4 md:mx-8 md:gap-x-6 lg:mx-10">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <div key={i} className="border-l border-[#ededed]" />
+      <div className="relative mx-5 h-full md:mx-8 lg:mx-10">
+        {Array.from({ length: 13 }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute inset-y-0 border-l border-[#242424]"
+            style={{ left: `calc((100% / 12) * ${i})` }}
+          />
         ))}
       </div>
     </div>
@@ -54,7 +62,7 @@ export function Eyebrow({
   return (
     <p
       className={cn(
-        "text-[11px] font-medium uppercase tracking-[0.18em] text-[#737373]",
+        "text-[11px] font-medium uppercase tracking-[0.18em] text-[#8a8a8a]",
         className,
       )}
     >
