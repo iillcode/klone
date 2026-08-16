@@ -46,9 +46,9 @@ export function PricingSection() {
   return (
     <section id="pricing" aria-label="Pricing" className="relative bg-white">
       <GridLines />
-      <LandingContainer className="relative pt-[72px] pb-[96px] md:pt-[100px] md:pb-[120px]">
+      <LandingContainer className="relative pt-[28px] pb-[72px] md:pt-[40px] md:pb-[96px]">
         <div className="mx-auto max-w-[720px] text-center">
-          <p className="mb-6 text-[11px] font-medium uppercase tracking-[0.2em] text-[#737373]">
+          <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.2em] text-[#737373]">
             Pricing
           </p>
           <h1 className="text-[44px] font-bold leading-[0.98] tracking-tight text-[#0a0a0a] md:text-[64px]">
@@ -58,21 +58,21 @@ export function PricingSection() {
               Everything included.
             </span>
           </h1>
-          <p className="mx-auto mt-7 max-w-[480px] text-[16px] leading-[1.65] text-[#525252]">
+          <p className="mx-auto mt-5 max-w-[480px] text-[16px] leading-[1.65] text-[#525252]">
             No tiers to compare, no seats to count. One plan with every
             template, every editor tool, and unlimited documents.
           </p>
         </div>
 
         {/* single plan card */}
-        <div className="mx-auto mt-14 w-full max-w-[880px] border border-[#e5e5e5] bg-white">
+        <div className="mx-auto mt-8 w-full max-w-[880px] border border-[#e5e5e5] bg-white">
           <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr]">
             {/* plan summary */}
-            <div className="border-b border-[#e5e5e5] p-8 md:p-10 lg:border-r lg:border-b-0">
+            <div className="border-b border-[#e5e5e5] p-6 md:p-7 lg:border-r lg:border-b-0">
               <span className="inline-block bg-[#0a0a0a] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#aef637]">
                 Klone Pro
               </span>
-              <div className="mt-6 flex items-baseline gap-2">
+              <div className="mt-5 flex items-baseline gap-2">
                 <span className="text-[56px] font-bold leading-none tracking-tight text-[#0a0a0a]">
                   $19
                 </span>
@@ -84,18 +84,18 @@ export function PricingSection() {
 
               <a
                 href="/register"
-                className="group mt-8 flex w-full items-center justify-center gap-2 bg-[#0a0a0a] px-6 py-3.5 text-[15px] font-medium text-white transition-colors duration-200 hover:bg-[#262626] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a]"
+                className="group mt-6 flex w-full items-center justify-center gap-2 bg-[#0a0a0a] px-6 py-3.5 text-[15px] font-medium text-white transition-colors duration-200 hover:bg-[#262626] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a]"
               >
                 Start 7-day free trial
                 <ArrowRight size={15} className="transition-transform duration-200 group-hover:translate-x-1" />
               </a>
-              <p className="mt-4 text-center text-[12px] text-[#8a8a8a]">
+              <p className="mt-3 text-center text-[12px] text-[#8a8a8a]">
                 No card required to start.
               </p>
             </div>
 
             {/* everything you get */}
-            <div className="p-8 md:p-10">
+            <div className="p-6 md:p-7">
               <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#737373]">
                 Everything you get
               </p>

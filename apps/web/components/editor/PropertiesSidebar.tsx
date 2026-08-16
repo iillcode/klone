@@ -98,6 +98,12 @@ interface PropertiesSidebarProps {
   selectedLayerIds?: string[];
   /** Select a layer from the tree (additive = Ctrl/⌘ multi-select). */
   onSelectLayer?: (id: string, additive: boolean) => void;
+  /** Move a layer by dragging it in the tree (undoable on the canvas). */
+  onReorderLayer?: (
+    id: string,
+    targetId: string,
+    position: "before" | "after" | "inner",
+  ) => void;
 }
 
 export function PropertiesSidebar({
@@ -119,6 +125,7 @@ export function PropertiesSidebar({
   layersTree = [],
   selectedLayerIds = [],
   onSelectLayer,
+  onReorderLayer,
 }: PropertiesSidebarProps) {
   // Design = property editing, Layers = open-pencil-style folder tree.
   const [tab, setTab] = useState<"design" | "layers">("design");
@@ -214,6 +221,9 @@ export function PropertiesSidebar({
             tree={layersTree}
             selectedIds={selectedLayerIds}
             onSelect={(id, additive) => onSelectLayer?.(id, additive)}
+            onReorder={(id, targetId, position) =>
+              onReorderLayer?.(id, targetId, position)
+            }
           />
         </div>
       )}

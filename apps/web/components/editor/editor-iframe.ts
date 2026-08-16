@@ -7,7 +7,30 @@ export function getEditorScript(): string {
   // will show an older version. Hard-refresh the page to reload it.
   if(window.__kloneEditorInjected)return; // never double-bind listeners
   window.__kloneEditorInjected=true;
-  console.log('[editor] script v26');
+  console.log('[editor] script v33');
+// ── Global pointer-events reset ──
+// Templates routinely ship 'pointer-events:none' on decorative/wrapper
+// elements, and CSS pointer-events INHERITS - without an override every
+// descendant is un-clickable too, so whole regions become unselectable and
+// impossible to drag. The editor owns interaction here: force hit-testing
+// back on for every NON-editor element. The exclusions keep editor chrome
+// working exactly as designed (overlay UI passes clicks through; page
+// boundaries stay click-through containers; placeholders reserve space only).
+// This element is editor-only chrome; serializeCleanHtml strips it from
+// saved/exported HTML.
+(function(){
+  var s=document.createElement('style');
+  s.setAttribute('data-editor-reset','');
+  // Page boundaries stay click-through and placeholders only reserve space
+  // (force 'none' so template styles can never re-enable them). Everything
+  // else is forced back to hit-testable EXCEPT editor chrome
+  // ([data-editor-ui]), which keeps its own inline pointer-events values -
+  // overlay roots stay click-through while the resize handles stay
+  // interactive.
+  s.textContent='*[data-klone-page-boundary],*[data-klone-page-placeholder]{pointer-events:none !important;}'+
+    ':not([data-editor-ui]):not([data-editor-reset]):not([data-klone-page-boundary]):not([data-klone-page-placeholder]){pointer-events:auto !important;}';
+  (document.head||document.documentElement).appendChild(s);
+})();
 var selectedEls=[];
 var hoveredEl=null;
 var isDragging=false;
@@ -58,6 +81,11 @@ var dragDirX=0;
 var dragDirY=0;
 var nudgeGuideTimer=null;
 var splitMode=false;
+// Selection lock: true while the selection was made from the Layers panel.
+// While locked, clicking/dragging INSIDE the selection moves the
+// panel-selected element (Figma-like locked selection) instead of
+// deep-selecting the child under the cursor.
+var layerSelLock=false;
 
 function getPageBreakEls(){
   var list=document.querySelectorAll('[data-klone-page-break]');
@@ -924,6 +952,7 @@ function pruneDetachedSelection(){
 }
 
 function deselect(){
+  layerSelLock=false;
   for(var i=0;i<selectedEls.length;i++){
     selectedEls[i].style.outline='';
     selectedEls[i].style.outlineOffset='';
@@ -1127,6 +1156,108 @@ function startLayerTreeWatch(){
   layerTreeObs.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['data-klone-page-break','style','class']});
 }
 
+function layerElById(id){
+  if(!id)return null;
+  return document.querySelector('[data-klone-id="'+id+'"]');
+}
+
+// Re-insert el into parent before next (or append when next is gone).
+// Shared by the __reorder__ undo/redo branches. restoreT is the transform
+// that this step should re-apply (the layer's transform is cleared on a
+// cross-parent move; undo/redo each restore their own recorded value).
+function reinsertLayerElement(el,parent,next,restoreT){
+  if(!el||!parent)return;
+  if(next&&next.parentNode===parent)parent.insertBefore(el,next);
+  else parent.appendChild(el);
+  syncElementPointerEvents(el);
+  if(typeof restoreT==='string')el.style.transform=restoreT;
+}
+
+// Move a layer to a new position in the document tree (drag & drop from
+// the Layers panel). position: 'before'/'after' a target element, or
+// 'last-child' to nest inside the target (or a 'page:N' root, which
+// appends to that page's container). The move is one undo step and
+// preserves the element's appearance AND its visual position when it
+// crosses parents (transform compensated, like canvas drag-drop).
+function moveLayerElement(id,targetId,position){
+  var el=layerElById(id);
+  if(!el||!el.isConnected)return;
+  // Never reorder page roots, system frames, overlays or placeholders -
+  // the tree still lists only real layers, but stay defensive.
+  if(isPageBoundary(el)||isContainer(el))return;
+  if(el.getAttribute('data-editor-ui'))return;
+  if(el.getAttribute('data-klone-page-placeholder')!==null)return;
+  var container=null,ref=null; // ref = child to insert before (null = append)
+  if(String(targetId).indexOf('page:')===0){
+    var pi=parseInt(String(targetId).slice(5),10);
+    if(!isFinite(pi)||pi<0)return;
+    if(getPageIndexOf(el)===pi)return; // dropped onto its own page - no-op
+    // Dropping a layer ONTO a page lands it INSIDE that page - the same
+    // placement as the sidebar's "move to page" (relative offset from its
+    // old page, clamped into the target page; styles, pointer-events and
+    // undo all handled by the reparent path). Without this the element
+    // would keep its old visual Y and never appear on the new page.
+    batchId++;
+    reparentElementToPage(el,pi,batchId,true);
+    updateSelectionBox();
+    updatePageBreakMarkers();
+    updateBoundaryMarkers();
+    scheduleLayerTree();
+    if(selectedEls.length>0)fireSelected();
+    if(el.isConnected&&el.scrollIntoView){
+      el.scrollIntoView({block:'nearest',inline:'nearest'});
+    }
+    return;
+  }else{
+    var t=layerElById(targetId);
+    if(!t||!t.isConnected||t===el)return;
+    if(t.contains(el))return; // cannot move a layer into its own subtree
+    if(position==='last-child'){
+      container=t;
+    }else{
+      if(!t.parentNode)return;
+      if(isPageBoundary(t)||isSystemFrame(t))return;
+      container=t.parentNode;
+      ref=(position==='after')?t.nextSibling:t;
+    }
+  }
+  if(!container)return;
+  if(ref===el)return; // dropped right beside itself
+  if(container===el.parentNode&&ref===el.nextSibling)return; // no-op
+  batchId++;
+  var oldParent=el.parentNode;
+  var oldNext=el.nextSibling;
+  var oldTransform=el.style.transform||'';
+  var sameParent=container===oldParent;
+  // Crossing parents changes which ancestor-context styles match - snapshot
+  // the subtree first, then re-inline whatever changed (appearance intact).
+  // The element LANDS IN ITS NEW FLOW SLOT (DOM order semantics, like
+  // Figma), so the old visual position is NOT compensated: keeping it at
+  // the previous Y would leave it stranded on the old page, invisible. A
+  // leftover canvas-drag translate would float it off the new slot too, so
+  // it is cleared when the layer crosses parents (undo restores it).
+  var snapshots=sameParent?null:captureSubtreeStyles(el);
+  var newTransform=sameParent?oldTransform:'';
+  undoStack.push({property:'__reorder__',element:el,oldParent:oldParent,oldNextSibling:oldNext,newParent:container,newNextSibling:ref,oldTransform:oldTransform,newTransform:newTransform,batchId:batchId});
+  redoStack=[];
+  if(ref&&ref!==el)container.insertBefore(el,ref);
+  else container.appendChild(el);
+  if(!sameParent){
+    restoreSubtreeStyles(el,snapshots);
+    syncElementPointerEvents(el);
+    el.style.transform=''; // land in the slot - no stale drag offset
+  }
+  updateSelectionBox();
+  updatePageBreakMarkers();
+  updateBoundaryMarkers();
+  scheduleLayerTree();
+  if(selectedEls.length>0)fireSelected();
+  // Bring the moved layer into view so the result of the drop is visible.
+  if(el.isConnected&&el.scrollIntoView){
+    el.scrollIntoView({block:'nearest',inline:'nearest'});
+  }
+}
+
 function setHover(el){
   if(hoveredEl===el)return;
   clearHover();
@@ -1157,14 +1288,25 @@ function formatStyleValue(property,computedValue){
   }
   return computedValue;
 }
-// Content moved onto a page container re-enables pointer events on itself
-// (the page box is click-through, so without this it could never be
-// selected). Kept in sync on reparent AND undo/redo: only elements whose
-// parent IS a page container carry the inline override.
+// Content moved onto a page container re-enables pointer events (the page
+// box is click-through, so without this the content could never be
+// selected). pointer-events INHERITS, but children may already carry an
+// authored inline override, so restore the WHOLE subtree: the moved element
+// and every descendant gets 'auto' only when the computed value inherited
+// 'none' (never clobbering an authored auto). Kept in sync on reparent AND
+// undo/redo: only content whose parent IS a page container carries the
+// inline override.
 function syncElementPointerEvents(el){
   if(!el||!el.style)return;
-  if(el.parentNode&&isPageBoundary(el.parentNode))el.style.pointerEvents='auto';
-  else if(el.style.pointerEvents==='auto')el.style.pointerEvents='';
+  if(el.parentNode&&isPageBoundary(el.parentNode)){
+    var list=[el];
+    var desc=el.querySelectorAll('*');
+    for(var i=0;i<desc.length;i++)list.push(desc[i]);
+    for(var j=0;j<list.length;j++){
+      var n=list[j];
+      if(getComputedStyle(n).pointerEvents==='none')n.style.pointerEvents='auto';
+    }
+  }else if(el.style.pointerEvents==='auto')el.style.pointerEvents='';
 }
 
 function performUndo(){
@@ -1219,6 +1361,12 @@ function performUndo(){
         if(entry.nextSibling&&entry.nextSibling.parentNode)entry.nextSibling.parentNode.insertBefore(entry.element,entry.nextSibling);
         else entry.parentNode.appendChild(entry.element);
       }
+    }else if(entry.property==='__reorder__'){
+      // Layers-panel drag & drop: restore the pre-drop position and the
+      // pre-move transform; the swapped entry lets redo replay the exact
+      // move (including its post-drop transform) again.
+      redoStack.push({property:'__reorder__',element:entry.element,oldParent:entry.newParent,oldNextSibling:entry.newNextSibling,newParent:entry.oldParent,newNextSibling:entry.oldNextSibling,oldTransform:entry.newTransform,newTransform:entry.oldTransform,batchId:lastBatch});
+      reinsertLayerElement(entry.element,entry.oldParent,entry.oldNextSibling,entry.oldTransform);
     }else if(entry.property==='__reparent__'){
       // Restore the pre-move position; push the swapped entry so redo
       // moves the element back to where the user put it. The origin-space
@@ -1310,6 +1458,12 @@ function performRedo(){
       }else{
         entry.element.remove();
       }
+    }else if(entry.property==='__reorder__'){
+      // Redo of a Layers-panel move: replay it to the post-drop position
+      // (the entry's swapped fields hold where the element went) and
+      // re-apply the post-drop transform; undo can reverse it exactly.
+      undoStack.push({property:'__reorder__',element:entry.element,oldParent:entry.newParent,oldNextSibling:entry.newNextSibling,newParent:entry.oldParent,newNextSibling:entry.oldNextSibling,oldTransform:entry.newTransform,newTransform:entry.oldTransform,batchId:lastBatch});
+      reinsertLayerElement(entry.element,entry.oldParent,entry.oldNextSibling,entry.oldTransform);
     }else if(entry.property==='__reparent__'){
       undoStack.push({property:'__reparent__',element:entry.element,oldParent:entry.newParent,oldNextSibling:entry.newNextSibling,oldTransform:entry.newTransform,newParent:entry.oldParent,newNextSibling:entry.oldNextSibling,newTransform:entry.oldTransform,placeholder:entry.placeholder,homePlaceholders:entry.homePlaceholders,batchId:lastBatch});
       // Redo moves the element to the state it had BEFORE the undo ran
@@ -1923,11 +2077,11 @@ function renderGuides(dragR,targets){
 // All selectable elements whose box intersects the marquee rectangle.
 // The page container (.scroll-wrapper/html/body) is NEVER marquee-selected:
 // it spans the whole document, so it would intersect every drag box.
-// The DEEPEST intersecting elements win: when a wrapper (e.g. .header,
-// .section) and one of its children both intersect the box, the wrapper
-// is dropped so the drag selects the actual element under the box - not
-// the whole block around it. Only elements with no other intersecting
-// descendant get selected.
+// OUTER elements win (Figma-style): once the drag box touches a wrapper
+// (e.g. .header, .section), the wrapper itself is selected and its inner
+// elements are NOT selected again - the user gets one selection for the
+// whole block instead of a noisy explosion of nested children. Children
+// stay reachable the normal way (click inside a selection to drill down).
 function computeMarqueeSelection(box,base){
   var els=getClickableElements();
   var sel=base?base.slice():[];
@@ -1942,17 +2096,16 @@ function computeMarqueeSelection(box,base){
     if(r.left>=box.right||r.right<=box.left||r.top>=box.bottom||r.bottom<=box.top)continue;
     hits.push(el);
   }
-  // Pass 2: drop any hit that contains another hit (the wrapper), keeping
-  // only the deepest elements the box actually touched.
+  // Pass 2: drop any hit that sits INSIDE another hit (the children),
+  // keeping only the outermost elements the box actually touched - a
+  // selected wrapper already represents its whole subtree.
   for(var i=0;i<hits.length;i++){
     var el=hits[i];
-    var hasChildHit=false;
-    if(el.children.length>0){
-      for(var j=0;j<hits.length;j++){
-        if(hits[j]!==el&&el.contains(hits[j])){hasChildHit=true;break;}
-      }
+    var hasAncestorHit=false;
+    for(var j=0;j<hits.length;j++){
+      if(hits[j]!==el&&hits[j].contains(el)){hasAncestorHit=true;break;}
     }
-    if(!hasChildHit)sel.push(el);
+    if(!hasAncestorHit)sel.push(el);
   }
   return sel;
 }
@@ -2088,6 +2241,18 @@ document.addEventListener('click',function(e){
     return;
   }
   clearHover();
+  if(layerSelLock&&selectedEls.length>0){
+    // Layers-panel selections are LOCKED: clicking anywhere inside the
+    // selection keeps the panel-selected element active (the user picked
+    // exactly THAT layer in the tree), like Figma. Clicking outside falls
+    // through to normal canvas-driven selection, which unlocks it.
+    var inSel=false;
+    for(var ci=0;ci<selectedEls.length;ci++){
+      if(selectedEls[ci]===el||selectedEls[ci].contains(el)){inSel=true;break;}
+    }
+    if(inSel)return;
+  }
+  layerSelLock=false;
   if(e.ctrlKey||e.metaKey){
     var idx=selectedEls.indexOf(el);
     if(idx>=0){
@@ -2233,8 +2398,10 @@ document.addEventListener('mousedown',function(e){
     // Grabbing a child element that is inside a selected container but is
     // NOT itself selected selects that child first (Figma-like), so the
     // drag moves the clicked element instead of its parent - unless the
-    // grab is part of the current selection, which moves as a group.
-    if(!grabSelfSelected&&isClickable(grabEl)&&!marqueeAdditive){
+    // grab is part of the current selection, which moves as a group. A
+    // LOCKED selection (made from the Layers panel) always moves as the
+    // user picked it - no deep-select until they click outside it.
+    if(!grabSelfSelected&&isClickable(grabEl)&&!marqueeAdditive&&!layerSelLock){
       deselect();
       selectedEls=[grabEl];
       fireSelected();
@@ -2574,10 +2741,14 @@ document.addEventListener('mouseup',function(e){
       fireSelected();
     }else if(selectedEls.length>0){
       // Marquee: if more than one element was selected, ensure each has
-      // its own outline (no selection box in multi-select).
+      // its own outline (no selection box in multi-select). Marquee and
+      // empty-drag selections are canvas-driven, so they unlock a
+      // Layers-panel selection lock.
+      layerSelLock=false;
       if(selectedEls.length>1)highlightSelected();
       fireSelected();
     }else{
+      layerSelLock=false;
       window.parent.postMessage({type:'selection-cleared'},'*');
     }
   }
@@ -2624,6 +2795,20 @@ document.addEventListener('selectstart',function(e){
 document.addEventListener('dragstart',function(e){
   if(inspectEnabled||splitMode)e.preventDefault();
 });
+
+// ── Canvas zoom relay ──
+// Ctrl/⌘ + wheel (and two-finger trackpad pinch, both of which report
+// ctrlKey) can only be observed INSIDE the iframe - they are relayed to the
+// parent, which owns the zoom factor and scales the preview around its
+// horizontal center. preventDefault stops the iframe's browser zoom; the
+// listener must be non-passive for that to work (Chrome makes document
+// wheel listeners passive by default).
+document.addEventListener('wheel',function(e){
+  if(e.ctrlKey||e.metaKey){
+    e.preventDefault();
+    window.parent.postMessage({type:'zoom-wheel',deltaY:e.deltaY},'*');
+  }
+},{passive:false});
 
 createSelectionBox();
 createMarquee();
@@ -2686,6 +2871,54 @@ function syncLayout(){
   syncPageBoundarySizes();
   updatePageBreakMarkers();
   updateBoundaryMarkers();
+  reportDocHeight();
+}
+
+// ── Document height reporter (canvas zoom) ──
+// The parent canvas zooms OUT only as a 'reveal' (it grows the preview's
+// layout height to this document's full content height and scales it
+// down, so the WHOLE document is visible). It therefore needs the
+// current total content height, reported here whenever the layout
+// changes.
+//
+// CRITICAL: never report documentElement/body scrollHeight directly.
+// The canvas ties the iframe's own box to the reported value while
+// zoom < 1, and both shells chain their height back to that box
+// (html{height:100%} + body{min-height:100%} for user templates,
+// .scroll-wrapper{height:100%} for default templates). Reporting the
+// html/body scrollHeight therefore feeds the iframe's OWN height back
+// into the reveal (plus body margins outside the 100% chain), so the
+// preview grows unboundedly. Instead measure the CONTENT's intrinsic
+// height, which never depends on the iframe's current box:
+//   - user templates — the .klone-render-space page sheet's own box
+//     (+ its top offset and margin): overflow:visible, so its height
+//     IS the document;
+//   - default shells — .scroll-wrapper scrollHeight (the full content
+//     inside the scroller; when the content is shorter than one
+//     screenful it equals the viewport height, a stable fixpoint, so
+//     the reveal simply shows the single screen scaled).
+function measureDocHeight(){
+  var wrap=document.querySelector('.scroll-wrapper');
+  if(wrap){
+    if(wrap.classList&&wrap.classList.contains('klone-render-space')){
+      var cs=getComputedStyle(wrap);
+      var mb=parseFloat(cs.marginBottom)||0;
+      var top=wrap.getBoundingClientRect().top+(window.pageYOffset||0);
+      return Math.ceil(top+wrap.offsetHeight+mb);
+    }
+    return wrap.scrollHeight;
+  }
+  return Math.max(
+    document.documentElement.scrollHeight,
+    document.body?document.body.scrollHeight:0
+  );
+}
+var lastReportedDocHeight=-1;
+function reportDocHeight(){
+  var h=measureDocHeight();
+  if(h===lastReportedDocHeight)return;
+  lastReportedDocHeight=h;
+  window.parent.postMessage({type:'doc-height',height:h},'*');
 }
 
 var layoutWatchStarted=false;
@@ -2702,6 +2935,14 @@ function startLayoutWatch(){
   obs.observe(document.documentElement);
   var wrap=document.querySelector('.scroll-wrapper');
   if(wrap)obs.observe(wrap);
+  // The scroller's scrollHeight also changes when content GROWS taller
+  // than the viewport (the element's box itself does not resize), so watch
+  // its height too to keep the zoom reveal sized to the whole document.
+  var scroller=(function(){
+    var isUserTpl=!!document.querySelector('.klone-render-space');
+    return isUserTpl?document.documentElement:(wrap||document.body);
+  })();
+  if(scroller&&scroller!==wrap)obs.observe(scroller);
   // One final pass once all resources (external CSS, fonts, images) are in.
   window.addEventListener('load',function(){syncLayout();});
 }
@@ -3000,6 +3241,9 @@ window.addEventListener('message',function(e){
       deselect();
       selectedEls=[lel];
     }
+    // Panel-driven selection: lock it so the next drag/click on the canvas
+    // moves exactly this element instead of deep-selecting a child.
+    layerSelLock=selectedEls.length>0;
     if(selectedEls.length===0){
       if(selBoxEl)selBoxEl.style.display='none';
       window.parent.postMessage({type:'selection-cleared'},'*');
@@ -3011,6 +3255,12 @@ window.addEventListener('message',function(e){
         selectedEls[0].scrollIntoView({block:'nearest',inline:'nearest'});
       }
     }
+  }
+  if(data.type==='reorder-layer'){
+    // Layers-panel drag & drop: move the layer to another
+    // position/container in the live document (undoable).
+    if(!data.id||!data.targetId)return;
+    moveLayerElement(String(data.id),String(data.targetId),String(data.position));
   }
   if(data.type==='inspect-mode'){
     inspectEnabled=data.enabled;

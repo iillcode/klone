@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -20,36 +21,16 @@ import {
 /* Colors/dark/light/buildHtml live in lib/data/templates.ts (shared with the
    template library + document creation). */
 
-/** Thin, arrow-less scrollbar injected into the preview document so the
- *  content scroller (.scroll-wrapper) stays very narrow and the up/down
- *  scroll buttons never appear — regardless of a template's own scrollbar
- *  CSS. Templates set the STANDARD scrollbar-width/scrollbar-color, which in
- *  Chromium DISABLES the WebKit pseudo-elements, so those are forced back to
- *  `auto` and the scrollbar is styled exclusively via `::-webkit-scrollbar`
- *  for full control of the width and to hide the buttons. */
-const PREVIEW_SCROLLBAR_STYLE = `<style>
-/* Default/blank templates scroll on .scroll-wrapper: keep it hairline + arrow-less. */
-.scroll-wrapper{scrollbar-width:auto !important;scrollbar-color:auto !important;}
-.scroll-wrapper::-webkit-scrollbar{width:1px !important;height:4px !important;}
-.scroll-wrapper::-webkit-scrollbar-track{background:transparent !important;}
-.scroll-wrapper::-webkit-scrollbar-button{display:none !important;width:0 !important;height:0 !important;}
-.scroll-wrapper::-webkit-scrollbar-corner{background:transparent !important;}
-.scroll-wrapper::-webkit-scrollbar-thumb{background-color:rgba(47, 47, 50, 0.6) !important;border-radius:99px !important;}
-.scroll-wrapper::-webkit-scrollbar-thumb:hover{background-color:rgba(113,113,122,0.85) !important;}
-/* User templates: <html> is the canvas scroller (see SYSTEM_RESET_CSS in
-   lib/data/templates.ts). Style the custom-colored, thin, arrow-less
-   scrollbar on <html> so it renders at the document's own right edge
-   (the iframe clips its far-right edge, but the html scrollbar still
-   paints inside the clip and is fully visible). Match the system chrome
-   scrollbar (apps/web/app/globals.css .custom-scroll): black-ish #3f3f46,
-   hover #52525b. Change --klone-scroll-thumb to recolor. */
-html{--klone-scroll-thumb:#3f3f46;--klone-scroll-thumb-hover:#52525b;scrollbar-width:thin !important;scrollbar-color:var(--klone-scroll-thumb) transparent !important;}
-html::-webkit-scrollbar{width:10px !important;height:10px !important;}
-html::-webkit-scrollbar-track{background:transparent !important;}
-html::-webkit-scrollbar-button{display:none !important;width:0 !important;height:0 !important;}
-html::-webkit-scrollbar-corner{background:transparent !important;}
-html::-webkit-scrollbar-thumb{background-color:var(--klone-scroll-thumb) !important;border-radius:99px !important;}
-html::-webkit-scrollbar-thumb:hover{background-color:var(--klone-scroll-thumb-hover) !important;}
+/** Scrollbars of the preview document are HIDDEN entirely (the content
+ *  remains scrollable via wheel/trackpad — only the native bars are gone).
+ *  Both scrolling shells are covered: default/blank templates scroll on
+ *  `.scroll-wrapper`, user-authored templates scroll on `<html>` (plus a
+ *  horizontal bar from the fixed 794px A4 sheet). The injected chrome is
+ *  stripped from saved/exported HTML via `[data-editor-reset]`. */
+const PREVIEW_SCROLLBAR_STYLE = `<style data-editor-reset>
+/* Hide ALL scrollbars in the preview document (scrolling still works). */
+html,body,.scroll-wrapper{scrollbar-width:none !important;-ms-overflow-style:none !important;}
+html::-webkit-scrollbar,body::-webkit-scrollbar,.scroll-wrapper::-webkit-scrollbar{display:none !important;width:0 !important;height:0 !important;}
 </style>`;
 
 function injectEditorScript(html: string): string {
@@ -130,6 +111,14 @@ export interface HtmlPreviewHandle {
   /** Select a layer by its tree id (Layers panel). `additive` toggles it
    *  within the current multi-selection. */
   selectLayer: (id: string, additive?: boolean) => void;
+  /** Move a layer to a new position via the Layers panel (undoable).
+   *  `position` is relative to the target row; "inner" nests the layer as
+   *  the target's last child. */
+  reorderLayer: (
+    id: string,
+    targetId: string,
+    position: "before" | "after" | "inner",
+  ) => void;
 }
 
 export type AlignMode =
@@ -164,6 +153,13 @@ interface HtmlPreviewProps {
   onPageInfo?: (info: { page: number; pageCount: number }) => void;
   onPagesChange?: (count: number, changed: boolean) => void;
   onLayersTree?: (tree: LayerNode[], selectedIds: string[]) => void;
+  /** Canvas zoom factor (1 = 100%). Applied as a scale transform around the
+   *  preview's horizontal CENTER so the page can never pan sideways. */
+  zoom?: number;
+  /** Relay for Ctrl/⌘ + wheel (and trackpad pinch) gestures that happen
+   *  inside the sandboxed iframe; called with a relative zoom factor the
+   *  parent applies to `zoom`. */
+  onZoomWheel?: (factor: number) => void;
 }
 
 export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
@@ -180,6 +176,8 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       onPageInfo,
       onPagesChange,
       onLayersTree,
+      zoom = 1,
+      onZoomWheel,
     },
     ref,
   ) {
@@ -190,6 +188,22 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [editState, setEditState] = useState<TextEditState | null>(null);
     const [draft, setDraft] = useState("");
+
+    // ── Zoom-out REVEAL height ──
+    // Zooming out must show the WHOLE document (not just one screenful).
+    // The reveal works by growing this container's layout height to the
+    // iframe document's full CONTENT height (reported by the editor
+    // script as an intrinsic measurement, never the html/body
+    // scrollHeight), scaling it down around the top center - so the page
+    // keeps its fixed width and stays horizontally centered at every
+    // zoom. The iframe's own box is locked to this value only while
+    // zoom < 1, so the DEFAULT 100% view is never affected. Measuring
+    // the content itself (not html/body scrollHeight) is essential:
+    // the canvas ties the iframe box to the reveal value while zoom < 1,
+    // and the shell CSS chains html/body/wrapper heights to that box,
+    // so a scrollHeight read would feed the iframe's own height back
+    // into the reveal and grow it forever.
+    const [revealHeight, setRevealHeight] = useState<number | null>(null);
 
     // ── Text edit overlay: the editor lives HERE (parent document), so
     // focus is stable and the sandboxed iframe never fights for it. The
@@ -222,6 +236,67 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       });
       onEditModeChange?.(false);
     }, [onEditModeChange]);
+
+    // ── Zoom-out REVEAL height tracking ──
+    // Zooming out shows the WHOLE document (not just one screenful) by
+    // growing the preview's layout height to the iframe document's full
+    // scrollHeight and scaling it down around the top center. Three
+    // sources keep that height current:
+    //   1. `doc-height` posts from the editor script (layout changes),
+    //   2. a periodic tick (page-break toggles, undo/redo and other
+    //      internal reflows that never post),
+    //   3. a ResizeObserver on the iframe (its height changes with the
+    //      reveal, so scrollHeight is re-derived each time).
+    // The height is only applied while zoom < 1; at 100% the reveal is
+    // released (h-full) and the default view is untouched. Declared here
+    // (before the message handler) because the handler wires in
+    // `doc-height` posts.
+    const zoomedOut = zoom < 1;
+    const updateRevealHeight = useCallback(() => {
+      if (!iframeRef.current) return;
+      try {
+        const doc = iframeRef.current.contentDocument;
+        if (!doc || !doc.body) return;
+        // Mirror the iframe's own measurement (editor script
+        // `measureDocHeight`): use the CONTENT's intrinsic height, never
+        // the html/body scrollHeight. The canvas locks the iframe box to
+        // the reveal height while zoom < 1, and the shell CSS chains
+        // html/body/wrapper heights back to that box — reading
+        // scrollHeight would feed the iframe's own height back into the
+        // reveal and grow it forever.
+        const wrap = doc.querySelector<HTMLElement>(".scroll-wrapper");
+        let h = 0;
+        if (wrap) {
+          if (wrap.classList.contains("klone-render-space")) {
+            // User-authored sheet: overflow:visible, its own box (+ top
+            // offset and bottom margin) is the whole document.
+            const cs = doc.defaultView
+              ? doc.defaultView.getComputedStyle(wrap)
+              : null;
+            const mb = cs ? parseFloat(cs.marginBottom) || 0 : 0;
+            const view = doc.defaultView;
+            const top =
+              wrap.getBoundingClientRect().top + (view ? view.pageYOffset : 0);
+            h = Math.ceil(top + wrap.offsetHeight + mb);
+          } else {
+            // Default shell: full content height inside the scroller.
+            h = wrap.scrollHeight;
+          }
+        } else {
+          h = Math.max(
+            doc.documentElement.scrollHeight,
+            doc.body ? doc.body.scrollHeight : 0,
+          );
+        }
+        if (h > 0) setRevealHeight((prev) => (prev === h ? prev : h));
+      } catch {
+        // cross-origin guard (should never happen with srcDoc)
+      }
+    }, []);
+    const reportRevealHeight = useCallback((height: number) => {
+      if (height > 0) setRevealHeight((prev) => (prev === height ? prev : height));
+    }, []);
+    const releaseReveal = useCallback(() => setRevealHeight(null), []);
 
     const handleEditKeyDown = useCallback(
       (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -270,6 +345,11 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         // Remove editor overlays from the clone
         clone
           .querySelectorAll("#el-overlay, #hover-overlay, [data-editor-ui]")
+          .forEach((el) => el.remove());
+        // Editor-injected chrome (e.g. the global pointer-events reset)
+        // lives in <head> as a <style data-editor-reset> - never persist it.
+        clone
+          .querySelectorAll("[data-editor-reset]")
           .forEach((el) => el.remove());
         clone.querySelectorAll("script").forEach((el) => el.remove());
         clone
@@ -600,6 +680,17 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
           "*",
         );
       },
+      reorderLayer: (id, targetId, position) => {
+        iframeRef.current?.contentWindow?.postMessage(
+          {
+            type: "reorder-layer",
+            id,
+            targetId,
+            position: position === "inner" ? "last-child" : position,
+          },
+          "*",
+        );
+      },
     }));
 
     useEffect(() => {
@@ -649,6 +740,17 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
             Array.isArray(e.data.selectedIds) ? e.data.selectedIds : [],
           );
         }
+        if (e.data && e.data.type === "doc-height") {
+          reportRevealHeight(Number(e.data.height) || 0);
+        }
+        if (e.data && e.data.type === "zoom-wheel") {
+          // Ctrl/⌘ + wheel (incl. trackpad pinch) can only be observed
+          // inside the iframe - it relays the gesture here. The zoom state
+          // lives in the parent so the preview (and the text-edit overlay
+          // inside this same scaled container) scales as one.
+          const dy = Number(e.data.deltaY) || 0;
+          if (dy !== 0) onZoomWheel?.(Math.exp(-dy * 0.002));
+        }
       };
       window.addEventListener("message", handler);
       return () => window.removeEventListener("message", handler);
@@ -661,6 +763,8 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       onPageInfo,
       onPagesChange,
       onLayersTree,
+      onZoomWheel,
+      reportRevealHeight,
     ]);
 
     // Keep draftRef in sync so commitTextEdit (stale-closure safe) reads
@@ -704,6 +808,39 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       );
     }, [splitMode]);
 
+    // ── Reveal height tracking ──
+    // Keep the preview container sized to the document's FULL height while
+    // zoomed out. Three sources drive it:
+    //   1. `doc-height` posts from the editor script (layout changes),
+    //   2. a periodic tick (page-break toggles, undo/redo and other
+    //      internal reflows that never post),
+    //   3. a ResizeObserver on the iframe (defensive re-read while the
+    //      box moves).
+    // All reads are intrinsic-content measurements (see
+    // `updateRevealHeight`), so the reveal value never depends on the
+    // iframe's own height - the tracking loop is a NO-OP once settled
+    // instead of a growth loop.
+    // Keep the reveal height current while zoomed out (see the tracking
+    // block above); release it as soon as the zoom returns to 100%.
+    useLayoutEffect(() => {
+      if (!zoomedOut) {
+        releaseReveal();
+        return;
+      }
+      updateRevealHeight();
+      const id = window.setInterval(updateRevealHeight, 300);
+      return () => window.clearInterval(id);
+    }, [zoomedOut, updateRevealHeight, releaseReveal]);
+
+    useEffect(() => {
+      if (!zoomedOut || typeof ResizeObserver === "undefined") return;
+      const iframe = iframeRef.current;
+      if (!iframe) return;
+      const obs = new ResizeObserver(() => updateRevealHeight());
+      obs.observe(iframe);
+      return () => obs.disconnect();
+    }, [zoomedOut, updateRevealHeight]);
+
     const srcDoc = html
       ? injectEditorScript(normalizeTemplateHtml(html))
       : defaultHtml;
@@ -711,25 +848,60 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
     const hasBg = bg && bg !== "transparent" && bg !== "rgba(0, 0, 0, 0)";
 
     return (
-      <div className="relative w-full h-full">
-        <iframe
-          ref={iframeRef}
-          srcDoc={srcDoc}
-          className="w-full h-full border-0 bg-transparent"
-          title="Preview"
-          sandbox="allow-scripts allow-same-origin"
-          onLoad={() => {
-            iframeRef.current?.contentWindow?.postMessage(
-              { type: "inspect-mode", enabled: inspectMode },
-              "*",
-            );
-            iframeRef.current?.contentWindow?.postMessage(
-              { type: "set-split-mode", enabled: splitMode },
-              "*",
-            );
-          }}
-        />
-        {editState && (
+      <div
+        // ZOOM-OUT REVEAL (zoom < 1): the whole document becomes visible
+        // while the page keeps its fixed width and stays horizontally
+        // centered. Geometry:
+        //   outer div  → layout height = the SCALED height (h*zoom), so the
+        //                canvas scrolls exactly as much as the visual size
+        //                requires (overflow:hidden keeps the oversized
+        //                child out of the scrollable area),
+        //   inner div  → layout height = the document's FULL height h,
+        //                scaled down around the top center; the width is
+        //                untouched (scale shrinks it visually around the
+        //                center line, so the page can never drift sideways).
+        // At zoom >= 1 (the DEFAULT view) no style is applied at all — the
+        // wrapper renders exactly like the original 100% layout.
+        className={
+          zoom < 1 && revealHeight ? "relative w-full" : "relative w-full h-full"
+        }
+        style={
+          zoom < 1 && revealHeight
+            ? { height: revealHeight * zoom, overflow: "hidden" }
+            : undefined
+        }
+      >
+        <div
+          className="relative w-full"
+          style={
+            zoom < 1 && revealHeight
+              ? {
+                  height: revealHeight,
+                  transform: `scale(${zoom})`,
+                  transformOrigin: "top center",
+                  willChange: "transform",
+                }
+              : { width: "100%", height: "100%" }
+          }
+        >
+          <iframe
+            ref={iframeRef}
+            srcDoc={srcDoc}
+            className="w-full h-full border-0 bg-transparent"
+            title="Preview"
+            sandbox="allow-scripts allow-same-origin"
+            onLoad={() => {
+              iframeRef.current?.contentWindow?.postMessage(
+                { type: "inspect-mode", enabled: inspectMode },
+                "*",
+              );
+              iframeRef.current?.contentWindow?.postMessage(
+                { type: "set-split-mode", enabled: splitMode },
+                "*",
+              );
+            }}
+          />
+          {editState && (
           <div
             className="absolute z-10"
             style={{
@@ -765,8 +937,9 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
                 whiteSpace: "pre-wrap",
               }}
             />
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
     );
   },

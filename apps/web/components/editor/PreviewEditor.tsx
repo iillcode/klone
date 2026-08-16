@@ -9,6 +9,7 @@ import {
   type LayerNode,
 } from "./HtmlPreview";
 import { FigmaBottomToolbar } from "./FigmaBottomToolbar";
+import { MinusIcon, PlusIcon } from "./icons/toolbar-icons";
 import { Sidebar } from "@/components/layout/Sidebar";
 import type { UserProfile } from "@/lib/data/users";
 import { PropertiesSidebar } from "./PropertiesSidebar";
@@ -78,6 +79,22 @@ export function PreviewEditor({
     () => ((html ?? "").match(/data-klone-page-boundary/g)?.length ?? 0) + 1,
   );
   const [currentPage, setCurrentPage] = useState(0);
+  // ── Canvas zoom ──
+  // The preview is scaled around its HORIZONTAL CENTER (transform-origin
+  // "top center" in HtmlPreview), so the page can NEVER drift or pan
+  // sideways - zoom only changes how big the vertically scrolling document
+  // appears. Layout size is unchanged, so no horizontal scrollbars can
+  // ever appear.
+  const [zoom, setZoom] = useState(1);
+  const clampZoom = useCallback(
+    (z: number) => Math.min(2, Math.max(0.25, Math.round(z * 100) / 100)),
+    [],
+  );
+  const zoomBy = useCallback(
+    (factor: number) => setZoom((z) => clampZoom(z * factor)),
+    [clampZoom],
+  );
+  const zoomTo = useCallback((z: number) => setZoom(clampZoom(z)), [clampZoom]);
   // Live layer tree reported by the iframe editor (Layers sidebar tab).
   // Selection badges are derived from selectedElements instead of the
   // iframe's reported ids so they update instantly with canvas clicks.
@@ -217,6 +234,14 @@ export function PreviewEditor({
     previewRef.current?.selectLayer(id, additive);
   }, []);
 
+  const handleReorderLayer = useCallback(
+    (id: string, targetId: string, position: "before" | "after" | "inner") => {
+      previewRef.current?.reorderLayer(id, targetId, position);
+      setDirty(true);
+    },
+    [],
+  );
+
   const handlePageInfo = useCallback(
     (info: { page: number; pageCount: number }) => {
       setCurrentPage(info.page);
@@ -275,7 +300,7 @@ export function PreviewEditor({
     } finally {
       setSaving(false);
     }
-  }, [saving, docId, docTitle, router]);
+  }, [saving, docId, docTitle, router, initialTemplateSlug]);
 
   // Best-effort guard against losing unsaved work on tab close/refresh.
   useEffect(() => {
@@ -329,6 +354,26 @@ export function PreviewEditor({
         e.preventDefault();
         previewRef.current?.redo();
         return;
+      }
+
+      // Zoom: Ctrl/Cmd + '+'/'-' to zoom in/out, Ctrl/Cmd + '0' resets to
+      // 100%. Wheel zoom (Ctrl/⌘+scroll) is relayed from the iframe itself.
+      if (e.metaKey || e.ctrlKey) {
+        if (e.key === "=" || e.key === "+") {
+          e.preventDefault();
+          zoomBy(1.2);
+          return;
+        }
+        if (e.key === "-" || e.key === "_") {
+          e.preventDefault();
+          zoomBy(1 / 1.2);
+          return;
+        }
+        if (e.key === "0") {
+          e.preventDefault();
+          zoomTo(1);
+          return;
+        }
       }
 
       // V key: toggle inspect mode (only when not focused on an input)
@@ -408,7 +453,7 @@ export function PreviewEditor({
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [inspectMode, selectedElements.length, splitMode]);
+  }, [inspectMode, selectedElements.length, splitMode, zoomBy, zoomTo]);
 
   return (
     <div className="flex flex-col w-full h-full bg-[#161617]">
@@ -457,8 +502,12 @@ export function PreviewEditor({
 
         {/* ── Center: Canvas ── */}
         <div className="flex-1 h-full relative overflow-hidden">
-          {/* Preview iframe area */}
-          <div className="absolute inset-0 flex items-start justify-center overflow-auto">
+          {/* Preview iframe area — vertical scrolling only; the page stays
+              horizontally centered when zoomed (see HtmlPreview's
+              transform-origin), so the canvas can never pan sideways.
+              The vertical scrollbar is hidden (wheel/trackpad still scroll;
+              `scrollbar-none` utility in app/globals.css). */}
+          <div className="absolute inset-0 flex items-start justify-center overflow-x-hidden overflow-y-auto scrollbar-none">
             <div className="w-full h-full">
               {/*
                 Hidden input that captures keyboard focus when elements are selected.
@@ -477,6 +526,8 @@ export function PreviewEditor({
                 html={html ?? undefined}
                 inspectMode={inspectMode}
                 splitMode={splitMode}
+                zoom={zoom}
+                onZoomWheel={zoomBy}
                 onElementSelect={handleElementSelect}
                 onStyleUpdated={handleStyleUpdated}
                 onEditModeChange={handleEditModeChange}
@@ -487,6 +538,34 @@ export function PreviewEditor({
                 onLayersTree={handleLayersTree}
               />
             </div>
+          </div>
+
+          {/* ── Zoom controls: bottom-left pill ──
+              Canvas zoom scales the preview around its horizontal center
+              (see HtmlPreview), so the page never moves sideways - the
+              document only scrolls vertically. */}
+          <div className="absolute bottom-3 left-3 z-10 flex items-center h-8 rounded-lg bg-[#1e1e1e] border border-[#2d2d2d] shadow-lg select-none">
+            <button
+              onClick={() => zoomBy(1 / 1.2)}
+              title="Zoom out (Ctrl+-)"
+              className="w-7 h-8 flex items-center justify-center text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2a2a2a] transition-colors rounded-l-lg"
+            >
+              <MinusIcon />
+            </button>
+            <button
+              onClick={() => zoomTo(1)}
+              title="Reset zoom to 100% (Ctrl+0)"
+              className="px-1.5 h-8 min-w-[50px] text-[11px] font-medium text-[#e4e4e7] tabular-nums hover:bg-[#2a2a2a] transition-colors"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              onClick={() => zoomBy(1.2)}
+              title="Zoom in (Ctrl++)"
+              className="w-7 h-8 flex items-center justify-center text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2a2a2a] transition-colors rounded-r-lg"
+            >
+              <PlusIcon />
+            </button>
           </div>
 
           {/* ── Split-mode hint (inspect mode + split mode) ── */}
@@ -538,6 +617,7 @@ export function PreviewEditor({
                 .map((el) => el.id)
                 .filter((id): id is string => !!id)}
               onSelectLayer={handleSelectLayer}
+              onReorderLayer={handleReorderLayer}
             />
           </div>
         </div>

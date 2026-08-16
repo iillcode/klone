@@ -4,7 +4,6 @@ import { FinalCTA } from "@/components/marketing/landing/FinalCTA";
 import { HeroSection } from "@/components/marketing/landing/Hero";
 import { LandingFooter } from "@/components/marketing/landing/LandingFooter";
 import { LandingNavbar } from "@/components/marketing/landing/LandingNavbar";
-import { LogoCloud } from "@/components/marketing/landing/LogoCloud";
 import { PipelineSection } from "@/components/marketing/landing/PipelineSection";
 import { PositioningSection } from "@/components/marketing/landing/PositioningSection";
 import { TemplatesSection } from "@/components/marketing/landing/TemplatesSection";
@@ -21,7 +20,6 @@ export default function KloneLandingPage() {
       <LandingNavbar />
       <main>
         <HeroSection />
-        <LogoCloud />
         <PositioningSection />
         <TemplatesSection />
         <FeatureGridSection />

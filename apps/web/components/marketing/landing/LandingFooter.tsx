@@ -90,11 +90,11 @@ const LEGAL_LINKS = ["Privacy", "Terms", "Security", "Status"];
 export function LandingFooter() {
   return (
     <footer id="resources" className="bg-[#0a0a0a] text-white">
-      <LandingContainer className="py-16 md:py-20">
-        <div className="flex flex-col gap-12 lg:flex-row lg:justify-between">
+      <LandingContainer className="py-10 md:py-12">
+        <div className="flex flex-col gap-8 lg:flex-row lg:justify-between">
           {/* Wordmark + statement */}
-          <div className="max-w-[280px]">
-            <span className="flex items-center gap-2 text-[18px] font-bold tracking-tight">
+          <div className="max-w-[260px]">
+            <span className="flex items-center gap-2 text-[16px] font-bold tracking-tight">
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
                 <rect x="1" y="1" width="16" height="16" fill="#aef637" />
                 <path
@@ -107,25 +107,25 @@ export function LandingFooter() {
               </svg>
               Klone
             </span>
-            <p className="mt-4 text-[13px] leading-[1.7] text-[#a3a3a3]">
+            <p className="mt-3 text-[12px] leading-[1.7] text-[#a3a3a3]">
               The AI document studio. Ask your AI assistant, edit the result
               yourself, and download a finished PDF.
             </p>
           </div>
 
           {/* Nav columns */}
-          <div className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 lg:grid-cols-5">
             {FOOTER_COLUMNS.map((column) => (
               <nav key={column.heading} aria-label={column.heading}>
-                <h3 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#737373]">
+                <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#737373]">
                   {column.heading}
                 </h3>
-                <ul className="mt-4 space-y-2.5">
+                <ul className="mt-3 space-y-2">
                   {column.links.map((link) => (
                     <li key={link}>
                       <a
                         href="#"
-                        className="text-[13.5px] text-[#d4d4d4] transition-colors duration-150 hover:text-white focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
+                        className="text-[12.5px] text-[#d4d4d4] transition-colors duration-150 hover:text-white focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
                       >
                         {link}
                       </a>
@@ -138,7 +138,7 @@ export function LandingFooter() {
         </div>
 
         {/* Legal area */}
-        <div className="mt-16 border-t border-[#262626] pt-6">
+        <div className="mt-8 border-t border-[#262626] pt-5 md:mt-10">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               <p className="text-[12px] text-[#a3a3a3]">
@@ -170,9 +170,9 @@ export function LandingFooter() {
                     <a
                       href="#"
                       aria-label={label}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-[#a3a3a3] transition-colors duration-150 hover:bg-[#262626] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-[#a3a3a3] transition-colors duration-150 hover:bg-[#262626] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
                     >
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
                         {path}
                       </svg>
                     </a>

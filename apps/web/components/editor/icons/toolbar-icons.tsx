@@ -119,6 +119,21 @@ export function PlusIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function MinusIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      className="w-3.5 h-3.5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+      {...props}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12h-15" />
+    </svg>
+  );
+}
+
 export function SearchIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
