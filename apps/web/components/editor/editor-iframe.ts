@@ -1272,6 +1272,7 @@ function fireSelected(){
         borderRadius:s.borderRadius,
         visibility:s.visibility,
         mixBlendMode:s.mixBlendMode,
+        backgroundBlendMode:s.backgroundBlendMode,
         rotate:s.rotate,
         scaleX:s.scaleX,
         scaleY:s.scaleY,

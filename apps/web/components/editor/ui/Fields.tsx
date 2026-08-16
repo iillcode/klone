@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef } from "react";
 import { Eye, EyeOff, Minus } from "lucide-react";
 import { ColorPicker } from "./ColorPicker";
-import { NumberField } from "./NumberField";
+import { PanelSelect } from "./PanelSelect";
+import { ScrubField } from "./ScrubField";
 
 /* .field-block — 11px label + control (open-pencil tokens) */
 export function FieldBlock({
@@ -56,28 +57,55 @@ export function Section({
   );
 }
 
-/* ─── Color row (open-pencil fill row: PaintField + rail eye/minus) ─── */
+/* ─── Color row — exact open-pencil Fill item (PaintField + rail + blend) ─── */
+const FILL_BLEND_OPTIONS = [
+  { value: "NORMAL", label: "Normal" },
+  { value: "MULTIPLY", label: "Multiply" },
+  { value: "SCREEN", label: "Screen" },
+  { value: "OVERLAY", label: "Overlay" },
+  { value: "DARKEN", label: "Darken" },
+  { value: "LIGHTEN", label: "Lighten" },
+  { value: "COLOR_DODGE", label: "Color Dodge" },
+  { value: "COLOR_BURN", label: "Color Burn" },
+  { value: "HARD_LIGHT", label: "Hard Light" },
+  { value: "SOFT_LIGHT", label: "Soft Light" },
+  { value: "DIFFERENCE", label: "Difference" },
+  { value: "EXCLUSION", label: "Exclusion" },
+  { value: "HUE", label: "Hue" },
+  { value: "SATURATION", label: "Saturation" },
+  { value: "COLOR", label: "Color" },
+  { value: "LUMINOSITY", label: "Luminosity" },
+];
+
 export function ColorRow({
   label,
   color,
   opacity = 1,
   hidden = false,
+  blendMode = "NORMAL",
+  index = 0,
   onChange,
   onOpacityChange,
   onToggleVisibility,
   onRemove,
+  onBlendModeChange,
 }: {
   label: string;
   color: string;
   opacity?: number;
   hidden?: boolean;
+  blendMode?: string;
+  /** Position of this fill in the section's item list (open-pencil data-index). */
+  index?: number;
   onChange: (color: string) => void;
   onOpacityChange?: (opacity: number) => void;
   onToggleVisibility?: () => void;
   onRemove?: () => void;
+  onBlendModeChange?: (mode: string) => void;
 }) {
+  // Open-pencil shows the hex WITHOUT the leading '#' (maxlength 6).
   const [hexInput, setHexInput] = useState(() =>
-    color ? color.toUpperCase() : "",
+    color ? color.replace("#", "").toUpperCase() : "",
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerPos, setPickerPos] = useState({ left: 0, top: 0 });
@@ -86,19 +114,20 @@ export function ColorRow({
   // Sync hex input when color changes externally (empty = transparent)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setHexInput(color ? color.toUpperCase() : "");
+    setHexInput(color ? color.replace("#", "").toUpperCase() : "");
   }, [color]);
 
   const openPicker = () => {
     const r = swatchRef.current?.getBoundingClientRect();
     if (!r) return;
-    const W = 272;
-    const H = 505;
-    let left = r.left - W - 8;
-    if (left < 8) left = r.right + 8;
+    // open-pencil popover: w-60 p-2; approximate rendered height for clamping.
+    const W = 240;
+    const H = 380;
+    let left = r.left - W - 4;
+    if (left < 8) left = r.right + 4;
     if (left + W > window.innerWidth - 8)
       left = Math.max(8, window.innerWidth - W - 8);
-    let top = r.top;
+    let top = r.top - 4;
     if (top + H > window.innerHeight - 8)
       top = Math.max(8, window.innerHeight - H - 8);
     setPickerPos({ left, top });
@@ -107,69 +136,96 @@ export function ColorRow({
 
   const hasBase = !!color;
   const opacityPct = Math.round((opacity || 0) * 100);
+  const hex6 = hexInput.replace("#", "").toUpperCase();
 
   return (
     <div
-      data-slot="item-row"
-      className="group grid min-h-6 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-1.5 py-0.5"
+      data-slot="item"
+      className="group grid min-h-6 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1.5 gap-y-1.5 py-0.5"
+      data-property="fills"
+      data-index={index}
     >
       {/* content */}
       <div className="flex min-w-0 items-center gap-1.5" data-slot="content">
         {/* open-pencil PaintField */}
         <div
-          className="h-6 min-w-0 flex-1 flex items-center overflow-hidden rounded border border-transparent bg-[#383838] text-[11px] transition-colors hover:bg-[#404040] focus-within:border-[#3b82f6] focus-within:bg-[#404040]"
+          className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-transparent bg-[#383838] text-[11px] transition-colors hover:bg-[#404040] focus-within:border-[#3b82f6] focus-within:bg-[#404040] w-full flex-none"
           data-slot="paint-field"
           data-property="paint"
         >
-          <div className="flex shrink-0 items-center pl-1">
+          <div className="flex shrink-0 items-center pl-1" data-slot="preview">
             <button
               type="button"
               ref={swatchRef}
               onClick={openPicker}
-              className="relative block size-4 overflow-hidden rounded border border-[#3a3a3a] cursor-pointer bg-[#3a3a3a] bg-[image:linear-gradient(45deg,#555_25%,transparent_25%),linear-gradient(-45deg,#555_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#555_75%),linear-gradient(-45deg,transparent_75%,#555_75%)] bg-[size:8px_8px] bg-[position:0_0,0_4px,4px_-4px,-4px_0]"
+              className="size-4 shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0"
               title={`Change ${label.toLowerCase()} color`}
+              aria-label={label}
+              data-test-id="fill-picker-swatch"
             >
-              {color ? (
-                <div
-                  className="pointer-events-none absolute inset-0"
-                  style={{ backgroundColor: color, opacity: opacity }}
-                />
-              ) : (
-                <div className="pointer-events-none absolute inset-0 border border-white/15" />
-              )}
+              <span
+                className="relative block size-full overflow-hidden rounded border border-[#3a3a3a] bg-[#3a3a3a] bg-[image:linear-gradient(45deg,#4a4a4a_25%,transparent_25%),linear-gradient(-45deg,#4a4a4a_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#4a4a4a_75%),linear-gradient(-45deg,transparent_75%,#4a4a4a_75%)] bg-[size:8px_8px] bg-[position:0_0,0_4px,4px_-4px,-4px_0]"
+                data-fill-type="SOLID"
+                data-fill-category="SOLID"
+                role="img"
+                aria-roledescription="fill swatch"
+                data-slot="swatch"
+                style={
+                  color
+                    ? { ["--open-pencil-fill-swatch-background" as string]: color }
+                    : undefined
+                }
+              >
+                {color ? (
+                  <span
+                    className="pointer-events-none absolute inset-0"
+                    style={{ backgroundColor: color, opacity: opacity }}
+                  />
+                ) : (
+                  <span className="pointer-events-none absolute inset-0 border border-white/15" />
+                )}
+              </span>
             </button>
           </div>
-          <input
-            type="text"
-            value={hexInput}
-            placeholder="transparent"
-            data-property="color-hex"
-            className="min-w-0 flex-1 border-none bg-transparent font-mono text-[11px] pl-1.5 pr-1 text-[#f0f0f0] outline-none caret-[#3b82f6]"
-            onChange={(e) => {
-              const val = e.target.value;
-              setHexInput(val);
-              if (/^#[0-9a-fA-F]{6}$/.test(val)) {
-                if (val.toLowerCase() === (color || "").toLowerCase()) return;
-                onChange(val);
-              }
-            }}
-            onBlur={() => {
-              if (hexInput && !/^#[0-9a-fA-F]{6}$/.test(hexInput)) {
-                setHexInput(color ? color.toUpperCase() : "");
-              }
-            }}
-          />
-          <div className="h-4 w-px shrink-0 bg-[#888888]/40" />
-          <NumberField
+          <div
+            className="flex min-w-0 flex-1 items-center pl-1.5 pr-1"
+            data-slot="value"
+          >
+            <input
+              type="text"
+              aria-label={label}
+              data-property="color-hex"
+              maxLength={6}
+              value={hex6}
+              placeholder="transparent"
+              className="min-w-0 flex-1 border-none bg-transparent font-mono text-xs text-[#f0f0f0] outline-none caret-[#3b82f6]"
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^0-9a-fA-F]/g, "").toUpperCase();
+                setHexInput(val);
+                if (/^[0-9a-fA-F]{6}$/.test(val)) {
+                  const withHash = `#${val}`;
+                  if (withHash.toLowerCase() === (color || "").toLowerCase()) return;
+                  onChange(withHash);
+                }
+              }}
+              onBlur={() => {
+                if (!/^[0-9a-fA-F]{6}$/.test(hexInput.replace("#", ""))) {
+                  setHexInput(color ? color.replace("#", "").toUpperCase() : "");
+                }
+              }}
+            />
+          </div>
+          <div className="h-4 w-px shrink-0 bg-[#888888]/40" data-slot="divider" />
+          <ScrubField
             className="h-full w-12 flex-none shrink-0 rounded-none border-0 bg-transparent shadow-none"
+            label="Opacity"
             suffix="%"
             min={0}
             max={100}
             disabled={!hasBase}
             value={opacityPct}
             onChange={(v) => {
-              const n = Math.round(parseFloat(v || "0") * 10) / 10;
-              onOpacityChange?.(Math.min(1, Math.max(0, n / 100)));
+              onOpacityChange?.(Math.min(1, Math.max(0, v / 100)));
             }}
           />
         </div>
@@ -182,10 +238,12 @@ export function ColorRow({
             type="button"
             title={hidden ? "Show" : "Hide"}
             aria-label={hidden ? "Show" : "Hide"}
+            aria-pressed={hidden}
             onClick={onToggleVisibility}
             className={`flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0] ${
               hidden ? "text-[#3b82f6]" : ""
             }`}
+            data-slot="visibility"
           >
             {hidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
           </button>
@@ -197,11 +255,39 @@ export function ColorRow({
             aria-label="Remove"
             onClick={onRemove}
             className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
+            data-slot="remove"
           >
             <Minus className="size-3.5" />
           </button>
         )}
       </div>
+
+      {/* per-fill Blend mode (open-pencil details row) */}
+      {onBlendModeChange && (
+        <div className="col-span-2 min-w-0" data-slot="details">
+          <div data-slot="root" data-panel-field-group="" className="min-w-0">
+            <label
+              data-slot="label"
+              className="mb-1 block truncate text-[11px] leading-none text-[#888888]"
+            >
+              Blend mode
+            </label>
+            <div
+              data-slot="container"
+              className="flex min-w-0 flex-col gap-1.5"
+            >
+              <PanelSelect
+                value={blendMode}
+                label="Blend mode"
+                dataProperty="fill-blend-mode"
+                className="w-full min-w-0"
+                options={FILL_BLEND_OPTIONS}
+                onChange={(v) => onBlendModeChange(v)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {pickerOpen && (
         <ColorPicker

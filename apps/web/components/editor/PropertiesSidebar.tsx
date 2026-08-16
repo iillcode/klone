@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { ElementInfo, AlignMode } from "./HtmlPreview";
 import {
   Keyboard,
@@ -16,29 +15,16 @@ import {
   FlipVertical2,
   RotateCwSquare,
   RotateCw,
-  Plus,
-  Blend,
-  Square,
-  Image as ImageIcon,
-  Trash2,
   DeleteIcon,
 } from "lucide-react";
-import {
-  cssPx,
-  parseTranslate,
-  parseRgbToHex,
-  parseColorAlpha,
-  withColorAlpha,
-  gradientFirstColor,
-  isTransparentColor,
-} from "./utils/style-utils";
+import { parseTranslate } from "./utils/style-utils";
 import { NumberField } from "./ui/NumberField";
-import { ColorRow } from "./ui/Fields";
 import { TypographyPanel } from "./ui/TypographyPanel";
 import { AppearanceSection } from "./ui/AppearanceSection";
 import { StrokeSection } from "./ui/StrokeSection";
 import { EffectsSection } from "./ui/EffectsSection";
 import { LayoutSection } from "./ui/LayoutSection";
+import { FillSection } from "./ui/FillSection";
 
 /**
  * Keyboard shortcuts available in the Klone editor, shown in the design
@@ -164,28 +150,6 @@ export function PropertiesSidebar({
 
   // Format numbers without trailing decimals (12.5 stays 12.5, 12.0 → 12)
   const fmtNum = (n: number) => (Math.round(n * 10) / 10).toString();
-
-  // The element's VISIBLE background color. A background-image (gradient /
-  // image) paints OVER background-color, so when one is present we surface
-  // its first color stop; otherwise fall back to background-color.
-  const visibleBg =
-    gradientFirstColor(s?.backgroundImage) ?? s?.backgroundColor;
-  const bgColor = isTransparentColor(visibleBg)
-    ? ""
-    : parseRgbToHex(visibleBg);
-  const bgOpacity = parseColorAlpha(visibleBg);
-  const txtColor = isTransparentColor(s?.color)
-    ? ""
-    : parseRgbToHex(s?.color);
-  const txtOpacity = parseColorAlpha(s?.color);
-
-  // Open-pencil fill visibility state (reset whenever the selection changes).
-  const [txtHidden, setTxtHidden] = useState(false);
-  const [bgHidden, setBgHidden] = useState(false);
-  useEffect(() => {
-    setTxtHidden(false);
-    setBgHidden(false);
-  }, [selectedElements]);
 
   // Rotation / flip helpers (compose with the existing translate transform).
   const rotation = Math.round(parseFloat(s?.rotate || "0")) || 0;
@@ -449,96 +413,8 @@ export function PropertiesSidebar({
             {/* ── Stroke ── */}
             <StrokeSection styles={s} onApplyStyle={onApplyStyle} />
 
-            {/* ── Fill / Color ── */}
-            <div className="py-3.5 border-b border-[#3a3a3a]">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-[#f0f0f0]">
-                  Fill
-                </span>
-                <div className="flex items-center gap-0.5">
-                  <button
-                    type="button"
-                    title="Add color"
-                    onClick={() => {
-                      if (!txtColor) onApplyStyle("color", "#000000");
-                      if (!bgColor) onApplyStyle("backgroundColor", "#000000");
-                    }}
-                    className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
-                  >
-                    <Plus className="size-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-3 flex items-center gap-1.5">
-                <button
-                  type="button"
-                  title="Solid"
-                  className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
-                >
-                  <Square className="size-3.5" />
-                </button>
-                <button
-                  type="button"
-                  title="Gradient"
-                  className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
-                >
-                  <Blend className="size-3.5" />
-                </button>
-                <button
-                  type="button"
-                  title="Image"
-                  className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]"
-                >
-                  <ImageIcon className="size-3.5" />
-                </button>
-              </div>
-
-              <div className="mt-3">
-                <ColorRow
-                  label="Text"
-                  color={txtColor}
-                  opacity={txtOpacity}
-                  hidden={txtHidden}
-                  onChange={(c) => {
-                    const cAlpha = parseColorAlpha(c);
-                    onApplyStyle(
-                      "color",
-                      cAlpha < 1 || !txtColor
-                        ? c
-                        : withColorAlpha(c, txtOpacity),
-                    );
-                  }}
-                  onOpacityChange={(a) => {
-                    if (!txtColor) return;
-                    onApplyStyle("color", withColorAlpha(txtColor, a));
-                  }}
-                  onToggleVisibility={() => setTxtHidden((v) => !v)}
-                  onRemove={() => onApplyStyle("color", "transparent")}
-                />
-                <ColorRow
-                  label="Background"
-                  color={bgColor}
-                  opacity={bgOpacity}
-                  hidden={bgHidden}
-                  onChange={(c) => {
-                    const cAlpha = parseColorAlpha(c);
-                    onApplyStyle(
-                      "backgroundColor",
-                      cAlpha < 1 || !bgColor
-                        ? c
-                        : withColorAlpha(c, bgOpacity),
-                    );
-                  }}
-                  onOpacityChange={(a) => {
-                    if (!bgColor) return;
-                    onApplyStyle("backgroundColor", withColorAlpha(bgColor, a));
-                  }}
-                  onToggleVisibility={() => setBgHidden((v) => !v)}
-                  onRemove={() => onApplyStyle("backgroundColor", "transparent")}
-                />
-              </div>
-            </div>
+            {/* ── Fill (open-pencil clone) ── */}
+            <FillSection styles={s} onApplyStyle={onApplyStyle} />
 
             {/* ── Effects ── */}
             <EffectsSection styles={s} onApplyStyle={onApplyStyle} />

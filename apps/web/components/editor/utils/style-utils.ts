@@ -52,11 +52,11 @@ export function withColorAlpha(
   alpha: number,
 ): string {
   const a = clamp01(alpha);
-  if (isTransparentColor(color) || a <= 0) return "transparent";
+  if (!color || isTransparentColor(color) || a <= 0) return "transparent";
   if (a >= 1) return color;
   // Resolve to `#rrggbb` then split into rgb channels.
-  const hex = color!.startsWith("#")
-    ? color!
+  const hex = color.startsWith("#")
+    ? color
     : parseRgbToHex(color).replace("#", "");
   const parts = hex.match(/[0-9a-fA-F]{2}/g) ?? [];
   const r = parseInt(parts[0] ?? "0", 16);

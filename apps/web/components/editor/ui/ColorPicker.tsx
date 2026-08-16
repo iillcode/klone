@@ -3,28 +3,29 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Square, Blend, Image as ImageIcon } from "lucide-react";
+import { NumberField } from "./NumberField";
+import { PanelSelect } from "./PanelSelect";
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Custom color editor popover.
-   React + Tailwind conversion of the standalone "Custom Color Editor" HTML,
-   preserving the visual design exactly (colors, sizes, spacing, radii):
-     • Header with Custom / Libraries tabs + add / close actions
-     • Fill-type tools row (solid, pattern, grid, image, video, style, droplet,
-       color wheel) — active state only, no behavior
-     • Saturation/Value square with draggable handle
-     • Hue slider, eyedropper + alpha slider
-     • Value fields with Hex / RGB / HSL mode switcher
-     • "On this page" swatch grid (24 preset swatches, + add-current)
-   Rendered via portal so it can float above the editor sidebar.
+   Fill color picker — faithful React port of open-pencil's FillPicker
+   (src/components/fill-picker/FillPicker.vue) rendering the SOLID branch of
+   ColorPickerPanel (src/components/color-picker-panel/*):
+     • Fill-type tab row: Solid / Gradient / Image (fill-picker theme tabs)
+     • Saturation/Value area (hsb, x=saturation y=brightness, h-140px)
+     • Labeled slider rows: Hue + Alpha, each with a 56px number field and a
+       white 3.5px-bordered round thumb (color-slider theme)
+     • Format select (RGB / HSL / HSB, w-120px) + 3-cell channel input grid
+   Popover shell: w-60 p-2 rounded-xl panel bg + open-pencil popover shadow.
 ───────────────────────────────────────────────────────────────────────────── */
 
-type Mode = "hex" | "rgb" | "hsl";
+type Format = "rgb" | "hsl" | "hsb";
+type FillTab = "SOLID" | "GRADIENT" | "IMAGE";
 type HSV = { h: number; s: number; v: number };
 
 const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
 
-/* ── Color math (ported verbatim from the reference) ── */
+/* ── Color math ── */
 function rgbFromChroma(
   h: number,
   c: number,
@@ -114,120 +115,35 @@ function hexToRgb(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-/* ── Static gradients & data ── */
+/* ── Static gradients & options ── */
 const HUE_GRADIENT =
   "linear-gradient(to right,#f00 0%,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00 100%)";
 
-const INITIAL_SWATCHES = [
-  "#ffffff", "#1c1c1c", "#a678c8", "#3f9bd8", "#1ba39a", "#ffffff", "#f25c05", "#141414", "#ffffff",
-  "#3f4347", "#12282c", "#efb52c", "#f2a01e", "#f59d84", "#f04a4a", "#ffffff", "#c9a9e4", "#9a4106",
-  "#23c2ae", "#ad5518", "#333333", "#2b2b2b", "#2ba3e8", "#000000",
+/* open-pencil checkerboard under the alpha track (#3a3a3a base, #4a4a4a muted) */
+const CHECKERBOARD_BG =
+  "bg-[#3a3a3a] bg-[image:linear-gradient(45deg,#4a4a4a_25%,transparent_25%),linear-gradient(-45deg,#4a4a4a_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#4a4a4a_75%),linear-gradient(-45deg,transparent_75%,#4a4a4a_75%)] bg-[size:8px_8px] bg-[position:0_0,0_4px,4px_-4px,-4px_0]";
+
+const FORMAT_OPTIONS = [
+  { value: "rgb", label: "RGB" },
+  { value: "hsl", label: "HSL" },
+  { value: "hsb", label: "HSB" },
 ];
 
-const TOOLS = [
+const CHANNEL_LABELS: Record<Format, [string, string, string]> = {
+  rgb: ["Red", "Green", "Blue"],
+  hsl: ["Hue", "Saturation", "Lightness"],
+  hsb: ["Hue", "Saturation", "Brightness"],
+};
+
+const TABS: { id: FillTab; title: string; icon: React.ReactNode }[] = [
+  { id: "SOLID", title: "Solid", icon: <Square className="size-3.5" /> },
   {
-    title: "Solid",
-    icon: <Square className="size-3.5" />,
-  },
-  {
-    title: "Pattern",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-        <circle cx="4" cy="4" r="1.4" />
-        <circle cx="8" cy="4" r="1.4" />
-        <circle cx="12" cy="4" r="1.4" />
-        <circle cx="4" cy="8" r="1.4" />
-        <circle cx="8" cy="8" r="1.4" />
-        <circle cx="12" cy="8" r="1.4" />
-        <circle cx="4" cy="12" r="1.4" />
-        <circle cx="8" cy="12" r="1.4" />
-        <circle cx="12" cy="12" r="1.4" />
-      </svg>
-    ),
-  },
-  {
-    title: "Grid",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-        <rect x="2" y="2" width="5.2" height="5.2" rx="1" />
-        <rect x="8.8" y="2" width="5.2" height="5.2" rx="1" />
-        <rect x="2" y="8.8" width="5.2" height="5.2" rx="1" />
-        <rect x="8.8" y="8.8" width="5.2" height="5.2" rx="1" />
-      </svg>
-    ),
-  },
-  {
-    title: "Image",
-    icon: <ImageIcon className="size-3.5" />,
-  },
-  {
-    title: "Video",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 16 16">
-        <rect x="2" y="3" width="12" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M6.8 6v4l3.6-2z" fill="currentColor" />
-      </svg>
-    ),
-  },
-  {
-    title: "Style",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 16 16">
-        <path d="M3 4.5h10M3 8h10M3 11.5h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    title: "Gradient",
+    id: "GRADIENT",
+    title: "Linear gradient",
     icon: <Blend className="size-3.5" />,
   },
-  {
-    title: "Color wheel",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 16 16">
-        <circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
-        <path
-          d="M8 2.4a5.6 5.6 0 010 11.2 2.8 2.8 0 010-5.6 2.8 2.8 0 000-5.6z"
-          fill="currentColor"
-        />
-      </svg>
-    ),
-  },
+  { id: "IMAGE", title: "Image", icon: <ImageIcon className="size-3.5" /> },
 ];
-
-/* ── Shared button class strings (themed to the Klone design system) ── */
-const iconBtnCls =
-  "flex size-6 cursor-pointer items-center justify-center rounded border-none bg-transparent text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0]";
-const fieldInputCls =
-  "min-w-0 bg-[#1e1e1e] border border-[#262626] rounded-[6px] text-[#e4e4e7] text-xs px-1.5 py-[6px] text-center outline-none focus:border-[#3b82f6]";
-const sliderHandleCls =
-  "absolute w-[13px] h-[13px] rounded-full border-[2.5px] border-white bg-black -translate-x-1/2 -translate-y-1/2 top-1/2 shadow-[0_0_0_1px_rgba(0,0,0,0.45)] pointer-events-none";
-
-function parseInitial(
-  value: string,
-  alphaProp = 1,
-): { hsv: HSV; alpha: number; formatted: string } {
-  const a = clamp(alphaProp, 0, 1);
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  let hsv: HSV;
-  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) {
-    [r, g, b] = hexToRgb(value);
-    const { h, s, v } = rgbToHsv(r, g, b);
-    hsv = { h: h ?? 25, s, v };
-  } else {
-    hsv = { h: 25, s: 0, v: 0 };
-  }
-  // `formatted` mirrors exactly what the emit effect would produce for the
-  // initial state, so opening the picker never fires a spurious change.
-  const formulated = rgbToHex(r, g, b);
-  const formatted =
-    a >= 1
-      ? "#" + formulated
-      : `rgba(${r}, ${g}, ${b}, ${Math.round(a * 100) / 100})`;
-  return { hsv, alpha: a, formatted };
-}
 
 /* ── Drag helper: pointer-capture based, clamps to 0..1 ── */
 function useDrag(onMove: (x: number, y: number) => void) {
@@ -258,6 +174,76 @@ function useDrag(onMove: (x: number, y: number) => void) {
   return { onPointerDown, onPointerMove, onPointerUp };
 }
 
+/* Channel triple for the active format, derived from the HSV model. */
+function channelsFor(fmt: Format, hsv: HSV): [number, number, number] {
+  const [r, g, b] = hsvToRgb(hsv.h, hsv.s, hsv.v);
+  if (fmt === "rgb") return [r, g, b];
+  if (fmt === "hsb")
+    return [Math.round(hsv.h), Math.round(hsv.s * 100), Math.round(hsv.v * 100)];
+  const { h, s, l } = rgbToHsl(r, g, b, hsv.h);
+  return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+}
+
+/* Convert a committed channel triple back into the HSV model. */
+function hsvFromChannels(
+  fmt: Format,
+  vals: [number, number, number],
+  fallbackHue: number,
+): HSV {
+  if (fmt === "rgb") {
+    const { h, s, v } = rgbToHsv(
+      clamp(vals[0], 0, 255),
+      clamp(vals[1], 0, 255),
+      clamp(vals[2], 0, 255),
+    );
+    return { h: h ?? fallbackHue, s, v };
+  }
+  if (fmt === "hsb") {
+    return {
+      h: clamp(vals[0], 0, 360),
+      s: clamp(vals[1], 0, 100) / 100,
+      v: clamp(vals[2], 0, 100) / 100,
+    };
+  }
+  const [r, g, b] = hslToRgb(
+    clamp(vals[0], 0, 360),
+    clamp(vals[1], 0, 100) / 100,
+    clamp(vals[2], 0, 100) / 100,
+  );
+  const { h, s, v } = rgbToHsv(r, g, b);
+  return { h: h ?? fallbackHue, s, v };
+}
+
+function parseInitial(
+  value: string,
+  alphaProp = 1,
+): { hsv: HSV; alpha: number; formatted: string } {
+  const a = clamp(alphaProp, 0, 1);
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let hsv: HSV;
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) {
+    [r, g, b] = hexToRgb(value);
+    const { h, s, v } = rgbToHsv(r, g, b);
+    hsv = { h: h ?? 25, s, v };
+  } else {
+    hsv = { h: 25, s: 0, v: 0 };
+  }
+  // `formatted` mirrors exactly what the emit effect would produce for the
+  // initial state, so opening the picker never fires a spurious change.
+  const formulated = rgbToHex(r, g, b);
+  const formatted =
+    a >= 1
+      ? "#" + formulated
+      : `rgba(${r}, ${g}, ${b}, ${Math.round(a * 100) / 100})`;
+  return { hsv, alpha: a, formatted };
+}
+
+/* open-pencil slider thumb (color-slider theme) */
+const thumbCls =
+  "pointer-events-none absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-sm outline-none";
+
 interface ColorPickerProps {
   /** Current color as hex "#rrggbb", or "" for transparent. */
   value: string;
@@ -280,19 +266,13 @@ export function ColorPicker({
   const [init] = useState(() => parseInitial(value, initialAlpha));
   const [hsv, setHsv] = useState<HSV>(init.hsv);
   const [alpha, setAlpha] = useState(init.alpha);
-  const [mode, setMode] = useState<Mode>("hex");
-  const [tab, setTab] = useState<"custom" | "libraries">("custom");
-  const [toolIdx, setToolIdx] = useState(0);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [swatches, setSwatches] = useState<string[]>(INITIAL_SWATCHES);
-  const [fieldValues, setFieldValues] = useState<string[]>(() => {
-    const [r, g, b] = hsvToRgb(init.hsv.h, init.hsv.s, init.hsv.v);
-    return rgbToHex(r, g, b).match(/.{2}/g) ?? [];
-  });
-  const [alphaText, setAlphaText] = useState(String(Math.round(init.alpha * 100)));
+  const [tab, setTab] = useState<FillTab>("SOLID");
+  const [format, setFormat] = useState<Format>("rgb");
+  const [channelText, setChannelText] = useState<string[]>(() =>
+    channelsFor("rgb", init.hsv).map(String),
+  );
 
-  const fieldRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const alphaRef = useRef<HTMLInputElement>(null);
+  const channelRefs = useRef<(HTMLInputElement | null)[]>([]);
   const lastEmitted = useRef(init.formatted);
 
   const [r, g, b] = hsvToRgb(hsv.h, hsv.s, hsv.v);
@@ -311,35 +291,15 @@ export function ColorPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hsv, alpha]);
 
-  /* Sync value fields with the model unless the field is being typed in */
+  /* Sync channel fields with the model unless a field is being typed in */
   useEffect(() => {
-    const [rr, gg, bb] = hsvToRgb(hsv.h, hsv.s, hsv.v);
-    let vals: string[];
-    if (mode === "hex") {
-      const hexVal = rgbToHex(rr, gg, bb);
-      vals = [hexVal.slice(0, 2), hexVal.slice(2, 4), hexVal.slice(4, 6)];
-    } else if (mode === "rgb") vals = [String(rr), String(gg), String(bb)];
-    else {
-      const { h, s, l } = rgbToHsl(rr, gg, bb, hsv.h);
-      vals = [
-        String(Math.round(h)),
-        String(Math.round(s * 100)),
-        String(Math.round(l * 100)),
-      ];
-    }
-    setFieldValues((prev) =>
+    const vals = channelsFor(format, hsv).map(String);
+    setChannelText((prev) =>
       vals.map((v, i) =>
-        fieldRefs.current[i] === document.activeElement ? prev[i] ?? v : v,
+        channelRefs.current[i] === document.activeElement ? (prev[i] ?? v) : v,
       ),
     );
-  }, [hsv, mode]);
-
-  /* Sync alpha text unless focused */
-  useEffect(() => {
-    if (alphaRef.current !== document.activeElement) {
-      setAlphaText(String(Math.round(alpha * 100)));
-    }
-  }, [alpha]);
+  }, [hsv, format]);
 
   /* Close on Escape */
   useEffect(() => {
@@ -350,84 +310,20 @@ export function ColorPicker({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  /* Close the mode menu when clicking anywhere */
-  useEffect(() => {
-    const close = () => setMenuOpen(false);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
-
-  const applyRgb = (rgb: [number, number, number]) => {
-    const res = rgbToHsv(rgb[0], rgb[1], rgb[2]);
-    setHsv((prev) => ({ h: res.h ?? prev.h, s: res.s, v: res.v }));
-  };
-
   const svDrag = useDrag((x, y) =>
     setHsv((prev) => ({ ...prev, s: x, v: 1 - y })),
   );
   const hueDrag = useDrag((x) => setHsv((prev) => ({ ...prev, h: x * 360 })));
   const alphaDrag = useDrag((x) => setAlpha(x));
 
-  const commitHexFrom = (el: HTMLInputElement) => {
-    const joined =
-      mode === "hex"
-        ? fieldValues.map((v) => v.trim()).join("").replace(/[^0-9a-f]/gi, "")
-        : el.value.trim().replace("#", "");
-    if (/^[0-9a-f]{6}$/i.test(joined)) {
-      applyRgb(hexToRgb(joined));
-      const [rr, gg, bb] = hexToRgb(joined);
-      setFieldValues(rgbToHex(rr, gg, bb).match(/.{2}/g) ?? []);
-    } else {
-      const [rr, gg, bb] = hsvToRgb(hsv.h, hsv.s, hsv.v);
-      setFieldValues(rgbToHex(rr, gg, bb).match(/.{2}/g) ?? []);
+  const commitChannels = () => {
+    const nums = channelText.map((v) => parseInt(v, 10));
+    if (nums.some((n) => Number.isNaN(n))) {
+      setChannelText(channelsFor(format, hsv).map(String));
+      return;
     }
+    setHsv(hsvFromChannels(format, [nums[0], nums[1], nums[2]], hsv.h));
   };
-
-  const onRgbFieldInput = () => {
-    const vals = fieldValues.map((v) => parseInt(v, 10));
-    if (vals.every((v) => !Number.isNaN(v))) {
-      if (mode === "rgb") {
-        applyRgb(vals.map((v) => clamp(v, 0, 255)) as [number, number, number]);
-      } else {
-        applyRgb(
-          hslToRgb(
-            clamp(vals[0], 0, 360),
-            clamp(vals[1], 0, 100) / 100,
-            clamp(vals[2], 0, 100) / 100,
-          ),
-        );
-      }
-    }
-  };
-
-  const handleEyeDrop = async () => {
-    const ED = (
-      window as unknown as {
-        EyeDropper?: new () => { open(): Promise<{ sRGBHex: string }> };
-      }
-    ).EyeDropper;
-    if (!ED) return;
-    try {
-      const { sRGBHex } = await new ED().open();
-      applyRgb(hexToRgb(sRGBHex.slice(1)));
-    } catch {
-      /* user cancelled */
-    }
-  };
-
-  const addCurrentSwatch = () => {
-    setSwatches((prev) => [...prev, "#" + hex]);
-  };
-
-  const modeLabels: Record<Mode, string> = { hex: "Hex", rgb: "RGB", hsl: "HSL" };
-
-  /* Channel labels for the active mode */
-  const channelLabels: string[] =
-    mode === "hex"
-      ? ["RR", "GG", "BB"]
-      : mode === "rgb"
-        ? ["R", "G", "B"]
-        : ["H", "S", "L"];
 
   return createPortal(
     <>
@@ -438,85 +334,42 @@ export function ColorPicker({
         className="fixed z-[101]"
         style={{ left: position.left, top: position.top }}
       >
+        {/* open-pencil popover content: w-60 p-2 rounded-xl bg-panel */}
         <div
-          className="w-[240px] h-max bg-[#2a2a2a] rounded-xl shadow-[0_8px_30px_rgb(0_0_0/0.4)] text-[#f0f0f0] select-none text-[11px]"
+          data-picker-content
+          className="w-60 rounded-xl bg-[#2a2a2a] p-2 text-[11px] text-[#f0f0f0] shadow-[0_8px_30px_rgba(0,0,0,0.4)] select-none"
         >
-          {/* ── Header ── */}
-          <div className="flex items-center justify-between px-2 py-1.5 border-b border-[#3a3a3a]">
-            <div className="flex gap-0.5">
-              {(["custom", "libraries"] as const).map((t) => (
+          {/* ── Fill-type tabs (fill-picker theme) ── */}
+          <div className="mb-2 flex items-center gap-0.5">
+            {TABS.map((t) => {
+              const active = tab === t.id;
+              return (
                 <button
-                  key={t}
+                  key={t.id}
                   type="button"
-                  onClick={() => setTab(t)}
-                  className={`border-none text-[11px] font-semibold px-2 py-[5px] rounded-[5px] cursor-pointer ${
-                    tab === t
-                      ? "bg-[#404040] text-[#f0f0f0]"
-                      : "bg-transparent text-[#888888] hover:text-[#f0f0f0]"
+                  title={t.title}
+                  aria-label={t.title}
+                  data-active={active || undefined}
+                  data-test-id={`fill-picker-tab-${t.id.toLowerCase()}`}
+                  onClick={() => setTab(t.id)}
+                  className={`flex size-6 cursor-pointer items-center justify-center rounded border-none p-0 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#3b82f6] ${
+                    active
+                      ? "bg-[#353535] text-[#f0f0f0]"
+                      : "text-[#888888] hover:bg-[#353535] hover:text-[#f0f0f0]"
                   }`}
                 >
-                  {t === "custom" ? "Custom" : "Libraries"}
+                  {t.icon}
                 </button>
-              ))}
-            </div>
-            <div className="flex gap-0.5">
-              <button
-                type="button"
-                className={iconBtnCls}
-                title="Add current color to swatches"
-                onClick={addCurrentSwatch}
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14">
-                  <path
-                    d="M7 2v10M2 7h10"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className={iconBtnCls}
-                title="Close"
-                onClick={onClose}
-              >
-                <svg width="13" height="13" viewBox="0 0 14 14">
-                  <path
-                    d="M3 3l8 8M11 3l-8 8"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-            </div>
+              );
+            })}
           </div>
 
-          {tab === "custom" ? (
-            <>
-              {/* ── Fill-type tools (open-pencil FillPicker tabs) ── */}
-              <div className="flex items-center gap-0.5 px-2 pt-2 pb-0.5">
-                {TOOLS.map((tool, i) => (
-                  <button
-                    key={tool.title}
-                    type="button"
-                    title={tool.title}
-                    onClick={() => setToolIdx(i)}
-                    className={`flex size-6 cursor-pointer items-center justify-center rounded border-none p-0 text-[#888888] outline-none transition-colors ${
-                      toolIdx === i
-                        ? "bg-[#404040] text-[#f0f0f0]"
-                        : "hover:bg-[#353535] hover:text-[#f0f0f0]"
-                    }`}
-                  >
-                    {tool.icon}
-                  </button>
-                ))}
-              </div>
-
-              {/* ── Saturation / Value square ── */}
+          {tab === "SOLID" ? (
+            /* ── ColorPickerPanel: area + sliders + format controls ── */
+            <div className="flex flex-col gap-2">
+              {/* Saturation / Value area (hsb, x=saturation y=brightness) */}
               <div
-                className="relative h-[140px] w-full mx-2 mt-2 cursor-crosshair overflow-hidden rounded touch-none"
+                className="relative h-[140px] w-full cursor-crosshair touch-none overflow-hidden rounded"
                 style={{
                   background: `linear-gradient(to top,#000,rgba(0,0,0,0)), linear-gradient(to right,#fff,hsl(${hsv.h},100%,50%))`,
                 }}
@@ -532,185 +385,115 @@ export function ColorPicker({
                 />
               </div>
 
-              {/* ── Hue ── */}
-              <div
-                className="relative h-3 rounded-full mx-2 mt-2.5 cursor-pointer touch-none"
-                style={{ background: HUE_GRADIENT }}
-                {...hueDrag}
-              >
+              {/* Hue slider row */}
+              <div className="flex items-center gap-2">
+                <span className="w-7 shrink-0 text-[10px] font-medium text-[#888888]">
+                  Hue
+                </span>
                 <div
-                  className={sliderHandleCls}
-                  style={{
-                    left: `${(hsv.h / 360) * 100}%`,
-                    background: `hsl(${hsv.h},100%,50%)`,
-                  }}
+                  className="relative h-3 flex-1 cursor-pointer touch-none select-none rounded-md"
+                  style={{ background: HUE_GRADIENT }}
+                  {...hueDrag}
+                >
+                  <div
+                    className={thumbCls}
+                    style={{
+                      left: `${(hsv.h / 360) * 100}%`,
+                      background: `hsl(${hsv.h},100%,50%)`,
+                    }}
+                  />
+                </div>
+                <NumberField
+                  className="w-14 flex-none shrink-0"
+                  min={0}
+                  max={360}
+                  value={Math.round(hsv.h)}
+                  onChange={(v) =>
+                    setHsv((prev) => ({
+                      ...prev,
+                      h: clamp(parseFloat(v || "0"), 0, 360),
+                    }))
+                  }
                 />
               </div>
 
-              {/* ── Eyedropper + Alpha ── */}
-              <div className="flex items-center gap-2 mx-2 mt-2.5">
-                <button
-                  type="button"
-                  className={iconBtnCls + " flex-none"}
-                  title="Pick color from screen"
-                  onClick={handleEyeDrop}
-                >
-                  <svg width="15" height="15" viewBox="0 0 16 16">
-                    <path
-                      d="M9.3 4.7l2 2-5.6 5.6-2.4.8.8-2.4zM10.7 3.3l1.1-1.1a1.5 1.5 0 012.1 2.1l-1.1 1.1z"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
+              {/* Alpha slider row (checkerboard track) */}
+              <div className="flex items-center gap-2">
+                <span className="w-7 shrink-0 text-[10px] font-medium text-[#888888]">
+                  Alpha
+                </span>
                 <div
-                  className="relative flex-1 h-[12px] rounded-full cursor-pointer touch-none"
-                  style={{
-                    background: `linear-gradient(to right, rgba(${r},${g},${b},0), rgba(${r},${g},${b},1)), repeating-conic-gradient(#7a7a7a 0% 25%, #4a4a4a 0% 50%) 0 0 / 8px 8px`,
-                  }}
+                  className={`relative h-3 flex-1 cursor-pointer touch-none select-none rounded-md ${CHECKERBOARD_BG}`}
                   {...alphaDrag}
                 >
                   <div
-                    className={sliderHandleCls}
+                    className="absolute inset-0 overflow-hidden rounded-md"
+                    style={{
+                      background: `linear-gradient(to right, rgba(${r},${g},${b},0), rgba(${r},${g},${b},1))`,
+                    }}
+                  />
+                  <div
+                    className={thumbCls}
                     style={{
                       left: `${alpha * 100}%`,
                       background: `rgba(${r},${g},${b},${alpha})`,
                     }}
                   />
                 </div>
+                <NumberField
+                  className="w-14 flex-none shrink-0"
+                  suffix="%"
+                  min={0}
+                  max={100}
+                  value={Math.round(alpha * 100)}
+                  onChange={(v) =>
+                    setAlpha(clamp(parseFloat(v || "0"), 0, 100) / 100)
+                  }
+                />
               </div>
 
-              {/* ── Values (open-pencil 3-cell number grid + alpha) ── */}
-              <div className="mx-2 mt-2.5 flex items-center gap-2">
-                <div className="relative flex items-center gap-[5px]">
-                  <button
-                    type="button"
-                    className="flex items-center gap-[5px] px-2 py-[6px] border border-[#3a3a3a] rounded-[6px] bg-transparent text-[#f0f0f0] text-[11px] cursor-pointer hover:border-[#424242]"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpen((o) => !o);
-                    }}
-                  >
-                    <span>{modeLabels[mode]}</span>
-                    <svg width="10" height="6" viewBox="0 0 10 6">
-                      <path
-                        d="M1 1l4 4 4-4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </button>
-                  {menuOpen && (
-                    <div className="absolute top-[calc(100%+4px)] left-0 z-20 min-w-[72px] bg-[#404040] border border-[#3a3a3a] rounded-[6px] overflow-hidden flex flex-col">
-                      {(["hex", "rgb", "hsl"] as const).map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => {
-                            setMode(m);
-                            setMenuOpen(false);
-                          }}
-                          className="bg-transparent border-none text-[#f0f0f0] text-[11px] text-left px-2.5 py-1.5 cursor-pointer hover:bg-[#353535]"
-                        >
-                          {modeLabels[m]}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+              {/* Format select (open-pencil FormatControls) */}
+              <PanelSelect
+                className="w-[120px]"
+                value={format}
+                label="Color format"
+                dataProperty="color-format"
+                options={FORMAT_OPTIONS}
+                onChange={(v) => setFormat(v as Format)}
+              />
 
-                {/* open-pencil channel grid */}
-                <div className="grid min-w-0 flex-1 grid-cols-[repeat(3,minmax(0,1fr))] gap-px overflow-hidden rounded border border-[#3a3a3a] bg-[#3a3a3a]">
-                  {fieldValues.map((val, i) => (
-                    <input
-                      key={i}
-                      ref={(el) => {
-                        fieldRefs.current[i] = el;
-                      }}
-                      type="text"
-                      inputMode="numeric"
-                      spellCheck={false}
-                      value={val}
-                      aria-label={channelLabels[i]}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setFieldValues((prev) =>
-                          prev.map((v, idx) => (idx === i ? raw : v)),
-                        );
-                        if (mode !== "hex") onRgbFieldInput();
-                      }}
-                      onBlur={(e) => {
-                        if (mode === "hex") commitHexFrom(e.target);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && mode === "hex")
-                          commitHexFrom(e.target as HTMLInputElement);
-                      }}
-                      className="w-full bg-[#1e1e1e] px-2 py-1 text-[11px] text-[#f0f0f0] outline-none"
-                    />
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-1">
+              {/* Channel grid (RGBFields-style 3-cell input grid) */}
+              <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-px overflow-hidden rounded border border-[#3a3a3a] bg-[#3a3a3a]">
+                {channelText.map((val, i) => (
                   <input
-                    ref={alphaRef}
+                    key={i}
+                    ref={(el) => {
+                      channelRefs.current[i] = el;
+                    }}
                     type="text"
                     inputMode="numeric"
-                    aria-label="Alpha"
-                    value={alphaText}
+                    spellCheck={false}
+                    value={val}
+                    aria-label={CHANNEL_LABELS[format][i]}
                     onChange={(e) => {
                       const raw = e.target.value;
-                      setAlphaText(raw);
-                      const v = parseInt(raw, 10);
-                      if (!Number.isNaN(v)) setAlpha(clamp(v, 0, 100) / 100);
+                      setChannelText((prev) =>
+                        prev.map((v, idx) => (idx === i ? raw : v)),
+                      );
                     }}
-                    className="w-[42px] bg-[#1e1e1e] border border-[#3a3a3a] rounded-[6px] px-2 py-1 text-[11px] text-[#f0f0f0] text-center outline-none focus:border-[#3b82f6]"
+                    onBlur={() => commitChannels()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitChannels();
+                    }}
+                    className="w-full bg-[#1e1e1e] px-2 py-1 text-xs text-[#f0f0f0] outline-none"
                   />
-                  <span className="text-[#888888] text-[11px]">%</span>
-                </div>
+                ))}
               </div>
-
-              {/* ── Swatches ── */}
-              <div className="mx-2 mt-3">
-                <button
-                  type="button"
-                  className="w-full flex justify-between items-center px-2.5 py-1.5 bg-transparent border border-[#3a3a3a] rounded-[6px] text-[#f0f0f0] text-[11px] font-semibold cursor-pointer hover:border-[#424242]"
-                >
-                  On this page
-                  <svg width="10" height="6" viewBox="0 0 10 6">
-                    <path
-                      d="M1 1l4 4 4-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
-                <div className="grid grid-cols-8 gap-[5px] mt-2.5">
-                  {swatches.map((c, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      title={"#" + c.replace("#", "")}
-                      onClick={() => applyRgb(hexToRgb(c))}
-                      className="aspect-square border-none rounded-[5px] cursor-pointer shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)] transition-transform duration-100 hover:scale-[1.12]"
-                      style={{ background: c }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </>
+            </div>
           ) : (
-            <div className="py-8 px-4 text-center text-[#71717a] text-xs">
-              <p>No libraries connected.</p>
-              <p className="mt-1.5 text-[#6f6f6f]">
-                Styles shared to this file will show up here.
-              </p>
+            <div className="py-6 text-center text-[11px] text-[#888888]">
+              {tab === "GRADIENT" ? "Gradient" : "Image"} fills aren&apos;t
+              supported yet.
             </div>
           )}
         </div>
