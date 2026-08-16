@@ -3,33 +3,41 @@
 import { forwardRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
+const INPUT_CLASSES =
+  "w-full border border-[#e5e5e5] bg-white px-4 py-3 text-[14px] text-[#0a0a0a] placeholder:text-[#a3a3a3] transition-colors duration-150 focus:border-[#0a0a0a] focus:outline-none";
+
+/** Error message shown under an invalid input. */
+function FieldError({ id, error }: { id: string; error: string }) {
+  return (
+    <p className="mt-1.5 text-[12px] text-red-600" id={id} role="alert">
+      {error}
+    </p>
+  );
+}
+
 interface TextFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   name: string;
-  /** Appended to the input (used to surface the "bad" shake class). */
+  /** Appended to the input (kept for API compatibility). */
   className?: string;
-  /** Inline error message shown below the field (red, left-aligned). */
+  /** Inline error message shown below the field. */
   error?: string;
 }
 
-/** Text input styled for the auth screens (Mobbin-style dark fields). */
+/** Text input styled for the redesigned (light, editorial) auth screens. */
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
   function TextField({ name, className = "", error, ...props }, ref) {
     const errorId = `${name}-error`;
     return (
-      <div className="field">
+      <div>
         <input
           ref={ref}
           name={name}
           {...props}
-          className={className}
+          className={`${INPUT_CLASSES} ${className}`}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : undefined}
         />
-        {error && (
-          <p className="field-error" id={errorId} role="alert">
-            {error}
-          </p>
-        )}
+        {error && <FieldError id={errorId} error={error} />}
       </div>
     );
   },
@@ -41,39 +49,40 @@ interface PasswordFieldProps
   className?: string;
   /** Ref used to focus the password input on validation failure. */
   inputRef?: React.Ref<HTMLInputElement>;
-  /** Inline error message shown below the field (red, left-aligned). */
+  /** Inline error message shown below the field. */
   error?: string;
 }
 
 /** Password input with a show/hide toggle. */
 export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
-  function PasswordField({ name, className = "", inputRef, error, ...props }, ref) {
+  function PasswordField(
+    { name, className = "", inputRef, error, ...props },
+    ref,
+  ) {
     const [visible, setVisible] = useState(false);
     const errorId = `${name}-error`;
     return (
-      <div className="field">
-        <input
-          ref={inputRef ?? ref}
-          name={name}
-          type={visible ? "text" : "password"}
-          {...props}
-          className={className}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
-        />
-        <button
-          type="button"
-          className="eye show"
-          onClick={() => setVisible((v) => !v)}
-          aria-label={visible ? "Hide password" : "Show password"}
-        >
-          {visible ? <EyeOff /> : <Eye />}
-        </button>
-        {error && (
-          <p className="field-error" id={errorId} role="alert">
-            {error}
-          </p>
-        )}
+      <div>
+        <div className="relative">
+          <input
+            ref={inputRef ?? ref}
+            name={name}
+            type={visible ? "text" : "password"}
+            {...props}
+            className={`${INPUT_CLASSES} pr-11 ${className}`}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
+          />
+          <button
+            type="button"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8a8a8a] transition-colors duration-150 hover:text-[#0a0a0a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a]"
+            onClick={() => setVisible((v) => !v)}
+            aria-label={visible ? "Hide password" : "Show password"}
+          >
+            {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
+        {error && <FieldError id={errorId} error={error} />}
       </div>
     );
   },

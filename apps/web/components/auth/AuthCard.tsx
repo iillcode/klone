@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, X } from "lucide-react";
 import {
   login,
   register,
@@ -22,25 +22,25 @@ interface AuthCardProps {
   urlError?: string;
 }
 
-/** Fixed bottom toast pill (reference `.toast.show`). */
+const SUBMIT_CLASSES =
+  "w-full bg-[#0a0a0a] px-4 py-3 text-[14px] font-medium text-white transition-colors duration-150 hover:bg-[#262626] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a] disabled:opacity-60";
+
+/** Fixed bottom toast pill in the landing page's dark style. */
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   return (
-    <div className="toast show" role="status">
-      <i />
+    <div
+      role="status"
+      className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2.5 bg-[#0a0a0a] px-4 py-2.5 text-[13px] text-white"
+    >
+      <span className="h-1.5 w-1.5 shrink-0 bg-[#aef637]" aria-hidden="true" />
       <span>{message}</span>
       <button
         type="button"
         onClick={onClose}
         aria-label="Dismiss"
-        style={{
-          background: "none",
-          border: 0,
-          color: "#fff",
-          cursor: "pointer",
-          marginLeft: 4,
-        }}
+        className="ml-1 text-white/70 transition-colors duration-150 hover:text-white"
       >
-        ×
+        <X size={14} />
       </button>
     </div>
   );
@@ -52,7 +52,7 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
     FormData
   >(login, undefined);
   const [registerState, registerAction, registerPending] = useActionState<
-    RegisterResult,
+    RegisterResult | undefined,
     FormData
   >(register, undefined);
 
@@ -76,15 +76,38 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<"name" | "email" | "password", string>>
   >({});
-  // Global err slot — used for server/auth errors that aren't field-specific.
-  const [errMsg, setErrMsg] = useState("");
 
   const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const passRef = useRef<HTMLInputElement>(null);
-  const authBodyRef = useRef<HTMLDivElement>(null);
 
   const pending = mode === "signup" ? registerPending : loginPending;
+
+  // Server-side error: sign-in/sign-up action result, or an OAuth callback
+  // failure. Derived at render time and dismissible once the user acts again.
+  const serverError =
+    (mode === "signup" ? registerState?.error : loginState?.error) ??
+    urlError ??
+    "";
+  const [dismissedServerError, setDismissedServerError] = useState<
+    string | null
+  >(null);
+  const errMsg = dismissedServerError === serverError ? "" : serverError;
+
+  function showToast(msg: string) {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2600);
+  }
+
+  function clearError(field?: "name" | "email" | "password") {
+    if (field) {
+      setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    } else {
+      setFieldErrors({});
+    }
+    setDismissedServerError(serverError || null);
+  }
 
   // Delegate clicks on `a[data-doc]` (terms links) → demo toast.
   // Listens on document since the terms row is rendered by AuthShell,
@@ -101,45 +124,7 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
     };
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Sign-in errors → surface in the err slot (reference `.err.show`).
-  useEffect(() => {
-    if (loginState?.error) {
-      setErrMsg(loginState.error);
-    }
-  }, [loginState]);
-
-  // Sign-up errors → surface in the err slot. On success the server action
-  // auto-logs the user in and redirects to the dashboard (no success page).
-  useEffect(() => {
-    if (registerState?.error) {
-      setErrMsg(registerState.error);
-    }
-  }, [registerState]);
-
-  // Callback error (OAuth) → surface it in the err slot right away.
-  useEffect(() => {
-    if (urlError) {
-      setErrMsg(urlError);
-    }
-  }, [urlError]);
-
-  function showToast(msg: string) {
-    setToast(msg);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2600);
-  }
-
-  function clearError(field?: "name" | "email" | "password") {
-    if (field) {
-      setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
-    } else {
-      setFieldErrors({});
-    }
-    setErrMsg("");
-  }
 
   /** Validate every field at once and show each invalid field's inline error. */
   function handleSubmit(e: React.FormEvent) {
@@ -170,7 +155,7 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
     if (Object.keys(errors).length > 0) {
       e.preventDefault();
       setFieldErrors(errors);
-      setErrMsg("");
+      setDismissedServerError(serverError || null);
       const ref =
         firstInvalid === "name"
           ? nameRef
@@ -217,70 +202,62 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
   // ---- Forgot-password branch ----
   if (resetMode) {
     return (
-      <div className="panel-body">
-        <div className="auth-body" ref={authBodyRef}>
-          {resetState?.ok ? (
-            <div className="reset-done">
-              <CheckCircle2 className="reset-ck" />
-              <h2 className="reset-title">Check your inbox!</h2>
-              <p className="reset-msg">
-                We sent a password reset link to <b>{resetEmail.trim()}</b>.
+      <div>
+        {resetState?.ok ? (
+          <div className="py-4 text-center">
+            <CheckCircle2 size={40} className="mx-auto text-[#65a30d]" />
+            <h2 className="mt-4 text-[20px] font-bold tracking-tight text-[#0a0a0a]">
+              Check your inbox!
+            </h2>
+            <p className="mt-2 text-[13.5px] leading-[1.6] text-[#525252]">
+              We sent a password reset link to <b>{resetEmail.trim()}</b>.
+            </p>
+            <button
+              type="button"
+              onClick={exitReset}
+              className="mx-auto mt-6 flex items-center gap-2 text-[13px] font-medium text-[#0a0a0a] underline decoration-[#d4d4d4] underline-offset-2 transition-colors duration-150 hover:text-[#404040] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a]"
+            >
+              <ArrowLeft size={14} /> Back to login
+            </button>
+          </div>
+        ) : (
+          <>
+            <TextField
+              ref={emailRef}
+              name="resetEmail"
+              type="email"
+              placeholder="Enter email address"
+              autoComplete="email"
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              onInput={() => setResetState(null)}
+              error={resetState && !resetState.ok ? resetState.error : undefined}
+            />
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={resetPending}
+              className={`${SUBMIT_CLASSES} mt-4`}
+            >
+              {resetPending ? "Sending…" : "Send reset link"}
+            </button>
+            {errMsg && (
+              <p className="mt-3 text-[12px] text-red-600" role="alert">
+                {errMsg}
               </p>
-              <button type="button" className="backbtn" onClick={exitReset}>
-                <ArrowLeft /> Back to login
+            )}
+            <p className="mt-5 text-[13px] text-[#525252]">
+              Remembered it?{" "}
+              <button
+                type="button"
+                onClick={exitReset}
+                className="font-semibold text-[#0a0a0a] underline decoration-[#d4d4d4] underline-offset-2 transition-colors duration-150 hover:text-[#404040]"
+              >
+                Back to login
               </button>
-            </div>
-          ) : (
-            <>
-              <div className="field fx">
-                <TextField
-                  ref={emailRef}
-                  name="resetEmail"
-                  type="email"
-                  placeholder="Enter email address"
-                  autoComplete="email"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  onInput={() => setResetState(null)}
-                  error={
-                    resetState && !resetState.ok ? resetState.error : undefined
-                  }
-                  className={resetState && !resetState.ok ? "bad" : ""}
-                />
-              </div>
-              <div className="fx">
-                <button
-                  type="button"
-                  className={`submit${resetPending ? " loading" : ""}`}
-                  onClick={handleReset}
-                  disabled={resetPending}
-                >
-                  Send reset link
-                </button>
-              </div>
-              <div className="err" id="errMsg">
-                {!resetState?.ok ? "" : (resetState?.error ?? errMsg)}
-              </div>
-              <p className="swap fx">
-                Remembered it?{" "}
-                <button
-                  type="button"
-                  onClick={exitReset}
-                  style={{
-                    background: "none",
-                    border: 0,
-                    color: "#fff",
-                    fontWeight: 700,
-                    textDecoration: "underline",
-                    cursor: "pointer",
-                  }}
-                >
-                  Back to login
-                </button>
-              </p>
-            </>
-          )}
-        </div>
+            </p>
+          </>
+        )}
         {toast && <Toast message={toast} onClose={() => setToast(null)} />}
       </div>
     );
@@ -290,99 +267,90 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
   const submitLabel = mode === "signup" ? "Sign up" : "Continue";
 
   return (
-    <div className="panel-body">
-      <div className="auth-body" ref={authBodyRef}>
-        <div className="fx">
-          <GoogleButton
-            label={
-              mode === "signup" ? "Sign up with Google" : "Continue with Google"
-            }
+    <div>
+      <GoogleButton
+        label={mode === "signup" ? "Sign up with Google" : "Continue with Google"}
+      />
+
+      <div className="my-6 flex items-center gap-4">
+        <span className="h-px flex-1 bg-[#ededed]" />
+        <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#8a8a8a]">
+          or
+        </span>
+        <span className="h-px flex-1 bg-[#ededed]" />
+      </div>
+
+      <form action={handleFormAction} onSubmit={handleSubmit} noValidate>
+        {mode === "signup" && (
+          <div className="mb-4">
+            <TextField
+              ref={nameRef}
+              name="fullName"
+              type="text"
+              placeholder="Enter your name"
+              autoComplete="name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              onInput={() => clearError("name")}
+              error={fieldErrors.name}
+            />
+          </div>
+        )}
+
+        <div className="mb-4">
+          <TextField
+            ref={emailRef}
+            name="email"
+            type="email"
+            placeholder="Enter email address"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onInput={() => clearError("email")}
+            error={fieldErrors.email}
           />
         </div>
 
-        <div className="divider fx">or</div>
+        <PasswordField
+          ref={passRef}
+          name="password"
+          placeholder={mode === "signup" ? "Create a password" : "Password"}
+          autoComplete={mode === "signup" ? "new-password" : "current-password"}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onInput={() => clearError("password")}
+          error={fieldErrors.password}
+        />
 
-        <form action={handleFormAction} onSubmit={handleSubmit} noValidate>
-          {/* Name field — signup only, animates in via .extra.open (reference). */}
-          <div className={`extra${mode === "signup" ? " open" : ""}`}>
-            <div>
-              {mode === "signup" && (
-                <div className="field fx">
-                  <TextField
-                    ref={nameRef}
-                    name="fullName"
-                    type="text"
-                    placeholder="Enter your name"
-                    autoComplete="name"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    onInput={() => clearError("name")}
-                    error={fieldErrors.name}
-                    className={fieldErrors.name ? "bad" : ""}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
+        <button
+          type="submit"
+          disabled={pending}
+          className={`${SUBMIT_CLASSES} mt-5`}
+        >
+          {submitLabel}
+        </button>
 
-          <div className="field fx">
-            <TextField
-              ref={emailRef}
-              name="email"
-              type="email"
-              placeholder="Enter email address"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onInput={() => clearError("email")}
-              error={fieldErrors.email}
-              className={fieldErrors.email ? "bad" : ""}
-            />
-          </div>
-
-          <div className="field fx">
-            <PasswordField
-              ref={passRef}
-              name="password"
-              placeholder={mode === "signup" ? "Create a password" : "Password"}
-              autoComplete={
-                mode === "signup" ? "new-password" : "current-password"
-              }
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onInput={() => clearError("password")}
-              error={fieldErrors.password}
-              className={fieldErrors.password ? "bad" : ""}
-            />
-          </div>
-
-          <div className="fx">
-            <button
-              type="submit"
-              className={`submit${pending ? " loading" : ""}`}
-              id="submitBtn"
-            >
-              {pending ? "" : submitLabel}
-            </button>
-          </div>
-          <div className={errMsg ? "err show" : "err"} id="errMsg">
+        {errMsg && (
+          <p className="mt-3 text-[12px] text-red-600" role="alert">
             {errMsg}
-          </div>
-        </form>
+          </p>
+        )}
+      </form>
 
-        {mode === "signin" && (
+      {mode === "signin" && (
+        <div className="mt-5 text-center">
           <button
             type="button"
-            className="forgot fx"
             onClick={() => {
               clearError();
               setResetMode(true);
             }}
+            className="text-[13px] font-medium text-[#525252] underline decoration-[#d4d4d4] underline-offset-2 transition-colors duration-150 hover:text-[#0a0a0a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a]"
           >
             Forgot password?
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>

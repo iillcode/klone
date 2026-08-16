@@ -8,6 +8,7 @@ import { useTheme } from "@/components/ui/theme-provider";
 import {
   Check,
   CreditCard,
+  Download,
   Gem,
   Loader2,
   Lock,

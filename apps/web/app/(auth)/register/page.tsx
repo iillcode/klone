@@ -9,7 +9,11 @@ export const metadata: Metadata = {
 
 export default function RegisterPage() {
   return (
-    <AuthShell title="Create your account">
+    <AuthShell
+      variant="signup"
+      title="Start creating documents"
+      lead="Create your free account. Pick a template, ask your AI assistant to write, and download a finished PDF."
+    >
       <AuthCard mode="signup" />
     </AuthShell>
   );

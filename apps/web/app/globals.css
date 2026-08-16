@@ -5,6 +5,60 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ── Landing page animations (marketing/landing) ── */
+@theme {
+  --animate-float: landing-float 6s ease-in-out infinite;
+  --animate-float-alt: landing-float-alt 7s ease-in-out infinite;
+  --animate-dash-flow: landing-dash-flow 1.4s linear infinite;
+  --animate-pulse-dot: landing-pulse-dot 2.6s ease-in-out infinite;
+}
+
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes landing-float-alt {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+/* Marching-ants flow for dotted connector paths (dash+gap = 7, loop = 14). */
+@keyframes landing-dash-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+
+@keyframes landing-pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float,
+  .animate-float-alt,
+  .animate-dash-flow,
+  .animate-pulse-dot {
+    animation: none !important;
+  }
+}
+
 :root {
   --sidebar: #f5f5f5;
   --card: #ffffff;

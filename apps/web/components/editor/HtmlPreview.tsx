@@ -77,9 +77,28 @@ function isFirstElementInBody(el: Element): boolean {
 }
 
 export interface ElementInfo {
+  /** Stable per-session layer id assigned by the iframe editor
+   *  (data-klone-id); missing for legacy selections. */
+  id?: string;
   tag: string;
   classes: string;
   styles: Record<string, string>;
+}
+
+/** One row of the live document layer tree reported by the iframe editor
+ *  (open-pencil/Figma-style). `type: "page"` marks a page frame root. */
+export interface LayerNode {
+  id: string;
+  name: string;
+  type:
+    | "page"
+    | "frame"
+    | "rectangle"
+    | "text"
+    | "group"
+    | "image"
+    | "other";
+  children?: LayerNode[];
 }
 
 export interface HtmlPreviewHandle {
@@ -108,6 +127,9 @@ export interface HtmlPreviewHandle {
   copy: () => void;
   /** Paste the clipboard as a NEW element after the selection (or body end). */
   paste: () => void;
+  /** Select a layer by its tree id (Layers panel). `additive` toggles it
+   *  within the current multi-selection. */
+  selectLayer: (id: string, additive?: boolean) => void;
 }
 
 export type AlignMode =
@@ -141,6 +163,7 @@ interface HtmlPreviewProps {
   onSplitModeChange?: (enabled: boolean) => void;
   onPageInfo?: (info: { page: number; pageCount: number }) => void;
   onPagesChange?: (count: number, changed: boolean) => void;
+  onLayersTree?: (tree: LayerNode[], selectedIds: string[]) => void;
 }
 
 export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
@@ -156,6 +179,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       onSplitModeChange,
       onPageInfo,
       onPagesChange,
+      onLayersTree,
     },
     ref,
   ) {
@@ -251,6 +275,12 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         clone
           .querySelectorAll("[data-editor-capture]")
           .forEach((el) => el.remove());
+
+        // Layer-tree session ids are editor chrome (they map Layers-panel
+        // rows to live nodes) - never persist them into saved/exported HTML.
+        clone
+          .querySelectorAll("[data-klone-id]")
+          .forEach((el) => el.removeAttribute("data-klone-id"));
 
         // Strip editor chrome that lives as INLINE styles on content elements:
         // the hover/selection outlines (purple, set by editor-iframe). They are
@@ -564,6 +594,12 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       paste: () => {
         iframeRef.current?.contentWindow?.postMessage({ type: "paste" }, "*");
       },
+      selectLayer: (id: string, additive?: boolean) => {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "select-layer", id, additive: Boolean(additive) },
+          "*",
+        );
+      },
     }));
 
     useEffect(() => {
@@ -607,6 +643,12 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         if (e.data && e.data.type === "split-mode-changed") {
           onSplitModeChange?.(Boolean(e.data.enabled));
         }
+        if (e.data && e.data.type === "layers-tree") {
+          onLayersTree?.(
+            Array.isArray(e.data.tree) ? e.data.tree : [],
+            Array.isArray(e.data.selectedIds) ? e.data.selectedIds : [],
+          );
+        }
       };
       window.addEventListener("message", handler);
       return () => window.removeEventListener("message", handler);
@@ -618,6 +660,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       onSplitModeChange,
       onPageInfo,
       onPagesChange,
+      onLayersTree,
     ]);
 
     // Keep draftRef in sync so commitTextEdit (stale-closure safe) reads

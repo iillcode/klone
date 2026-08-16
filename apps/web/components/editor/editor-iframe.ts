@@ -7,7 +7,7 @@ export function getEditorScript(): string {
   // will show an older version. Hard-refresh the page to reload it.
   if(window.__kloneEditorInjected)return; // never double-bind listeners
   window.__kloneEditorInjected=true;
-  console.log('[editor] script v23');
+  console.log('[editor] script v26');
 var selectedEls=[];
 var hoveredEl=null;
 var isDragging=false;
@@ -25,7 +25,6 @@ var pendingEditEl=null;
 var editReqId=0;
 var isMoving=false;
 var moveDeltas=[];
-var autoScrollDir=null; // 'up'|'down'|null - edge auto-scroll while dragging
 var selBoxEl=null;
 var isResizing=false;
 var resizeHandle='';
@@ -87,12 +86,12 @@ function reportPageBreak(changed){
 function createPageBreakMarker(){
   var marker=document.createElement('div');
   marker.setAttribute('data-editor-ui','page-break-marker');
-  marker.style.cssText='position:fixed;left:0;height:0;border-top:2px dashed #18a0fb;pointer-events:none;z-index:99997;display:none;';
+  marker.style.cssText='position:absolute;left:0;height:0;border-top:2px dashed #18a0fb;pointer-events:none;z-index:99997;display:none;';
   var label=document.createElement('span');
   label.textContent='PDF page starts here';
   label.style.cssText='position:absolute;top:-21px;left:12px;padding:3px 7px;border-radius:4px;background:#18a0fb;color:#fff;font:600 10px/1.2 Arial,sans-serif;letter-spacing:.01em;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.28);';
   marker.appendChild(label);
-  document.body.appendChild(marker);
+  ensureOverlayAnchor().appendChild(marker);
   return marker;
 }
 
@@ -113,8 +112,8 @@ function updatePageBreakMarkers(){
     marker.style.display='block';
     // Show the line below/under the element (at its bottom edge) rather than
     // above it, so the break reads as "next page starts under this element".
-    marker.style.top=Math.round(r.bottom)+'px';
-    marker.style.width=Math.max(document.documentElement.clientWidth,document.body.clientWidth)+'px';
+    marker.style.top=Math.round(docPointY(r.bottom))+'px';
+    marker.style.width=Math.round(ensureOverlayAnchor().clientWidth)+'px';
   }
 }
 
@@ -490,7 +489,7 @@ function createPageBoundaryMarker(boundary,pageNum){
   // outline, so the page border never looks broken/uneven. An armed
   // (pending-delete) page turns red so it is obvious WHAT will be deleted.
   var edge=armed?'rgba(248,113,113,0.85)':'rgba(255,255,255,0.28)';
-  marker.style.cssText='position:fixed;left:0;top:0;box-sizing:border-box;border:0;border-top:1px dashed '+edge+';pointer-events:none;z-index:99995;display:none;'+(armed?'background:rgba(248,113,113,0.06);':'');
+  marker.style.cssText='position:absolute;left:0;top:0;box-sizing:border-box;border:0;border-top:1px dashed '+edge+';pointer-events:none;z-index:99995;display:none;'+(armed?'background:rgba(248,113,113,0.06);':'');
   var chip=document.createElement('div');
   chip.style.cssText='position:absolute;top:-22px;right:8px;display:flex;align-items:center;gap:6px;padding:3px 6px 3px 8px;border-radius:4px;background:'+(armed?'#3b1f22':'#2a2a2c')+';border:1px solid '+(armed?'#7f2b2b':'#3f3f46')+';color:#e4e4e7;font:600 10px/1.2 Arial,sans-serif;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.28);';
   var label=document.createElement('span');
@@ -506,7 +505,7 @@ function createPageBoundaryMarker(boundary,pageNum){
   removeBtn.style.cssText='border:0;background:transparent;color:'+(armed?'#fca5a5':'#a1a1aa')+';font:600 '+(armed?'10px':'12px')+'/1 Arial,sans-serif;cursor:pointer;padding:0 2px;pointer-events:auto;';
   chip.appendChild(removeBtn);
   marker.appendChild(chip);
-  document.body.appendChild(marker);
+  ensureOverlayAnchor().appendChild(marker);
   return marker;
 }
 
@@ -530,9 +529,9 @@ function updateBoundaryMarkers(){
     // The divider is drawn across the TOP edge of the page container, and
     // the page's own area is outlined so an empty page is clearly visible.
     marker.style.display='block';
-    marker.style.left=Math.round(r.left)+'px';
+    marker.style.left=Math.round(docPointX(r.left))+'px';
     marker.style.width=Math.round(r.width)+'px';
-    marker.style.top=Math.round(r.top)+'px';
+    marker.style.top=Math.round(docPointY(r.top))+'px';
     marker.style.height=Math.round(r.height)+'px';
   }
 }
@@ -935,6 +934,9 @@ function deselect(){
   if(selBoxEl)selBoxEl.style.display='none';
   hideMarquee();
   hideGuides();
+  // The Layers panel keeps its OWN selection badge until the next tree
+  // report - clear it here too so deselecting never leaves a stale row.
+  scheduleLayerTree();
 }
 
 function highlightSelected(){
@@ -993,6 +995,136 @@ function getClickableElements(){
     if(isClickable(all[i]))result.push(all[i]);
   }
   return result;
+}
+
+// ── Layers tree ──
+// The Layers panel (parent sidebar tab) shows an open-pencil/Figma-style
+// folder tree of the LIVE document. Every element gets a stable session id
+// (data-klone-id) so tree rows map back to live nodes without path
+// bookkeeping; the attribute is editor chrome and is STRIPPED from
+// saved/exported HTML by the parent (HtmlPreview.serializeCleanHtml).
+var layerIdCounter=0;
+function layerId(el){
+  if(!el||!el.getAttribute)return '';
+  var id=el.getAttribute('data-klone-id');
+  if(!id){
+    id='kl-n'+(++layerIdCounter);
+    el.setAttribute('data-klone-id',id);
+  }
+  return id;
+}
+
+var LAYER_SKIP_TAGS={script:1,style:1,meta:1,link:1,title:1,base:1,noscript:1,template:1,head:1,br:1};
+var LAYER_TEXT_TAGS={h1:1,h2:1,h3:1,h4:1,h5:1,h6:1,p:1,span:1,a:1,li:1,label:1,blockquote:1,pre:1,code:1,cite:1,em:1,strong:1,b:1,i:1,u:1,s:1,small:1,time:1,figcaption:1,caption:1,legend:1,dt:1,dd:1,abbr:1,q:1,mark:1,sub:1,sup:1,summary:1,output:1,address:1};
+var LAYER_FRAME_TAGS={div:1,section:1,header:1,footer:1,main:1,article:1,aside:1,nav:1,form:1,fieldset:1,table:1,thead:1,tbody:1,tfoot:1,tr:1,ul:1,ol:1,dl:1,figure:1,details:1};
+var LAYER_NAMES={div:'Frame',section:'Section',header:'Header',footer:'Footer',main:'Main',article:'Article',aside:'Aside',nav:'Nav',form:'Form',fieldset:'Fieldset',table:'Table',thead:'Table head',tbody:'Table body',tfoot:'Table foot',tr:'Row',ul:'List',ol:'List',dl:'List',li:'Item',figure:'Figure',details:'Details',h1:'Heading',h2:'Heading',h3:'Heading',h4:'Heading',h5:'Heading',h6:'Heading',p:'Text',span:'Text',a:'Link',button:'Button',label:'Label',input:'Input',textarea:'Input',select:'Select',img:'Image',picture:'Image',video:'Video',audio:'Audio',canvas:'Canvas',iframe:'Embed',svg:'Icon',hr:'Divider',blockquote:'Quote',pre:'Code',code:'Code'};
+
+function layerType(el,tag){
+  if(el.namespaceURI==='http://www.w3.org/2000/svg')return 'other';
+  if(tag==='img'||tag==='picture'||tag==='video'||tag==='canvas'||tag==='iframe'||tag==='audio')return 'image';
+  if(LAYER_TEXT_TAGS[tag])return 'text';
+  if(LAYER_FRAME_TAGS[tag])return 'frame';
+  if(tag==='hr'||tag==='progress'||tag==='meter')return 'rectangle';
+  return 'other';
+}
+
+function layerName(el,tag){
+  var base=LAYER_NAMES[tag]||tag;
+  // A meaningful class name (first non-system) disambiguates identical layers.
+  var cls='';
+  if(typeof el.className==='string'&&el.className){
+    var parts=el.className.trim().split(/\s+/);
+    for(var i=0;i<parts.length;i++){
+      var c=parts[i];
+      if(!c||c.indexOf('klone-')===0)continue;
+      cls=c;
+      break;
+    }
+  }
+  var name=cls?(base+' · '+cls):base;
+  // Leaf text layers get a content snippet, Figma-style.
+  if((!el.children||el.children.length===0)&&el.textContent){
+    var txt=el.textContent.replace(/\s+/g,' ').trim();
+    if(txt){
+      if(txt.length>26)txt=txt.slice(0,26)+'…';
+      name=name+' · "'+txt+'"';
+    }
+  }
+  return name;
+}
+
+function layerNode(el){
+  if(!el||!el.tagName)return null;
+  var tag=el.tagName.toLowerCase();
+  if(LAYER_SKIP_TAGS[tag])return null;
+  // SVG internals collapse into their <svg> root - one visual layer.
+  if(el.namespaceURI==='http://www.w3.org/2000/svg'&&tag!=='svg')return null;
+  if(el.getAttribute('data-editor-ui'))return null;
+  if(el.getAttribute('data-klone-page-placeholder')!==null)return null;
+  var node={id:layerId(el),name:layerName(el,tag),type:layerType(el,tag)};
+  if(tag==='svg')return node;
+  var children=[];
+  for(var i=0;i<el.children.length;i++){
+    var child=layerNode(el.children[i]);
+    if(child)children.push(child);
+  }
+  if(children.length>0)node.children=children;
+  return node;
+}
+
+function buildLayerTree(){
+  // Roots mirror the multi-page document: "Page N" frames (page 1 = content
+  // living directly in the content container, page N+1 = the Nth
+  // data-klone-page-boundary container).
+  var roots=[];
+  var container=getContentContainer();
+  var boundaries=getPageBoundaryEls();
+  var pageOne={id:'page:0',name:boundaries.length>0?'Page 1':'Page',type:'page',children:[]};
+  for(var i=0;i<container.children.length;i++){
+    var el=container.children[i];
+    if(isPageBoundary(el)||isSystemFrame(el))continue;
+    var n=layerNode(el);
+    if(n)pageOne.children.push(n);
+  }
+  roots.push(pageOne);
+  for(var j=0;j<boundaries.length;j++){
+    var page={id:'page:'+(j+1),name:'Page '+(j+2),type:'page',children:[]};
+    for(var k=0;k<boundaries[j].children.length;k++){
+      var n2=layerNode(boundaries[j].children[k]);
+      if(n2)page.children.push(n2);
+    }
+    roots.push(page);
+  }
+  return roots;
+}
+
+function selectedLayerIds(){
+  var ids=[];
+  for(var i=0;i<selectedEls.length;i++){
+    var id=layerId(selectedEls[i]);
+    if(id)ids.push(id);
+  }
+  return ids;
+}
+
+function postLayerTree(){
+  window.parent.postMessage({type:'layers-tree',tree:buildLayerTree(),selectedIds:selectedLayerIds()},'*');
+}
+
+// DOM mutations re-report the tree (debounced so drags/typing do not spam
+// the parent). attributeFilter covers the mutations the editor itself
+// performs (styles, page-break marks, classes); data-klone-id is
+// deliberately NOT in the filter, so id assignment never re-triggers it.
+var layerTreeTimer=null;
+function scheduleLayerTree(){
+  if(layerTreeTimer)return;
+  layerTreeTimer=setTimeout(function(){layerTreeTimer=null;postLayerTree();},150);
+}
+var layerTreeObs=null;
+function startLayerTreeWatch(){
+  if(layerTreeObs||typeof MutationObserver==='undefined')return;
+  layerTreeObs=new MutationObserver(function(){scheduleLayerTree();});
+  layerTreeObs.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['data-klone-page-break','style','class']});
 }
 
 function setHover(el){
@@ -1243,6 +1375,7 @@ function fireSelected(){
     var el=selectedEls[i];
     var s=getComputedStyle(el);
     infos.push({
+      id:layerId(el),
       tag:el.tagName.toLowerCase(),
       classes:el.className,
       styles:{
@@ -1294,6 +1427,9 @@ function fireSelected(){
     pageCount:countPages()
   },'*');
   updateSelectionBox();
+  // Keep the Layers panel's selection badge in sync with the canvas
+  // (structure itself is refreshed by the mutation observer).
+  scheduleLayerTree();
 }
 
 function deleteSelected(){
@@ -1344,11 +1480,9 @@ function getTranslate(el){
 // The document container: the default preview template uses a centered
 // .scroll-wrapper; user-authored HTML falls back to the body.
 // top/bottom are DOCUMENT-space vertical bounds (the content's top and
-// bottom edges), NOT the visible viewport edges. They are scroll-
-// independent: a scrolled viewport shows a slice of the content, but the
-// element may be dragged anywhere inside the full content area - including
-// below the current screen while auto-scroll carries it to the last page -
-// and only clamps at the actual document edges so it never leaves the body.
+// bottom edges), NOT the visible viewport edges - the element may be
+// dragged anywhere inside the full content area and only clamps at the
+// actual document edges so it never leaves the body.
 function getMoveBounds(){
   var wrap=document.querySelector('.scroll-wrapper');
   var box=wrap||document.body;
@@ -1484,18 +1618,79 @@ function isWidthLocked(property){
   return false;
 }
 
+// ── Overlay anchoring (document space) ──
+// Overlays used to be position:fixed and were chased by the selection via
+// scroll events. That was wrong twice:
+//   1. Template CSS that turns an ancestor into a containing block
+//      (transform/filter/will-change/contain) silently breaks
+//      position:fixed and drags the overlays along with the document.
+//   2. Even when fixed worked, scrolling is compositor-driven: the browser
+//      moves the content BEFORE JS scroll handlers fire, so a JS chase can
+//      never keep up - the highlight visibly lags, overshoots and wobbles
+//      up and down while the page moves.
+// Fix: place overlays in DOCUMENT SPACE, inside the same layout flow as
+// the content. The compositor then scrolls overlay and element together as
+// one layer with zero JS involvement - the box is glued no matter how the
+// page moves. Offsets are converted to anchor padding-box content
+// coordinates: (clientPoint - anchorRect - anchorBorders + anchorScroll),
+// which is scroll-stable by construction regardless of how or where the
+// canvas was scrolled.
+var overlayAnchorEl=null;
+function ensureOverlayAnchor(){
+  // The content root of the canvas: default/blank templates scroll inside
+  // .scroll-wrapper itself; user-authored templates scroll in <html> with
+  // the design hosted in the .scroll-wrapper page sheet (overflow:visible).
+  // Either way the wrapper (or body as fallback) sits INSIDE the scrollable
+  // flow, so position:absolute children ride the document - the compositor
+  // moves them together with every element.
+  var el=overlayAnchorEl;
+  if(!el||!el.isConnected)el=null;
+  if(!el){
+    el=document.querySelector('.scroll-wrapper')||document.body;
+    overlayAnchorEl=el;
+  }
+  // The anchor must be a containing block so absolute children position
+  // against it exactly (position:relative has no effect on layout flow).
+  if(getComputedStyle(el).position==='static')el.style.position='relative';
+  // If the anchor ever changes, move the persistent overlays back inside it.
+  var i,node;
+  for(i=0;i<3;i++){
+    node=i===0?selBoxEl:(i===1?marqueeEl:guidesLayer);
+    if(node&&node.parentNode!==el)el.appendChild(node);
+  }
+  return el;
+}
+// Convert a client (viewport) point to anchor-relative content coordinates.
+// Absolute positioning uses the anchor's PADDING box as origin and the
+// scrolled content sits (scrollTop - borderTopWidth) BELOW the rect edge,
+// so both the border and the current scroll must be added back - the same
+// helper works whether the anchor is the scroll container or a sheet
+// inside a window-scrolled document.
+function docPointX(cx){
+  var a=ensureOverlayAnchor();
+  var r=a.getBoundingClientRect();
+  var bl=parseFloat(getComputedStyle(a).borderLeftWidth)||0;
+  return cx-r.left-bl+a.scrollLeft;
+}
+function docPointY(cy){
+  var a=ensureOverlayAnchor();
+  var r=a.getBoundingClientRect();
+  var bt=parseFloat(getComputedStyle(a).borderTopWidth)||0;
+  return cy-r.top-bt+a.scrollTop;
+}
+
 function createMarquee(){
   if(marqueeEl)return;
   marqueeEl=document.createElement('div');
   marqueeEl.setAttribute('data-editor-ui','marquee');
-  marqueeEl.style.cssText='position:fixed;border:1px solid rgba(139,92,246,0.9);background:rgba(139,92,246,0.10);pointer-events:none;z-index:99996;display:none;border-radius:1px;';
-  document.body.appendChild(marqueeEl);
+  marqueeEl.style.cssText='position:absolute;border:1px solid rgba(139,92,246,0.9);background:rgba(139,92,246,0.10);pointer-events:none;z-index:99996;display:none;border-radius:1px;';
+  ensureOverlayAnchor().appendChild(marqueeEl);
 }
 function showMarquee(x1,y1,x2,y2){
   if(!marqueeEl)createMarquee();
   marqueeEl.style.display='block';
-  marqueeEl.style.left=Math.min(x1,x2)+'px';
-  marqueeEl.style.top=Math.min(y1,y2)+'px';
+  marqueeEl.style.left=docPointX(Math.min(x1,x2))+'px';
+  marqueeEl.style.top=docPointY(Math.min(y1,y2))+'px';
   marqueeEl.style.width=Math.abs(x2-x1)+'px';
   marqueeEl.style.height=Math.abs(y2-y1)+'px';
 }
@@ -1511,8 +1706,12 @@ function createGuidesLayer(){
   if(guidesLayer)return;
   guidesLayer=document.createElement('div');
   guidesLayer.setAttribute('data-editor-ui','guides');
-  guidesLayer.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:99997;overflow:hidden;';
-  document.body.appendChild(guidesLayer);
+  // A zero-size, overflow-visible container pinned to the anchor's content
+  // origin. Guide children are position:absolute in document coordinates, so
+  // they overflow this box freely and - being inside the scroll flow - the
+  // compositor scrolls them together with the content (no lag/jitter).
+  guidesLayer.style.cssText='position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:99997;';
+  ensureOverlayAnchor().appendChild(guidesLayer);
 }
 function hideGuides(){
   if(nudgeGuideTimer){clearTimeout(nudgeGuideTimer);nudgeGuideTimer=null;}
@@ -1646,18 +1845,22 @@ function matchingLines(a,b,axis,isContainer){
   }
   return out;
 }
+// Guide children are position:absolute inside the guides layer, which lives
+// in document space (anchored inside the scroll flow) - they are scrolled
+// with the canvas automatically. Coordinates are converted from the
+// viewport-measured values with docPointX/docPointY.
 function addGuideLine(vertical,pos,from,to){
   var d=document.createElement('div');
   d.setAttribute('data-editor-ui','guide');
   if(vertical){
-    d.style.cssText='position:fixed;width:1px;background:'+GUIDE_COLOR+';pointer-events:none;';
-    d.style.left=Math.round(pos)+'px';
-    d.style.top=Math.round(from)+'px';
+    d.style.cssText='position:absolute;width:1px;background:'+GUIDE_COLOR+';pointer-events:none;';
+    d.style.left=Math.round(docPointX(pos))+'px';
+    d.style.top=Math.round(docPointY(from))+'px';
     d.style.height=Math.max(1,Math.round(to-from))+'px';
   }else{
-    d.style.cssText='position:fixed;height:1px;background:'+GUIDE_COLOR+';pointer-events:none;';
-    d.style.top=Math.round(pos)+'px';
-    d.style.left=Math.round(from)+'px';
+    d.style.cssText='position:absolute;height:1px;background:'+GUIDE_COLOR+';pointer-events:none;';
+    d.style.top=Math.round(docPointY(pos))+'px';
+    d.style.left=Math.round(docPointX(from))+'px';
     d.style.width=Math.max(1,Math.round(to-from))+'px';
   }
   guidesLayer.appendChild(d);
@@ -1665,18 +1868,18 @@ function addGuideLine(vertical,pos,from,to){
 function addGuideDot(x,y){
   var d=document.createElement('div');
   d.setAttribute('data-editor-ui','guide');
-  d.style.cssText='position:fixed;width:5px;height:5px;border-radius:50%;background:'+GUIDE_COLOR+';pointer-events:none;margin-left:-2px;margin-top:-2px;';
-  d.style.left=Math.round(x)+'px';
-  d.style.top=Math.round(y)+'px';
+  d.style.cssText='position:absolute;width:5px;height:5px;border-radius:50%;background:'+GUIDE_COLOR+';pointer-events:none;margin-left:-2px;margin-top:-2px;';
+  d.style.left=Math.round(docPointX(x))+'px';
+  d.style.top=Math.round(docPointY(y))+'px';
   guidesLayer.appendChild(d);
 }
 function addGuideLabel(x,y,text){
   var d=document.createElement('div');
   d.setAttribute('data-editor-ui','guide');
   d.textContent=text;
-  d.style.cssText='position:fixed;background:rgba(255,77,109,0.92);color:#fff;font:600 10px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:2px 4px;border-radius:3px;pointer-events:none;white-space:nowrap;transform:translate(-50%,-50%);';
-  d.style.left=Math.round(x)+'px';
-  d.style.top=Math.round(y)+'px';
+  d.style.cssText='position:absolute;background:rgba(255,77,109,0.92);color:#fff;font:600 10px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:2px 4px;border-radius:3px;pointer-events:none;white-space:nowrap;transform:translate(-50%,-50%);';
+  d.style.left=Math.round(docPointX(x))+'px';
+  d.style.top=Math.round(docPointY(y))+'px';
   guidesLayer.appendChild(d);
 }
 // Draw all guide lines + end dots + distance labels for the dragged box.
@@ -1758,8 +1961,8 @@ function createSelectionBox(){
   if(selBoxEl)return;
   selBoxEl=document.createElement('div');
   selBoxEl.setAttribute('data-editor-ui','box');
-  selBoxEl.style.cssText='position:fixed;border:1.5px solid #8b5cf6;pointer-events:none;z-index:99998;display:none;';
-  document.body.appendChild(selBoxEl);
+  selBoxEl.style.cssText='position:absolute;border:1.5px solid #8b5cf6;pointer-events:none;z-index:99998;display:none;';
+  ensureOverlayAnchor().appendChild(selBoxEl);
   var positions=['l','r','nw','ne','sw','se'];
   for(var i=0;i<positions.length;i++){
     var p=positions[i];
@@ -1804,12 +2007,29 @@ function updateSelectionBox(){
     return;
   }
   var el=selectedEls[0];
+  // A detached element (undo/redo racing a layout pass) has no box to track.
+  if(!el.isConnected){
+    selBoxEl.style.display='none';
+    return;
+  }
   var r=el.getBoundingClientRect();
+  // Anchor-relative document coordinates: stable at ANY scroll position
+  // because the box moves with the element as part of the scrolled layer.
   selBoxEl.style.display='block';
-  selBoxEl.style.left=r.left+'px';
-  selBoxEl.style.top=r.top+'px';
+  selBoxEl.style.left=docPointX(r.left)+'px';
+  selBoxEl.style.top=docPointY(r.top)+'px';
   selBoxEl.style.width=r.width+'px';
   selBoxEl.style.height=r.height+'px';
+}
+
+// Continuous overlay pin. Scrolling itself is free - the compositor moves
+// the box with its element as one layer - but LAYOUT changes (fonts or
+// images loading, style edits, iframe resize, text edits) shift elements
+// without any event; the animation-frame loop keeps the box glued through
+// those. Cost: one element rect + one anchor rect + a few style writes.
+function overlayPinFrame(){
+  updateSelectionBox();
+  requestAnimationFrame(overlayPinFrame);
 }
 
 document.addEventListener('mouseover',function(e){
@@ -1994,7 +2214,6 @@ document.addEventListener('mousedown',function(e){
   dragStartY=e.clientY;
   isDragging=true;
   isMoving=false;
-  autoScrollDir=null;
   // Shift/Ctrl+drag starts an ADDITIVE marquee (adds to the current
   // selection); a plain drag on empty space replaces the selection.
   marqueeAdditive=(e.shiftKey||e.ctrlKey||e.metaKey);
@@ -2062,12 +2281,11 @@ document.addEventListener('mousedown',function(e){
   document.documentElement.style.webkitUserSelect='none';
 });
 
-// ── Drag auto-scroll ──
-// While dragging an element, holding the cursor near the top/bottom edge
-// of the canvas auto-scrolls it so the element can be moved onto pages
-// that are currently off-screen (above or below). The scroll container is
-// the document container itself (.scroll-wrapper, or the body for
-// user-authored HTML), so the same code works for both.
+// ── Scroll state ──
+// The scroll container is the document container itself (.scroll-wrapper
+// for default templates, or the <html> element for user-authored HTML), so
+// the same read works for both. Used by drag clamping so the document
+// position of a dragged element is known regardless of the scroll offset.
 function getScrollState(){
   var wrap=getContentContainer();
   // User templates host their A4 page sheet inside the body and <html> is
@@ -2087,50 +2305,6 @@ function getScrollState(){
   };
 }
 
-function setScrollTop(st,top){
-  if(st.useBody)window.scrollTo(0,top);
-  else st.el.scrollTop=top;
-}
-
-// Point the auto-scroll direction at the canvas edge the cursor is in.
-// The scroll container's getBoundingClientRect includes its full (scrolled)
-// content box, so the VISIBLE viewport is derived from the client height.
-function updateAutoScroll(cx,cy){
-  autoScrollDir=null;
-  var st=getScrollState();
-  if(!st.el)return;
-  var r=st.el.getBoundingClientRect();
-  var top=r.top;
-  var bottom=r.top+st.clientH;
-  var edge=44;
-  if(cy<top+edge)autoScrollDir='up';
-  else if(cy>bottom-edge)autoScrollDir='down';
-}
-
-// Scroll one step toward autoScrollDir; returns the viewport scroll delta
-// (positive = content moved up, i.e. scrolled down). 0 when the scroll is
-// already at its limit - the caller then stops auto-scrolling.
-function stepAutoScroll(){
-  var st=getScrollState();
-  if(!st.el)return 0;
-  var step=14;
-  var top=st.scrollTop;
-  var maxTop=Math.max(0,st.scrollH-st.clientH);
-  if(autoScrollDir==='down'){
-    if(top>=maxTop)return 0;
-    var next=Math.min(maxTop,top+step);
-    setScrollTop(st,next);
-    return next-top;
-  }
-  if(autoScrollDir==='up'){
-    if(top<=0)return 0;
-    var nextUp=Math.max(0,top-step);
-    setScrollTop(st,nextUp);
-    return nextUp-top; // negative: content moved down
-  }
-  return 0;
-}
-
 // Runs once per animation frame while an element is being dragged. All
 // layout data was cached at mousedown (dragBounds, dragBaseRect,
 // moveRects), so each frame only does cheap style reads and one transform
@@ -2139,17 +2313,6 @@ function stepAutoScroll(){
 function dragFrame(){
   dragFrameScheduled=false;
   if(!isMoving||!isDragging)return;
-  // Auto-scroll the canvas while the cursor is held against the top/bottom
-  // edge, so the dragged element can reach off-screen pages. The scroll
-  // moves the content under a stationary cursor, so the element's transform
-  // is compensated by exactly the scroll delta to keep it glued to the
-  // cursor. The loop keeps running (re-scheduling itself) while the cursor
-  // stays in the edge zone, even though mousemove stops firing.
-  var scrollDeltaY=0;
-  if(autoScrollDir){
-    scrollDeltaY=stepAutoScroll();
-    if(scrollDeltaY===0)autoScrollDir=null; // reached the scroll limit
-  }
   // Apply ONLY the cursor delta since the last APPLIED frame, on top of
   // the element's CURRENT transform (re-read every frame). Each drag
   // therefore continues from where the element actually is - it never
@@ -2165,10 +2328,8 @@ function dragFrame(){
   // Raw next positions (clamped to the container) before any snapping.
   var rawNx=[],rawNy=[];
   // Fresh bounds EVERY frame: the bounds are in DOCUMENT space (scroll-
-  // independent) so they are stable during auto-scroll - the element's
-  // document position grows as its transform compensates the scrolling,
-  // letting it ride down to the last page, and it only clamps when it
-  // reaches the actual content edges (never the visible screen edge).
+  // independent), so the element only clamps when it reaches the actual
+  // content edges - never the visible screen edge.
   var frameBounds=getMoveBounds()||dragBounds;
   for(var i=0;i<selectedEls.length;i++){
     var el=selectedEls[i];
@@ -2189,15 +2350,12 @@ function dragFrame(){
       if(curRight+relX>frameBounds.right)nx=curT2[0]+(frameBounds.right-curRight);
     }
     rawNx.push(nx);
-    // The scroll compensation keeps the element under the cursor while the
-    // canvas auto-scrolls underneath it.
-    var ny=curT2[1]+ddy+scrollDeltaY;
+    var ny=curT2[1]+ddy;
     // Vertical clamp in DOCUMENT space: the mousedown rect plus the scroll
     // offset at mousedown is the element's document position; the transform
-    // delta (including scroll compensation) moves it through the document.
-    // This pins at the content edges - it never pins at the screen edge, so
-    // a bottom-edge drag keeps riding down to the last page while
-    // auto-scrolling, and can't leave the body above/below.
+    // delta moves it through the document. This pins at the content edges -
+    // it never pins at the screen edge, so the element can never leave the
+    // body above or below.
     if(!isContainer(el)&&frameBounds&&moveRects[i]){
       var relY=ny-curT2[1];
       var rr2=moveRects[i];
@@ -2210,11 +2368,9 @@ function dragFrame(){
     rawNy.push(ny);
   }
   // Alignment snap (Figma/Canva-style). Holding Shift disables it for
-  // fine-tuned placement. Snap targets are captured at mousedown in
-  // viewport coordinates, so snapping is skipped while auto-scrolling
-  // (the canvas is moving, the targets are stale).
+  // fine-tuned placement.
   var appliedDx=0,appliedDy=0;
-  if(!pendingShift&&!autoScrollDir&&selectedEls.length>0&&dragBaseRect){
+  if(!pendingShift&&selectedEls.length>0&&dragBaseRect){
     var proj=shiftRect(dragBaseRect,rawNx[0]-dragBasePos[0],rawNy[0]-dragBasePos[1]);
     var snap=computeSnap(proj,moveTargets,dragDirX,dragDirY);
     appliedDx=snap.snapX;
@@ -2242,12 +2398,6 @@ function dragFrame(){
     }else{
       renderGuides(shiftRect(dragBaseRect,rawNx[0]-dragBasePos[0]+appliedDx,rawNy[0]-dragBasePos[1]+appliedDy),moveTargets);
     }
-  }
-  // Keep auto-scrolling frame after frame while the cursor stays in the
-  // edge zone (mousemove stops firing when the cursor is stationary).
-  if(autoScrollDir&&isMoving&&isDragging){
-    dragFrameScheduled=true;
-    requestAnimationFrame(dragFrame);
   }
 }
 
@@ -2298,9 +2448,6 @@ document.addEventListener('mousemove',function(e){
     pendingMX=e.clientX;
     pendingMY=e.clientY;
     pendingShift=e.shiftKey;
-    // Watch the canvas edges so the drag auto-scrolls toward off-screen
-    // pages while the cursor is held against the top/bottom edge.
-    updateAutoScroll(e.clientX,e.clientY);
     if(!dragFrameScheduled){
       dragFrameScheduled=true;
       requestAnimationFrame(dragFrame);
@@ -2377,7 +2524,6 @@ document.addEventListener('mouseup',function(e){
   hideGuides();
   lastGuidesKey=null;
   isDragging=false;
-  autoScrollDir=null;
   document.body.style.cursor='';
   document.body.style.userSelect='';
   document.body.style.webkitUserSelect='';
@@ -2482,6 +2628,10 @@ document.addEventListener('dragstart',function(e){
 createSelectionBox();
 createMarquee();
 createGuidesLayer();
+// Overlays live in document space (glued during scroll); only layout
+// changes need chasing, which the animation-frame loop covers (see
+// overlayPinFrame).
+requestAnimationFrame(overlayPinFrame);
 
 // ── Reload-safe layout sync ──
 // When this script parses, the document may not be laid out yet: external
@@ -2565,6 +2715,8 @@ requestAnimationFrame(function(){
   reportPageBreak(false);
   reportPages(false);
   startLayoutWatch();
+  postLayerTree();
+  startLayerTreeWatch();
 });
 
 // ── Preview canvas colour ──
@@ -2581,7 +2733,11 @@ if(__kloneAuthoredBgEl){
   document.body.style.setProperty('background-color','#161617','important');
 }
 window.addEventListener('resize',function(){updateSelectionBox();updatePageBreakMarkers();syncSystemFrameSize();syncPageBoundarySizes();updateBoundaryMarkers();});
-window.addEventListener('scroll',function(){updateSelectionBox();updatePageBreakMarkers();updateBoundaryMarkers();},true);
+// NOTE: there is deliberately NO scroll listener - overlays live in document
+// space, so the compositor scrolls them with the content automatically,
+// with zero lag or jitter. The old fixed + JS scroll-chase is exactly what
+// made the highlight box wobble relative to the element while moving the
+// page.
 
 window.addEventListener('message',function(e){
   var data=e.data;
@@ -2818,6 +2974,43 @@ window.addEventListener('message',function(e){
   if(data.type==='deselect'){
     deselect();
     window.parent.postMessage({type:'selection-cleared'},'*');
+  }
+  if(data.type==='select-layer'){
+    // Layers panel selection: map a tree row id back to its element and
+    // select it exactly like a canvas click (Ctrl/⌘ = additive toggle).
+    if(!data.id)return;
+    var lel=document.querySelector('[data-klone-id="'+data.id+'"]');
+    if(!lel||!lel.isConnected||!isClickable(lel))return;
+    clearHover();
+    if(data.additive){
+      var lidx=selectedEls.indexOf(lel);
+      if(lidx>=0){
+        lel.style.outline='';
+        lel.style.outlineOffset='';
+        selectedEls.splice(lidx,1);
+        for(var li=0;li<selectedEls.length;li++){
+          selectedEls[li].style.outline=selectedEls.length>1?'2px solid #8b5cf6':'';
+          selectedEls[li].style.outlineOffset=selectedEls.length>1?'2px':'';
+        }
+      }else{
+        selectedEls.push(lel);
+        highlightSelected();
+      }
+    }else{
+      deselect();
+      selectedEls=[lel];
+    }
+    if(selectedEls.length===0){
+      if(selBoxEl)selBoxEl.style.display='none';
+      window.parent.postMessage({type:'selection-cleared'},'*');
+    }else{
+      if(selectedEls.length>1)highlightSelected();
+      fireSelected();
+      updateSelectionBox();
+      if(selectedEls.length===1&&selectedEls[0].scrollIntoView){
+        selectedEls[0].scrollIntoView({block:'nearest',inline:'nearest'});
+      }
+    }
   }
   if(data.type==='inspect-mode'){
     inspectEnabled=data.enabled;

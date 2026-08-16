@@ -6,6 +6,7 @@ import {
   HtmlPreview,
   type HtmlPreviewHandle,
   type ElementInfo,
+  type LayerNode,
 } from "./HtmlPreview";
 import { FigmaBottomToolbar } from "./FigmaBottomToolbar";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -77,6 +78,10 @@ export function PreviewEditor({
     () => ((html ?? "").match(/data-klone-page-boundary/g)?.length ?? 0) + 1,
   );
   const [currentPage, setCurrentPage] = useState(0);
+  // Live layer tree reported by the iframe editor (Layers sidebar tab).
+  // Selection badges are derived from selectedElements instead of the
+  // iframe's reported ids so they update instantly with canvas clicks.
+  const [layersTree, setLayersTree] = useState<LayerNode[]>([]);
   // isEditingRef is the source of truth for edit-mode gating; the state
   // setter is kept to mirror it into the component (the value itself is
   // never read in render).
@@ -201,6 +206,15 @@ export function PreviewEditor({
   const handlePagesChange = useCallback((count: number, changed: boolean) => {
     setPageCount(Math.max(1, count));
     if (changed) setDirty(true);
+  }, []);
+
+  const handleLayersTree = useCallback((tree: LayerNode[]) => {
+    setLayersTree(tree);
+  }, []);
+
+  const handleSelectLayer = useCallback((id: string, additive: boolean) => {
+    setInspectMode(true);
+    previewRef.current?.selectLayer(id, additive);
   }, []);
 
   const handlePageInfo = useCallback(
@@ -470,6 +484,7 @@ export function PreviewEditor({
                 onSplitModeChange={setSplitMode}
                 onPageInfo={handlePageInfo}
                 onPagesChange={handlePagesChange}
+                onLayersTree={handleLayersTree}
               />
             </div>
           </div>
@@ -518,6 +533,11 @@ export function PreviewEditor({
                 previewRef.current?.moveToPage(pageIndex)
               }
               onDeletePage={handleDeletePage}
+              layersTree={layersTree}
+              selectedLayerIds={selectedElements
+                .map((el) => el.id)
+                .filter((id): id is string => !!id)}
+              onSelectLayer={handleSelectLayer}
             />
           </div>
         </div>

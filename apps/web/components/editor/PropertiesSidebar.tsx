@@ -1,6 +1,9 @@
 "use client";
 
-import type { ElementInfo, AlignMode } from "./HtmlPreview";
+import { useState } from "react";
+import type { ElementInfo, AlignMode, LayerNode } from "./HtmlPreview";
+import { PencilRuler, PanelsTopLeft } from "lucide-react";
+import { LayerTree } from "./ui/LayerTree";
 import {
   Keyboard,
   Undo2,
@@ -89,6 +92,12 @@ interface PropertiesSidebarProps {
   currentPage?: number;
   onMoveToPage?: (pageIndex: number) => void;
   onDeletePage?: (pageIndex: number) => void;
+  /** Live document layer tree (Layers tab). */
+  layersTree?: LayerNode[];
+  /** Layer ids currently selected on the canvas (Layers tab highlight). */
+  selectedLayerIds?: string[];
+  /** Select a layer from the tree (additive = Ctrl/⌘ multi-select). */
+  onSelectLayer?: (id: string, additive: boolean) => void;
 }
 
 export function PropertiesSidebar({
@@ -107,7 +116,12 @@ export function PropertiesSidebar({
   currentPage = 0,
   onMoveToPage,
   onDeletePage,
+  layersTree = [],
+  selectedLayerIds = [],
+  onSelectLayer,
 }: PropertiesSidebarProps) {
+  // Design = property editing, Layers = open-pencil-style folder tree.
+  const [tab, setTab] = useState<"design" | "layers">("design");
   const first = selectedElements[0];
   const s = first?.styles;
   const count = selectedElements.length;
@@ -162,8 +176,55 @@ export function PropertiesSidebar({
 
   return (
     <div className="w-64 shrink-0 h-full flex flex-col bg-[#161617] select-none overflow-hidden">
+      {/* ── Top tabs: Design | Layers ── */}
+      <div
+        role="tablist"
+        aria-label="Panel"
+        className="shrink-0 grid grid-cols-2 gap-0.5 border-b border-[#2d2d2d] p-1"
+      >
+        {([
+          { id: "design", label: "Design", Icon: PencilRuler },
+          { id: "layers", label: "Layers", Icon: PanelsTopLeft },
+        ] as const).map(({ id, label, Icon }) => {
+          const active = tab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTab(id)}
+              className={
+                "flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-[6px] text-[11px] font-medium transition-colors " +
+                (active
+                  ? "bg-[#2d2d31] text-[#f4f4f5]"
+                  : "text-[#8a8a8a] hover:bg-white/5 hover:text-[#c9c9cc]")
+              }
+            >
+              <Icon className="size-3.5" />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "layers" && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <LayerTree
+            tree={layersTree}
+            selectedIds={selectedLayerIds}
+            onSelect={(id, additive) => onSelectLayer?.(id, additive)}
+          />
+        </div>
+      )}
+
       {/* ── Scrollable properties area (panel padding 14px) ── */}
-      <div className="flex-1 overflow-y-auto custom-scroll px-3.5 py-3.5">
+      <div
+        className={
+          "flex-1 overflow-y-auto custom-scroll px-3.5 py-3.5" +
+          (tab === "layers" ? " hidden" : "")
+        }
+      >
         {!hasSelection && (
           <div className="flex h-full flex-col p-3">
             {/* Keyboard shortcuts */}

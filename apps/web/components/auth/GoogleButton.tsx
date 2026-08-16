@@ -7,7 +7,7 @@ import { signInWithGoogle } from "@/app/actions/auth";
 /** Official Google "G" mark (four brand colors), 24x24 viewBox. */
 function GoogleMark() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
       <path
         fill="#EA4335"
         d="M12 5.4c1.6 0 3 .55 4.1 1.62l3.07-3.07C17.3 2.19 14.87 1.2 12 1.2 7.78 1.2 4.13 3.62 2.35 7.15l3.58 2.78C6.78 7.32 9.17 5.4 12 5.4z"
@@ -32,6 +32,7 @@ interface GoogleButtonProps {
   label?: string;
 }
 
+/** Google OAuth button styled for the light editorial auth screens. */
 export function GoogleButton({ label = "Continue with Google" }: GoogleButtonProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,11 +56,20 @@ export function GoogleButton({ label = "Continue with Google" }: GoogleButtonPro
 
   return (
     <>
-      <button type="button" className="gbtn" onClick={handleClick} disabled={pending}>
-        {pending ? <Loader2 className="animate-spin" /> : <GoogleMark />}
+      <button
+        type="button"
+        className="flex w-full items-center justify-center gap-2.5 border border-[#e5e5e5] bg-white px-4 py-3 text-[14px] font-medium text-[#0a0a0a] transition-colors duration-150 hover:border-[#c4c4c4] hover:bg-[#fafafa] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0a0a0a] disabled:opacity-60"
+        onClick={handleClick}
+        disabled={pending}
+      >
+        {pending ? <Loader2 size={18} className="animate-spin" /> : <GoogleMark />}
         <span>{pending ? "Redirecting to Google…" : label}</span>
       </button>
-      {error && <div className="err show">{error}</div>}
+      {error && (
+        <p className="mt-2 text-[12px] text-red-600" role="alert">
+          {error}
+        </p>
+      )}
     </>
   );
 }

@@ -19,7 +19,11 @@ export default async function LoginPage({
       : undefined;
 
   return (
-    <AuthShell title="Welcome back">
+    <AuthShell
+      variant="signin"
+      title="Welcome back"
+      lead="Sign in to keep writing, editing, and downloading documents with your AI assistant."
+    >
       <AuthCard mode="signin" urlError={urlError} />
     </AuthShell>
   );
