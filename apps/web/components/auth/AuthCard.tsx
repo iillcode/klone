@@ -13,6 +13,7 @@ import {
 import { GoogleButton } from "./GoogleButton";
 import { TextField, PasswordField } from "./AuthFields";
 import { EMAIL_PATTERN, PASSWORD_PATTERN } from "./validation";
+import { pressClasses } from "@/components/ui/Button";
 
 type Mode = "signin" | "signup";
 
@@ -22,8 +23,7 @@ interface AuthCardProps {
   urlError?: string;
 }
 
-const SUBMIT_CLASSES =
-  "w-full bg-[#aef637] px-4 py-3 text-[14px] font-medium text-[#0a0a0a] transition-colors duration-150 hover:bg-[#9be22e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637] disabled:opacity-60";
+const SUBMIT_CLASSES = `${pressClasses("primary", "md")} w-full`;
 
 /** Fixed bottom toast pill in the landing page's dark style. */
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {

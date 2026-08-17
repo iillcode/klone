@@ -160,6 +160,12 @@ interface HtmlPreviewProps {
    *  inside the sandboxed iframe; called with a relative zoom factor the
    *  parent applies to `zoom`. */
   onZoomWheel?: (factor: number) => void;
+  /** Relay for PLAIN wheel gestures that happen inside the iframe while the
+   *  canvas is zoomed out. Wheel events never cross iframe boundaries, so
+   *  the iframe forwards them here and the parent scrolls its own canvas
+   *  container (the iframe's internal scroll is locked at zoom < 1).
+   *  `deltaMode` follows the WheelEvent spec: 0 = pixels, 1 = lines. */
+  onPanWheel?: (deltaX: number, deltaY: number, deltaMode: number) => void;
 }
 
 export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
@@ -178,6 +184,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       onLayersTree,
       zoom = 1,
       onZoomWheel,
+      onPanWheel,
     },
     ref,
   ) {
@@ -751,6 +758,15 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
           const dy = Number(e.data.deltaY) || 0;
           if (dy !== 0) onZoomWheel?.(Math.exp(-dy * 0.002));
         }
+        if (e.data && e.data.type === "pan-wheel") {
+          // Plain wheel over the page while zoomed out (see the wheel
+          // listener inside the iframe). The parent owns the vertical pan
+          // and scrolls the canvas container itself.
+          const dx = Number(e.data.deltaX) || 0;
+          const dy = Number(e.data.deltaY) || 0;
+          const mode = Number(e.data.deltaMode) || 0;
+          if (dx !== 0 || dy !== 0) onPanWheel?.(dx, dy, mode);
+        }
       };
       window.addEventListener("message", handler);
       return () => window.removeEventListener("message", handler);
@@ -764,6 +780,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       onPagesChange,
       onLayersTree,
       onZoomWheel,
+      onPanWheel,
       reportRevealHeight,
     ]);
 
@@ -807,6 +824,15 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         "*",
       );
     }, [splitMode]);
+
+    // Keep the iframe's zoom-out flag in sync: while zoomed out the iframe
+    // locks its own scroll and relays plain wheel pans to the parent.
+    useEffect(() => {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "set-zoom", zoom },
+        "*",
+      );
+    }, [zoom]);
 
     // ── Reveal height tracking ──
     // Keep the preview container sized to the document's FULL height while
@@ -897,6 +923,12 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
               );
               iframeRef.current?.contentWindow?.postMessage(
                 { type: "set-split-mode", enabled: splitMode },
+                "*",
+              );
+              // Re-sync zoom state after any iframe reload (HMR hard
+              // refresh, doc switch) so the relay logic stays armed.
+              iframeRef.current?.contentWindow?.postMessage(
+                { type: "set-zoom", zoom },
                 "*",
               );
             }}

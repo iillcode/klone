@@ -352,7 +352,7 @@ export function ColorPicker({
                   data-active={active || undefined}
                   data-test-id={`fill-picker-tab-${t.id.toLowerCase()}`}
                   onClick={() => setTab(t.id)}
-                  className={`flex size-6 cursor-pointer items-center justify-center rounded border-none p-0 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#3b82f6] ${
+                  className={`flex size-6 cursor-pointer items-center justify-center rounded border-none p-0 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#aef637] ${
                     active
                       ? "bg-[#353535] text-[#f0f0f0]"
                       : "text-[#888888] hover:bg-[#353535] hover:text-[#f0f0f0]"

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { signInWithGoogle } from "@/app/actions/auth";
+import { pressClasses } from "@/components/ui/Button";
 
 /** Official Google "G" mark (four brand colors), 24x24 viewBox. */
 function GoogleMark() {
@@ -58,7 +59,7 @@ export function GoogleButton({ label = "Continue with Google" }: GoogleButtonPro
     <>
       <button
         type="button"
-        className="flex w-full items-center justify-center gap-2.5 border border-[#2a2a2c] bg-[#1c1c1d] px-4 py-3 text-[14px] font-medium text-[#ededed] transition-colors duration-150 hover:border-[#3f3f42] hover:bg-[#232324] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637] disabled:opacity-60"
+        className={`${pressClasses("dark", "md")} w-full`}
         onClick={handleClick}
         disabled={pending}
       >

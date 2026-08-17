@@ -136,7 +136,7 @@ export function SelectField({
         title={title}
         onClick={() => (open ? close() : openMenu())}
         onKeyDown={onTriggerKeyDown}
-        className={`flex h-6 items-center justify-between rounded border border-transparent bg-[#1e1e1e] px-1.5 text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#262626] focus:border-[#3b82f6] focus:bg-[#262626] focus-visible:border-[#3b82f6] focus-within:border-[#3b82f6] focus-within:bg-[#262626] cursor-pointer ${
+        className={`flex h-6 items-center justify-between rounded border border-transparent bg-[#1e1e1e] px-1.5 text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#262626] focus:border-[#aef637] focus:bg-[#262626] focus-visible:border-[#aef637] focus-within:border-[#aef637] focus-within:bg-[#262626] cursor-pointer ${
           grow ? "flex-1 min-w-0" : "w-full min-w-0"
         } ${className}`}
       >
@@ -187,7 +187,7 @@ export function SelectField({
                   } ${selected ? "font-medium text-white" : ""}`}
                 >
                   {selected && (
-                    <span className="absolute left-1.5 text-[#3b82f6]">
+                    <span className="absolute left-1.5 text-[#aef637]">
                       <CheckIcon />
                     </span>
                   )}

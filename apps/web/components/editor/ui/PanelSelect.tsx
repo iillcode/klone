@@ -8,11 +8,11 @@ import { ChevronIcon } from "../icons/properties-icons";
 /**
  * Compact panel select — faithful React port of open-pencil's `AppSelect`
  * (theme in `src/theme/app-select.ts` + `src/theme/select.ts`):
- *   - trigger: h-6 panel-field (bg #1e1e1e, hover #262626, focus #3b82f6),
+ *   - trigger: h-6 panel-field (bg #1e1e1e, hover #262626, focus #aef637),
  *     text-[11px], value left-truncated, chevron ml-1 size-3 text-muted
  *   - menu: portal, min-width = trigger width, p-0.5, rounded panel bg
  *     (#2a2a2a), 11px items, h-6 rows, highlight bg (#353535), accent
- *     (#3b82f6) check indicator at left-1.5
+ *     (#aef637) check indicator at left-1.5
  */
 export function PanelSelect({
   value,
@@ -146,7 +146,7 @@ export function PanelSelect({
         onClick={() => (open ? close() : openMenu())}
         {...(dataProperty ? { "data-property": dataProperty } : {})}
         className={cn(
-          "flex h-6 min-w-0 items-center justify-between rounded border border-transparent bg-[#1e1e1e] px-1.5 text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#262626] focus:border-[#3b82f6] focus:bg-[#262626] focus-visible:border-[#3b82f6] focus-within:border-[#3b82f6] focus-within:bg-[#262626] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer",
+          "flex h-6 min-w-0 items-center justify-between rounded border border-transparent bg-[#1e1e1e] px-1.5 text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#262626] focus:border-[#aef637] focus:bg-[#262626] focus-visible:border-[#aef637] focus-within:border-[#aef637] focus-within:bg-[#262626] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer",
           className,
         )}
       >
@@ -195,7 +195,7 @@ export function PanelSelect({
                 >
                   {selected && (
                     <span
-                      className="absolute left-1.5 inline-flex items-center justify-center text-[#3b82f6]"
+                      className="absolute left-1.5 inline-flex items-center justify-center text-[#aef637]"
                       aria-hidden
                     >
                       <svg

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SearchIcon, PlusIcon, ComponentsIcon } from "./icons/toolbar-icons";
 
 import type { ComponentGroup } from "@/lib/data/types";
+import { cn } from "@/lib/utils";
+import { pressClasses } from "@/components/ui/Button";
 
 /* ─── Bottom dock: "Insert component" tool + grouped template library ── */
 
@@ -136,7 +138,7 @@ export function BottomComponentDock({
 
   return (
     <div
-      className="fixed bottom-5 left-1/2 -translate-x-1/2 z-20"
+      className="fixed bottom-3 left-1/2 -translate-x-1/2 z-20"
       ref={dockRef}
     >
       {/* Component library popup — centered above the dock */}
@@ -158,7 +160,7 @@ export function BottomComponentDock({
                 placeholder="Search components"
                 spellCheck={false}
                 autoComplete="off"
-                className="w-full h-10 bg-[#161617] border border-[#262626] rounded-lg text-[#e4e4e7] text-[13px] font-sans pl-9 pr-3 outline-none caret-[#18a0fb] placeholder:text-[#71717a] focus:border-[#18a0fb]"
+                className="w-full h-10 bg-[#161617] border border-[#262626] rounded-lg text-[#e4e4e7] text-[13px] font-sans pl-9 pr-3 outline-none caret-[#aef637] placeholder:text-[#71717a] focus:border-[#aef637]"
               />
             </div>
           </div>
@@ -223,7 +225,7 @@ export function BottomComponentDock({
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center gap-1 bg-[#1e1e1e] border border-[#262626] rounded-xl p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+      <div className="flex items-center gap-1 bg-[#1e1e1e] border border-[#262626] rounded-xl p-1 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
         <button
           onClick={() => (open ? closePopup() : setOpen(true))}
           disabled={!hasComponents}
@@ -232,24 +234,23 @@ export function BottomComponentDock({
               ? "Insert component"
               : "No components in this template"
           }
-          className={`flex items-center gap-1.5 h-10 px-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-            open
-              ? "bg-[#18a0fb] text-white"
-              : "text-[#e6e6e6] hover:bg-[#2a2a2a]"
-          }`}
+          className={cn(
+            open ? pressClasses("primary", "sm") : pressClasses("dark", "sm"),
+            "disabled:cursor-not-allowed",
+          )}
         >
           <ComponentsIcon className="w-[19px] h-[19px]" />
           <span className="text-[13px] font-medium">Components</span>
         </button>
 
-        <span className="w-px h-6 bg-[#262626] mx-0.5" />
+        <span className="w-px h-5 bg-[#262626] mx-0.5" />
 
         <button
           onClick={onAddPage}
           title="Add page"
-          className="flex items-center gap-1.5 h-10 px-3 rounded-lg text-[#e6e6e6] hover:bg-[#2a2a2a] transition-colors"
+          className={pressClasses("dark", "sm")}
         >
-          <PlusIcon className="w-[19px] h-[19px] text-[#18a0fb]" />
+          <PlusIcon className="w-[19px] h-[19px] text-[#aef637]" />
           <span className="text-[13px] font-medium">Add page</span>
           {pageCount > 1 && (
             <span className="text-[10px] text-[#71717a] font-mono ml-0.5">

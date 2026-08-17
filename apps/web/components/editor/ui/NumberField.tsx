@@ -29,12 +29,18 @@ export function NumberField({
   const composing = useRef(false);
   const lastCommitted = useRef(strValue);
   const inputRef = useRef<HTMLInputElement>(null);
+  // True while the user is actively typing/scrubbing this field. While
+  // focused we must NOT let the parent's (computed) value overwrite the
+  // input — for constrained elements (flex/%/max-width) the computed width
+  // can differ from what was just typed, which would otherwise clobber the
+  // entry with a seemingly random number.
+  const focusedRef = useRef(false);
 
   // Sync from parent only when the user isn't typing. Kept as an effect so the
   // `composing` ref is evaluated when `value` changes; `local` is deliberately
   // omitted from deps (adding it would clobber the user's in-progress typing).
   useEffect(() => {
-    if (!composing.current && value !== undefined) {
+    if (!composing.current && !focusedRef.current && value !== undefined) {
       const v = String(value);
       if (v !== local) {
         // Intentional prop→local sync (see comment above).
@@ -120,7 +126,7 @@ export function NumberField({
   return (
     <div
       className={cn(
-        "h-6 min-w-0 w-full flex items-center rounded border border-transparent bg-[#1e1e1e] text-[#f0f0f0] outline-none hover:bg-[#262626] focus-within:border-[#3b82f6] focus-within:bg-[#262626] text-[11px] tabular-nums",
+        "h-6 min-w-0 w-full flex items-center rounded border border-transparent bg-[#1e1e1e] text-[#f0f0f0] outline-none hover:bg-[#262626] focus-within:border-[#aef637] focus-within:bg-[#262626] text-[11px] tabular-nums",
         className,
       )}
     >
@@ -141,8 +147,14 @@ export function NumberField({
         value={local}
         disabled={disabled}
         onChange={handleChange}
-        onBlur={handleBlur}
-        onFocus={(e) => e.target.select()}
+        onFocus={(e) => {
+          focusedRef.current = true;
+          e.target.select();
+        }}
+        onBlur={() => {
+          focusedRef.current = false;
+          handleBlur();
+        }}
         onPointerDown={startScrub}
         onKeyDown={(e) => {
           if (e.key === "ArrowUp") {
@@ -162,7 +174,7 @@ export function NumberField({
           onChange(v);
           lastCommitted.current = v;
         }}
-        className="min-w-0 flex-1 cursor-text border-none bg-transparent pr-1.5 font-[inherit] text-[11px] text-[#f0f0f0] outline-none caret-[#3b82f6] disabled:opacity-40 disabled:cursor-not-allowed"
+        className="min-w-0 flex-1 cursor-text border-none bg-transparent pr-1.5 font-[inherit] text-[11px] text-[#f0f0f0] outline-none caret-[#aef637] disabled:opacity-40 disabled:cursor-not-allowed"
       />
       {suffix && !disabled && (
         <span className="shrink-0 pr-1.5 text-[#888888] select-none">{suffix}</span>

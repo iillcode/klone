@@ -2,7 +2,7 @@
 
 /* Figma-style toolbar/action buttons (faithful port of the mock's controls). */
 
-/* open-pencil icon-button (size-6, klone tokens: #353535/#888/#3b82f6) */
+/* open-pencil icon-button (size-6, klone tokens: #353535/#888/#aef637) */
 export function IconBtn({
   title,
   onClick,
@@ -24,9 +24,9 @@ export function IconBtn({
       title={title}
       onClick={onClick}
       aria-pressed={active}
-      className={`size-6 shrink-0 flex items-center justify-center rounded border border-transparent bg-transparent text-[#888888] outline-none transition-colors focus-visible:border-[#3b82f6] ${
+      className={`size-6 shrink-0 flex items-center justify-center rounded border border-transparent bg-transparent text-[#888888] outline-none transition-colors focus-visible:border-[#aef637] ${
         active
-          ? "border-[#3b82f6] text-[#3b82f6]"
+          ? "border-[#aef637] text-[#aef637]"
           : "hover:bg-[#353535] hover:text-[#f0f0f0]"
       } ${className}`}
     >

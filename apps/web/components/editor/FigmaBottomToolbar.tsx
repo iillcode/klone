@@ -8,6 +8,7 @@ import {
   SaveIcon,
   SpinnerIcon,
 } from "./icons/toolbar-icons";
+import { pressClasses } from "@/components/ui/Button";
 
 /* ─── Main component ─── */
 
@@ -88,7 +89,7 @@ export function FigmaBottomToolbar({
             title={inspectMode ? "Disable inspect (V)" : "Enable inspect (V)"}
             className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
               inspectMode
-                ? "bg-[#18a0fb] text-white shadow-[0_0_6px_rgba(24,160,251,0.3)]"
+                ? "bg-[#aef637] text-[#0a0a0a] shadow-[0_0_6px_rgba(174,246,55,0.3)]"
                 : "text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#202020]"
             }`}
           >
@@ -108,7 +109,7 @@ export function FigmaBottomToolbar({
           <button
             onClick={onSave}
             disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-[#e4e4e7] border border-[#262626] hover:bg-[#202020] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+            className={pressClasses("dark", "sm")}
           >
             {saving ? (
               <SpinnerIcon />
@@ -120,7 +121,7 @@ export function FigmaBottomToolbar({
           <button
             onClick={onShare}
             disabled={downloading}
-            className="flex items-center gap-1.5 px-3 py-1.5 min-w-[110px] justify-center rounded-md bg-[#18a0fb] hover:bg-[#0c8ce9] text-white text-[11px] font-medium transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+            className={`${pressClasses("primary", "sm")} min-w-[110px]`}
           >
             {downloading ? (
               <SpinnerIcon />

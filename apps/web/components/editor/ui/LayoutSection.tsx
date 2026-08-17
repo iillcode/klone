@@ -49,7 +49,7 @@ export function LayoutSection({
           title="Add auto layout"
           onClick={() => setAutoLayout((v) => !v)}
           className={`flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0] ${
-            autoLayout ? "text-[#3b82f6] border-[#3b82f6]" : ""
+            autoLayout ? "text-[#aef637] border-[#aef637]" : ""
           }`}
         >
           <LayoutPanelTop className="size-3.5" />

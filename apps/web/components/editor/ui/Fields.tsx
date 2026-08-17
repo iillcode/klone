@@ -149,7 +149,7 @@ export function ColorRow({
       <div className="flex min-w-0 items-center gap-1.5" data-slot="content">
         {/* open-pencil PaintField */}
         <div
-          className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-transparent bg-[#1e1e1e] text-[11px] transition-colors hover:bg-[#262626] focus-within:border-[#3b82f6] focus-within:bg-[#262626] w-full flex-none"
+          className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-transparent bg-[#1e1e1e] text-[11px] transition-colors hover:bg-[#262626] focus-within:border-[#aef637] focus-within:bg-[#262626] w-full flex-none"
           data-slot="paint-field"
           data-property="paint"
         >
@@ -198,7 +198,7 @@ export function ColorRow({
               maxLength={6}
               value={hex6}
               placeholder="transparent"
-              className="min-w-0 flex-1 border-none bg-transparent font-mono text-xs text-[#f0f0f0] outline-none caret-[#3b82f6]"
+              className="min-w-0 flex-1 border-none bg-transparent font-mono text-xs text-[#f0f0f0] outline-none caret-[#aef637]"
               onChange={(e) => {
                 const val = e.target.value.replace(/[^0-9a-fA-F]/g, "").toUpperCase();
                 setHexInput(val);
@@ -241,7 +241,7 @@ export function ColorRow({
             aria-pressed={hidden}
             onClick={onToggleVisibility}
             className={`flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0] ${
-              hidden ? "text-[#3b82f6]" : ""
+              hidden ? "text-[#aef637]" : ""
             }`}
             data-slot="visibility"
           >

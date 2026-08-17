@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ButtonLink } from "@/components/ui/Button";
 import { KloneWordmark } from "../landing/LandingNavbar";
 
 const DOCS_NAV_LINKS = [
@@ -68,16 +69,13 @@ export function DocsNavbar() {
         </ul>
 
         <div className="hidden items-center gap-6 lg:flex">
-          <a
-            href="/dashboard"
-            className="group flex items-center gap-1.5 bg-[#aef637] px-4 py-2.5 text-[14px] font-medium text-[#0a0a0a] transition-colors duration-150 hover:bg-[#9be22e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
-          >
+          <ButtonLink href="/dashboard" className="group">
             Open dashboard
             <ArrowUpRight
               size={14}
               className="transition-transform duration-150 group-hover:translate-x-px group-hover:-translate-y-px"
             />
-          </a>
+          </ButtonLink>
         </div>
 
         <button
@@ -107,12 +105,9 @@ export function DocsNavbar() {
             ))}
           </ul>
           <div className="mt-4 border-t border-[#2a2a2c] pt-4">
-            <a
-              href="/dashboard"
-              className="block bg-[#aef637] px-4 py-2.5 text-center text-[14px] font-medium text-[#0a0a0a]"
-            >
+            <ButtonLink href="/dashboard" className="w-full">
               Open dashboard
-            </a>
+            </ButtonLink>
           </div>
         </div>
       )}

@@ -268,14 +268,14 @@ export function PropertiesSidebar({
                   }
                   onClick={onToggleSplitMode}
                   className={`relative flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none p-0 outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0] ${
-                    splitMode ? "text-[#3b82f6]" : "text-[#888888]"
+                    splitMode ? "text-[#aef637]" : "text-[#888888]"
                   }`}
                 >
                   <svg width="15" height="15" viewBox="0 0 16 16" className="size-3.5">
                     <path d="M9.5 2.5L13.5 6.5L8 12h-4v-4z M3.5 13.5l3-3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
                   </svg>
                   {hasPageBreak && (
-                    <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 rounded-full bg-[#18a0fb] text-white text-[9px] leading-[14px] text-center">
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 rounded-full bg-[#aef637] text-black text-[9px] leading-[14px] text-center">
                       {pageBreakCount}
                     </span>
                   )}

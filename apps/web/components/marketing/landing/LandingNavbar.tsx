@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ButtonLink } from "@/components/ui/Button";
 
 const NAV_LINKS = [
   { label: "Templates", href: "#templates" },
@@ -106,16 +107,13 @@ export function LandingNavbar() {
           >
             Sign in
           </a>
-          <a
-            href="/register"
-            className="group flex items-center gap-1.5 bg-[#aef637] px-4 py-2.5 text-[14px] font-medium text-[#0a0a0a] transition-colors duration-150 hover:bg-[#9be22e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
-          >
+          <ButtonLink href="/register" className="group">
             Get started
             <ArrowUpRight
               size={14}
               className="transition-transform duration-150 group-hover:translate-x-px group-hover:-translate-y-px"
             />
-          </a>
+          </ButtonLink>
         </div>
 
         <button
@@ -145,18 +143,12 @@ export function LandingNavbar() {
             ))}
           </ul>
           <div className="mt-4 flex items-center gap-3 border-t border-[#2a2a2c] pt-4">
-            <a
-              href="/login"
-              className="flex-1 border border-[#2a2a2c] px-4 py-2.5 text-center text-[14px] font-medium text-[#ededed]"
-            >
+            <ButtonLink href="/login" variant="dark" className="flex-1">
               Sign in
-            </a>
-            <a
-              href="/register"
-              className="flex-1 bg-[#aef637] px-4 py-2.5 text-center text-[14px] font-medium text-[#0a0a0a]"
-            >
+            </ButtonLink>
+            <ButtonLink href="/register" className="flex-1">
               Get started
-            </a>
+            </ButtonLink>
           </div>
         </div>
       )}

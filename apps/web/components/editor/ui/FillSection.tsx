@@ -99,7 +99,7 @@ export function FillSection({
             title="Add fill"
             data-slot="icon-button"
             onClick={addFill}
-            className="flex size-6 cursor-pointer items-center justify-center rounded border border-transparent bg-transparent text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0] focus-visible:border-[#3b82f6]"
+            className="flex size-6 cursor-pointer items-center justify-center rounded border border-transparent bg-transparent text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0] focus-visible:border-[#aef637]"
           >
             <Plus className="size-3.5" />
           </button>

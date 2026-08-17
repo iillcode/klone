@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ButtonLink } from "@/components/ui/Button";
 import { DottedPath, Float, Packet, PulseDot } from "../landing/primitives";
 import { GridLines, LandingContainer } from "../landing/Section";
 
@@ -259,15 +260,12 @@ export function DocsHeroSection() {
               into your library. Same account, same documents, same editor.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
-              <a
-                href="#setup"
-                className="group flex items-center gap-2 bg-[#aef637] px-6 py-3.5 text-[15px] font-medium text-[#0a0a0a] transition-colors duration-200 hover:bg-[#9be22e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
-              >
+              <ButtonLink href="#setup" size="lg" className="group">
                 Start setup
                 <span className="transition-transform duration-200 group-hover:translate-x-1">
                   →
                 </span>
-              </a>
+              </ButtonLink>
               <a
                 href="#tools"
                 className="group flex items-center gap-2 px-2 py-2 text-[15px] font-medium text-[#ededed] transition-colors duration-200 hover:text-[#a1a1a6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"

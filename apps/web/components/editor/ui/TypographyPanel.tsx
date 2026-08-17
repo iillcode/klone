@@ -120,7 +120,7 @@ function FontPicker({
         ref={triggerRef}
         type="button"
         onClick={() => (open ? setOpen(false) : (setOpen(true), updatePos()))}
-        className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded border border-transparent bg-[#1e1e1e] px-1.5 text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#262626] focus:border-[#3b82f6] focus:bg-[#262626] focus-visible:border-[#3b82f6] focus-within:border-[#3b82f6] focus-within:bg-[#262626]"
+        className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded border border-transparent bg-[#1e1e1e] px-1.5 text-[11px] text-[#f0f0f0] outline-none transition-colors hover:bg-[#262626] focus:border-[#aef637] focus:bg-[#262626] focus-visible:border-[#aef637] focus-within:border-[#aef637] focus-within:bg-[#262626]"
         style={{ fontFamily: value || undefined }}
       >
         <span className="truncate">{currentLabel}</span>
@@ -157,7 +157,7 @@ function FontPicker({
                 style={{ fontFamily: f.value }}
               >
                 <span className="truncate">{f.label}</span>
-                {f.value === value && <Check className="size-3.5 shrink-0 text-[#3b82f6]" />}
+                {f.value === value && <Check className="size-3.5 shrink-0 text-[#aef637]" />}
               </button>
             ))}
           </div>
@@ -339,7 +339,7 @@ export function TypographyPanel({
             aria-label="Bold"
             aria-pressed={bold}
             onClick={() => onApplyStyle("fontWeight", bold ? "400" : "700")}
-            className={`${fmtBtn} ${bold ? "text-[#3b82f6]" : ""}`}
+            className={`${fmtBtn} ${bold ? "text-[#aef637]" : ""}`}
           >
             <Bold className="size-3.5" />
           </button>
@@ -349,7 +349,7 @@ export function TypographyPanel({
             aria-label="Italic"
             aria-pressed={italic}
             onClick={() => onApplyStyle("fontStyle", italic ? "normal" : "italic")}
-            className={`${fmtBtn} ${italic ? "text-[#3b82f6]" : ""}`}
+            className={`${fmtBtn} ${italic ? "text-[#aef637]" : ""}`}
           >
             <Italic className="size-3.5" />
           </button>
@@ -359,7 +359,7 @@ export function TypographyPanel({
             aria-label="Underline"
             aria-pressed={underline}
             onClick={() => toggleDeco("underline", !underline)}
-            className={`${fmtBtn} ${underline ? "text-[#3b82f6]" : ""}`}
+            className={`${fmtBtn} ${underline ? "text-[#aef637]" : ""}`}
           >
             <Underline className="size-3.5" />
           </button>
@@ -369,7 +369,7 @@ export function TypographyPanel({
             aria-label="Strikethrough"
             aria-pressed={strike}
             onClick={() => toggleDeco("line-through", !strike)}
-            className={`${fmtBtn} ${strike ? "text-[#3b82f6]" : ""}`}
+            className={`${fmtBtn} ${strike ? "text-[#aef637]" : ""}`}
           >
             <Strikethrough className="size-3.5" />
           </button>

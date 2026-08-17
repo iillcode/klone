@@ -1,4 +1,5 @@
 import { ArrowRight } from "lucide-react";
+import { ButtonLink } from "@/components/ui/Button";
 import { GridLines, LandingContainer } from "./Section";
 
 /** Large clean centered final call-to-action. */
@@ -15,19 +16,13 @@ export function FinalCTA() {
             Explore Klone today
           </h2>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <a
-              href="/register"
-              className="group flex items-center gap-2 bg-[#aef637] px-7 py-4 text-[15px] font-medium text-[#0a0a0a] transition-colors duration-200 hover:bg-[#9be22e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
-            >
+            <ButtonLink href="/register" size="lg" className="group">
               Start building
               <ArrowRight size={16} className="transition-transform duration-200 group-hover:translate-x-1" />
-            </a>
-            <a
-              href="#how"
-              className="group flex items-center gap-2 border border-[#2a2a2c] px-7 py-4 text-[15px] font-medium text-[#ededed] transition-colors duration-200 hover:border-[#a1a1a6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
-            >
+            </ButtonLink>
+            <ButtonLink href="#how" variant="dark" size="lg">
               See how it works
-            </a>
+            </ButtonLink>
           </div>
           <p className="mt-8 text-[13px] text-[#737373]">
             Works with the AI assistant you already use · Templates included

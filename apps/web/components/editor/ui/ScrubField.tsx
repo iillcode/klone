@@ -152,7 +152,7 @@ export function ScrubField({
             if (e.key === "Enter") commit();
             if (e.key === "Escape") setEditing(false);
           }}
-          className="min-w-0 flex-1 border-none bg-transparent py-0 pr-1.5 pl-1.5 font-[inherit] text-[11px] text-[#f0f0f0] outline-none caret-[#3b82f6]"
+          className="min-w-0 flex-1 border-none bg-transparent py-0 pr-1.5 pl-1.5 font-[inherit] text-[11px] text-[#f0f0f0] outline-none caret-[#aef637]"
         />
       ) : (
         <span

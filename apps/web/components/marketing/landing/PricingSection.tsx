@@ -1,4 +1,5 @@
 import { ArrowRight, Check } from "lucide-react";
+import { ButtonLink } from "@/components/ui/Button";
 import { GridLines, LandingContainer } from "./Section";
 
 const PLAN_FEATURES = [
@@ -82,13 +83,10 @@ export function PricingSection() {
                 Or $190/year — two months free.
               </p>
 
-              <a
-                href="/register"
-                className="group mt-6 flex w-full items-center justify-center gap-2 bg-[#aef637] px-6 py-3.5 text-[15px] font-medium text-[#0a0a0a] transition-colors duration-200 hover:bg-[#9be22e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637]"
-              >
+              <ButtonLink href="/register" size="lg" className="group mt-6 w-full">
                 Start 7-day free trial
                 <ArrowRight size={15} className="transition-transform duration-200 group-hover:translate-x-1" />
-              </a>
+              </ButtonLink>
               <p className="mt-3 text-center text-[12px] text-[#8a8a8a]">
                 No card required to start.
               </p>

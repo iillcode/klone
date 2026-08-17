@@ -10,13 +10,13 @@ import { SettingsModal } from "@/components/settings/SettingsModal";
 import {
   ChevronRight,
   FileText,
-  Library,
+  Folder,
   Loader2,
-  Rocket,
   Search,
   Settings,
   Zap,
 } from "lucide-react";
+import { pressClasses } from "@/components/ui/Button";
 
 const itemClass =
   "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px] font-medium text-[#a1a1aa] transition-colors hover:bg-[#1c1c1c] hover:text-[#e4e4e7] disabled:cursor-wait disabled:opacity-60";
@@ -122,20 +122,10 @@ export function Sidebar({
           className={itemClass}
           onClick={() => scrollTo("documents-section")}
         >
-          <Rocket className="h-4 w-4 text-[#a1a1aa]" />
-          Featured
+          <Folder className="h-4 w-4 text-[#a1a1aa]" />
+          Projects
           <span className="ml-auto text-xs text-[#a1a1aa]">
             {documents.length}
-          </span>
-        </button>
-        <button
-          className={itemClass}
-          onClick={() => scrollTo("templates-section")}
-        >
-          <Library className="h-4 w-4 text-[#a1a1aa]" />
-          Templates
-          <span className="ml-auto text-xs text-[#a1a1aa]">
-            {templates.length}
           </span>
         </button>
 
@@ -163,7 +153,7 @@ export function Sidebar({
       <div className="mx-3 mb-3 flex-none rounded-xl border border-[#262626] bg-[#1a1a1a] p-3.5">
         <div className="flex items-center justify-between text-[13px] font-bold text-[#e4e4e7]">
           Klone MCP
-          <Zap className="h-4 w-4 text-[#22c55e]" />
+          <Zap className="h-4 w-4 text-[#aef637]" />
         </div>
         <p className="mt-1.5 text-xs leading-5 text-[#a1a1aa]">
           Connect any coding agent — Claude, Cursor — to author polished PDFs
@@ -172,31 +162,37 @@ export function Sidebar({
         <button
           onClick={() => handleCreate("blank")}
           disabled={creating !== null}
-          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] text-[13px] font-semibold text-[#e4e4e7] transition-colors hover:border-[#3d3d3d] hover:bg-[#202020] disabled:cursor-wait disabled:opacity-60"
+          className={`${pressClasses("primary", "sm")} mt-3 w-full`}
         >
           Get started
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      {/* Account */}
-      <button
-        onClick={() => setSettingsOpen(true)}
-        className="mx-3 mb-3 flex flex-none items-center gap-2.5 rounded-xl border border-[#262626] bg-[#1a1a1a] p-2.5 text-left transition-colors hover:border-[#3d3d3d] hover:bg-[#202020]"
-      >
-        <span className="grid h-8 w-8 flex-none place-items-center rounded-full bg-[#16245a] text-[11px] font-bold text-[#8fb3ff]">
-          {initials}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-semibold text-[#e4e4e7]">
-            {displayName}
+      {/* Account — flat profile row pinned to the bottom */}
+      <div className="flex-none border-t border-[#2d2d2d]/60 p-2">
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[#1c1c1c]"
+        >
+          <span className="relative grid h-8 w-8 flex-none place-items-center rounded-full bg-[#16245a] text-[11px] font-bold text-[#8fb3ff] ring-1 ring-[#2d2d2d]">
+            {initials}
+            <span
+              className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#161617] bg-[#aef637]"
+              aria-hidden="true"
+            />
           </span>
-          <span className="block truncate text-[11.5px] text-[#a1a1aa]">
-            {profile?.plan === "pro" ? "Pro plan" : "Hobby plan"}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-semibold text-[#e4e4e7]">
+              {displayName}
+            </span>
+            <span className="block truncate text-[11.5px] text-[#71717a]">
+              {profile?.plan === "pro" ? "Pro plan" : "Hobby plan"}
+            </span>
           </span>
-        </span>
-        <Settings className="h-4 w-4 flex-none text-[#a1a1aa]" />
-      </button>
+          <Settings className="h-4 w-4 flex-none text-[#71717a] transition-colors group-hover:text-[#a1a1aa]" />
+        </button>
+      </div>
 
       <SettingsModal
         open={settingsOpen}

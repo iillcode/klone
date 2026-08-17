@@ -105,6 +105,28 @@ export function PreviewEditor({
   const [, setIsEditing] = useState(false);
   const previewRef = useRef<HtmlPreviewHandle>(null);
   const keyboardCaptureRef = useRef<HTMLInputElement>(null);
+  // Canvas scroll container. When the zoom is below 100% the parent owns
+  // vertical panning; plain wheel events that land inside the sandboxed
+  // iframe are relayed back here ('pan-wheel') and applied to this box.
+  const canvasScrollRef = useRef<HTMLDivElement>(null);
+  const handlePanWheel = useCallback(
+    (deltaX: number, deltaY: number, deltaMode: number) => {
+      const el = canvasScrollRef.current;
+      if (!el) return;
+      // WheelEvent deltaMode: 0 = pixels, 1 = lines, 2 = pages.
+      const factor =
+        deltaMode === 1 ? 16 : deltaMode === 2 ? el.clientHeight : 1;
+      let dy = deltaY * factor;
+      const dx = deltaX * factor;
+      // Two-finger trackpad sideways pans can arrive as deltaX; the canvas
+      // never scrolls horizontally so convert it to vertical pan instead of
+      // dropping the gesture.
+      if (dx !== 0 && deltaY === 0) dy = dx;
+      if (dy === 0) return;
+      el.scrollBy({ top: dy, behavior: "auto" });
+    },
+    [],
+  );
   // Ref mirror of isEditing so the message handler (which fires outside
   // render) and the keydown listener always see the latest value.
   const isEditingRef = useRef(false);
@@ -129,7 +151,11 @@ export function PreviewEditor({
       // abort the edit.
       if (isEditingRef.current) return;
       if (elements && elements.length > 0) {
-        keyboardCaptureRef.current?.focus();
+        // preventScroll: at zoom < 100% the canvas container is scrollable
+        // and this hidden input is anchored at its top — a bare focus()
+        // would auto-scroll the container back to the top, snapping the
+        // viewport away from the element the user just clicked.
+        keyboardCaptureRef.current?.focus({ preventScroll: true });
       } else {
         keyboardCaptureRef.current?.blur();
       }
@@ -169,6 +195,17 @@ export function PreviewEditor({
       // Mirror the iframe: a solid background color replaces any gradient/
       // image (backgroundImage) so the sidebar stays in sync immediately.
       return { backgroundColor: value, backgroundImage: "none" };
+    }
+    if (property === "borderWidth") {
+      // Mirror the iframe: setting a non-zero border width force-solidifies a
+      // 'none' border-style so the stroke is visible — but only when the
+      // border is currently invisible, never clobbering dashed/groove/etc.
+      const w = parseFloat(value);
+      const cur = selectedElements[0]?.styles?.borderStyle;
+      if (w > 0 && (!cur || cur === "none" || cur === "hidden")) {
+        return { borderWidth: value, borderStyle: "solid" };
+      }
+      return { borderWidth: value };
     }
     return { [property]: value };
   }
@@ -507,7 +544,10 @@ export function PreviewEditor({
               transform-origin), so the canvas can never pan sideways.
               The vertical scrollbar is hidden (wheel/trackpad still scroll;
               `scrollbar-none` utility in app/globals.css). */}
-          <div className="absolute inset-0 flex items-start justify-center overflow-x-hidden overflow-y-auto scrollbar-none">
+          <div
+            ref={canvasScrollRef}
+            className="absolute inset-0 flex items-start justify-center overflow-x-hidden overflow-y-auto scrollbar-none"
+          >
             <div className="w-full h-full">
               {/*
                 Hidden input that captures keyboard focus when elements are selected.
@@ -528,6 +568,7 @@ export function PreviewEditor({
                 splitMode={splitMode}
                 zoom={zoom}
                 onZoomWheel={zoomBy}
+                onPanWheel={handlePanWheel}
                 onElementSelect={handleElementSelect}
                 onStyleUpdated={handleStyleUpdated}
                 onEditModeChange={handleEditModeChange}
@@ -544,25 +585,25 @@ export function PreviewEditor({
               Canvas zoom scales the preview around its horizontal center
               (see HtmlPreview), so the page never moves sideways - the
               document only scrolls vertically. */}
-          <div className="absolute bottom-3 left-3 z-10 flex items-center h-8 rounded-lg bg-[#1e1e1e] border border-[#2d2d2d] shadow-lg select-none">
+          <div className="absolute bottom-3 left-3 z-10 flex items-center h-10 rounded-xl bg-[#1e1e1e] border border-[#2d2d2d] shadow-lg select-none">
             <button
               onClick={() => zoomBy(1 / 1.2)}
               title="Zoom out (Ctrl+-)"
-              className="w-7 h-8 flex items-center justify-center text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2a2a2a] transition-colors rounded-l-lg"
+              className="w-7 h-10 flex items-center justify-center text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2a2a2a] transition-colors rounded-l-xl"
             >
               <MinusIcon />
             </button>
             <button
               onClick={() => zoomTo(1)}
               title="Reset zoom to 100% (Ctrl+0)"
-              className="px-1.5 h-8 min-w-[50px] text-[11px] font-medium text-[#e4e4e7] tabular-nums hover:bg-[#2a2a2a] transition-colors"
+              className="px-1.5 h-10 min-w-[50px] text-[11px] font-medium text-[#e4e4e7] tabular-nums hover:bg-[#2a2a2a] transition-colors"
             >
               {Math.round(zoom * 100)}%
             </button>
             <button
               onClick={() => zoomBy(1.2)}
               title="Zoom in (Ctrl++)"
-              className="w-7 h-8 flex items-center justify-center text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2a2a2a] transition-colors rounded-r-lg"
+              className="w-7 h-10 flex items-center justify-center text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2a2a2a] transition-colors rounded-r-xl"
             >
               <PlusIcon />
             </button>
@@ -572,7 +613,7 @@ export function PreviewEditor({
           {inspectMode && splitMode && (
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1a1a1a]/90 border border-[#2d2d2d] backdrop-blur text-[11px] text-[#a1a1aa] shadow-lg whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#18a0fb]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#aef637]" />
                 Click an element to start a new PDF page
                 <span className="text-[#52525b]">·</span>
                 <kbd className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#3f3f46] text-[10px] text-[#e4e4e7] font-sans">

@@ -96,7 +96,7 @@ export function EffectsSection({
               title={hidden ? "Show" : "Hide"}
               onClick={() => setHidden((v) => !v)}
               className={`flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 text-[#888888] outline-none transition-colors hover:bg-[#353535] hover:text-[#f0f0f0] ${
-                hidden ? "text-[#3b82f6]" : ""
+                hidden ? "text-[#aef637]" : ""
               }`}
             >
               {hidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}

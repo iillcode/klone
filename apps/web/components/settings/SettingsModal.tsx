@@ -18,6 +18,8 @@ import {
   Shield,
   User,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { pressClasses } from "@/components/ui/Button";
 
 // ---------------------------------------------------------------------------
 // Types + nav config
@@ -89,12 +91,11 @@ function useLocalStorage<T>(key: string, initial: T) {
 // Small UI primitives (mirroring the reference template's classes)
 // ---------------------------------------------------------------------------
 
-const btn =
-  "inline-flex items-center gap-2 h-[34px] px-3 rounded-[9px] border border-[#2a2a2a] bg-[#1a1a1a] text-[13px] font-semibold text-[#e6e6e6] transition-colors hover:border-[#3d3d3d] hover:bg-[#202020] disabled:cursor-wait disabled:opacity-60";
-const btnPrimary = `${btn} border-[#2563eb] bg-[#2563eb] text-white hover:border-[#1d4ed8] hover:bg-[#1d4ed8]`;
-const btnSm = "h-[30px] px-2.5 text-[12.5px] rounded-lg gap-1.5";
+const btn = pressClasses("dark", "sm");
+const btnPrimary = pressClasses("primary", "sm");
+const btnSm = "px-2.5 py-1 gap-1.5";
 const inputCls =
-  "w-full h-[38px] rounded-[9px] border border-[#262626] bg-[#1e1e1e] px-3 text-[13.5px] text-[#f5f5f5] placeholder:text-[#6f6f6f] transition-[border-color,box-shadow] focus:border-[#3b82f6] focus:outline-none focus:ring-[3px] focus:ring-[#3b82f6]/15";
+  "w-full h-[38px] rounded-[9px] border border-[#262626] bg-[#1e1e1e] px-3 text-[13.5px] text-[#f5f5f5] placeholder:text-[#6f6f6f] transition-[border-color,box-shadow] focus:border-[#aef637] focus:outline-none focus:ring-[3px] focus:ring-[#aef637]/15";
 const labelCls = "mb-1.5 block text-[12.5px] font-semibold text-[#a3a3a3]";
 const stBlue =
   "inline-flex items-center rounded-full bg-[#16245a] px-2.5 py-0.5 text-[10.5px] font-semibold text-[#8fb3ff]";
@@ -192,7 +193,7 @@ function Switch({
       />
       <i
         className={`pointer-events-none absolute inset-0 rounded-full border transition-colors duration-200 ${
-          on ? "border-[#2563eb] bg-[#2563eb]" : "border-[#333] bg-[#2a2a2a]"
+          on ? "border-[#aef637] bg-[#aef637]" : "border-[#333] bg-[#2a2a2a]"
         }`}
       >
         <span
@@ -364,7 +365,7 @@ function SecuritySection({ profile }: { profile: UserProfile | null }) {
             span="We'll email you a secure reset link."
           />
           <button
-            className={`${btn} ${btnSm}`}
+            className={cn(btn, btnSm)}
             type="button"
             disabled={resetPending}
             onClick={() => {
@@ -421,7 +422,7 @@ function BillingSection({ profile }: { profile: UserProfile | null }) {
             }
             span="Monthly usage resets on the 1st."
           />
-          <button className={`${btnPrimary} ${btnSm}`} type="button">
+          <button className={cn(btnPrimary, btnSm)} type="button">
             <Gem className="h-3.5 w-3.5" /> Upgrade
           </button>
         </Prow>
@@ -434,7 +435,7 @@ function BillingSection({ profile }: { profile: UserProfile | null }) {
               </div>
               <div className="mt-[7px] h-1.5 overflow-hidden rounded-full bg-[#242424]">
                 <i
-                  className="block h-full rounded-full bg-gradient-to-r from-[#1d4ed8] to-[#3b82f6]"
+                  className="block h-full rounded-full bg-gradient-to-r from-[#9be22e] to-[#aef637]"
                   style={{ width: `${creditPct}%` }}
                 />
               </div>
@@ -559,7 +560,7 @@ function AppearanceSection() {
               onClick={() => pickTheme(c.id)}
               className={`rounded-xl border p-3 text-left transition-colors ${
                 pref === c.id
-                  ? "border-[#3b82f6]"
+                  ? "border-[#aef637]"
                   : "border-[#2a2a2a] hover:border-[#3d3d3d]"
               }`}
             >
@@ -569,7 +570,7 @@ function AppearanceSection() {
               <span className="flex items-center justify-between text-[13px] font-semibold text-[#f5f5f5]">
                 {c.name}
                 {pref === c.id && (
-                  <Check className="h-3.5 w-3.5 text-[#3b82f6]" />
+                  <Check className="h-3.5 w-3.5 text-[#aef637]" />
                 )}
               </span>
             </button>

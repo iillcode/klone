@@ -482,3 +482,10 @@ supabase db push --db-url "$DATABASE_URL"
 - [ ] Admin app: manage `pdf_templates` blueprints in the UI
 - [ ] Web app: template gallery sourced from `pdf_templates` (currently hardcoded in `apps/web/lib/data/templates.ts`)
 - [ ] Support MCP clients without custom header support (e.g. token via env/query param)
+
+
+# If you gout 404 issue 
+ ```bash 
+Get-Process node | Stop-Process -Force
+Remove-Item apps\web\.next -Recurse -Force
+ ```

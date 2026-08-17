@@ -7,7 +7,7 @@ export function getEditorScript(): string {
   // will show an older version. Hard-refresh the page to reload it.
   if(window.__kloneEditorInjected)return; // never double-bind listeners
   window.__kloneEditorInjected=true;
-  console.log('[editor] script v33');
+  console.log('[editor] script v36');
 // ── Global pointer-events reset ──
 // Templates routinely ship 'pointer-events:none' on decorative/wrapper
 // elements, and CSS pointer-events INHERITS - without an override every
@@ -86,6 +86,27 @@ var splitMode=false;
 // panel-selected element (Figma-like locked selection) instead of
 // deep-selecting the child under the cursor.
 var layerSelLock=false;
+// Canvas zoom state mirrored from the parent ('set-zoom' posts). While
+// zoomed out (<1) the parent scrolls the canvas and this document's own
+// scroll is locked + plain wheel is relayed to the parent (see the wheel
+// listener below).
+var editorZoomedOut=false;
+var lastInternalScrollTop=0;
+
+// While the canvas is zoomed out, any residual scroll inside the document
+// (fonts/images shifting content, keyboard paging, programmatic jumps)
+// fights the parent-owned pan, so it is snapped back to the locked offset.
+// The interval also covers content-resize cases (a shrunken scrollHeight
+// silently clamps scrollTop), so no extra observer is needed.
+function lockInternalScroll(){
+  if(!editorZoomedOut)return;
+  var el=document.scrollingElement||document.documentElement;
+  if(!el)return;
+  if(el.scrollTop!==lastInternalScrollTop){
+    el.scrollTop=lastInternalScrollTop;
+  }
+}
+setInterval(lockInternalScroll,80);
 
 function getPageBreakEls(){
   var list=document.querySelectorAll('[data-klone-page-break]');
@@ -114,10 +135,10 @@ function reportPageBreak(changed){
 function createPageBreakMarker(){
   var marker=document.createElement('div');
   marker.setAttribute('data-editor-ui','page-break-marker');
-  marker.style.cssText='position:absolute;left:0;height:0;border-top:2px dashed #18a0fb;pointer-events:none;z-index:99997;display:none;';
+  marker.style.cssText='position:absolute;left:0;height:0;border-top:2px dashed #aef637;pointer-events:none;z-index:99997;display:none;';
   var label=document.createElement('span');
   label.textContent='PDF page starts here';
-  label.style.cssText='position:absolute;top:-21px;left:12px;padding:3px 7px;border-radius:4px;background:#18a0fb;color:#fff;font:600 10px/1.2 Arial,sans-serif;letter-spacing:.01em;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.28);';
+  label.style.cssText='position:absolute;top:-21px;left:12px;padding:3px 7px;border-radius:4px;background:#aef637;color:#0a0a0a;font:600 10px/1.2 Arial,sans-serif;letter-spacing:.01em;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.28);';
   marker.appendChild(label);
   ensureOverlayAnchor().appendChild(marker);
   return marker;
@@ -270,7 +291,6 @@ function pasteClipboard(){
   if(!node)return;
   selectedEls=[node];
   fireSelected();
-  reportDirty();
 }
 
 function getPageBoundaryEls(){
@@ -373,22 +393,54 @@ function addPageBoundary(record,sharedBatchId,autoMoveDropped){
   reportPages(true);
 }
 
-// Append a template component (key + html + css) into the document. The
-// block goes inside the EXISTING body when there are no extra pages, or
-// inside the LAST page boundary (the most recently added page) when the
-// user has created new pages — so components accumulate on the page the user
-// is building rather than spilling back into the root body. The component
-// HTML is wrapped in a block-level container so it behaves like a normal
-// selectable/editable element, with its CSS scoped inside the block. One
-// undo step restores the document to its previous state.
+// ── Last-click tracking (component placement) ──
+// Record the last click inside the canvas in DOCUMENT coordinates (client
+// position + current scroll) so a newly added component can be placed where
+// the user is actually working. Null until the first click: adds then fall
+// back to the document bottom.
+var lastClickDocX=null;
+var lastClickDocY=null;
+document.addEventListener('mousedown',function(e){
+  var st=getScrollState();
+  var S=(st&&st.el)?st.scrollTop:0;
+  lastClickDocX=e.clientX;
+  lastClickDocY=e.clientY+S;
+},true);
+
+// Append a template component (key + html + css) into the document. When the
+// user has clicked somewhere on the canvas the new block is placed AT that
+// spot; without a prior click it goes to the bottom (inside the LAST page
+// boundary when extra pages exist). Placement works like canvas drag-and-
+// drop: the block is ALWAYS appended (never inserted mid-flow) so EXISTING
+// elements keep their positions untouched, then a translate offset lands it
+// at the clicked point (clamped inside the page). The component HTML is
+// wrapped in a block-level container so it behaves like a normal selectable/
+// editable element, with its CSS scoped inside the block. One undo step
+// restores the document to its previous state.
 function addComponentToBottom(key, html, css){
   if(!key||!html)return;
+  var useClick=lastClickDocX!==null&&lastClickDocY!==null;
   var container=getContentContainer();
   if(!container)return;
-  // When extra pages exist, append into the last page boundary so the new
-  // block lands on the page the user just created (not the root body).
-  var pages=getPageBoundaryEls();
-  if(pages.length>0)container=pages[pages.length-1];
+  if(useClick){
+    // Pick the page that CONTAINS the last clicked point: page boundaries
+    // are self-contained boxes, so hit-test the click Y against each one;
+    // a click outside every boundary was on the FIRST (root) page.
+    var st=getScrollState();
+    var S=(st&&st.el)?st.scrollTop:0;
+    var bounds=getPageBoundaryEls();
+    var hit=null;
+    for(var i=0;i<bounds.length;i++){
+      var br=bounds[i].getBoundingClientRect();
+      if(lastClickDocY>=br.top+S&&lastClickDocY<=br.bottom+S){hit=bounds[i];break;}
+    }
+    container=hit||getContentContainer();
+  }else{
+    // No canvas click yet: append into the last page boundary so the new
+    // block lands on the page the user just created (not the root body).
+    var pages=getPageBoundaryEls();
+    if(pages.length>0)container=pages[pages.length-1];
+  }
   var wrap=document.createElement('div');
   wrap.setAttribute('data-klone-component', key);
   wrap.setAttribute('data-editor-block','');
@@ -400,10 +452,32 @@ function addComponentToBottom(key, html, css){
   undoStack.push({property:'__component__',element:wrap,adding:true,parentNode:container,batchId:batchId});
   redoStack=[];
   container.appendChild(wrap);
+  if(useClick){
+    // Move the new block to the clicked point with a translate offset -
+    // appending (never inserting between siblings) means existing elements
+    // are never pushed around.
+    var st2=getScrollState();
+    var S2=(st2&&st2.el)?st2.scrollTop:0;
+    var r=wrap.getBoundingClientRect();
+    var cRect=container.getBoundingClientRect();
+    var flowDocTop=r.top+S2;
+    var flowDocLeft=r.left;
+    var ty=lastClickDocY-flowDocTop;
+    var tx=lastClickDocX-flowDocLeft;
+    // Clamp inside the page: never off the left/right edge or above the
+    // page top. Full-width blocks keep tx=0 automatically.
+    var cDocLeft=cRect.left;
+    var cDocRight=cRect.right;
+    var cDocTop=cRect.top+S2;
+    if(flowDocLeft+tx<cDocLeft)tx=cDocLeft-flowDocLeft;
+    if(r.left+tx+r.width>cDocRight)tx=cDocRight-(r.left+r.width);
+    if(flowDocTop+ty<cDocTop)ty=cDocTop-flowDocTop;
+    var nt=(tx===0&&ty===0)?'':'translate('+Math.round(tx)+'px,'+Math.round(ty)+'px)';
+    if(nt)wrap.style.transform=nt;
+  }
   // Select the newly added block so the user can immediately style it.
   selectedEls=[wrap];
   fireSelected();
-  reportDirty();
 }
 
 // Deep-clone an element, stripping any editor-only selection/state
@@ -2807,7 +2881,24 @@ document.addEventListener('wheel',function(e){
   if(e.ctrlKey||e.metaKey){
     e.preventDefault();
     window.parent.postMessage({type:'zoom-wheel',deltaY:e.deltaY},'*');
+    return;
   }
+  // While the canvas is ZOOMED OUT, the parent owns the vertical pan:
+  // the preview is scaled into the parent's scrollable container. Wheel
+  // gestures NEVER cross iframe boundaries, so without this relay every
+  // wheel over the page would hit the document's own few pixels of
+  // internal scroll and then stick to an edge - the "sticky" feel that
+  // did not happen when scrolling outside the page. Relay the pan to the
+  // parent instead; at 100% the iframe IS the canvas scroller and keeps
+  // its native behavior.
+  if(!editorZoomedOut)return;
+  e.preventDefault();
+  window.parent.postMessage({
+    type:'pan-wheel',
+    deltaX:e.deltaX,
+    deltaY:e.deltaY,
+    deltaMode:e.deltaMode||0
+  },'*');
 },{passive:false});
 
 createSelectionBox();
@@ -3017,6 +3108,22 @@ window.addEventListener('message',function(e){
           applied=true;
           undoStack.push({element:el,property:'backgroundImage',oldValue:oldBgImage,batchId:batchId});
           el.style.backgroundImage='none';
+        }
+      }
+      if(data.property==='borderWidth'){
+        // A non-zero border width is INVISIBLE while border-style stays
+        // 'none' (the CSS initial), so adding/raising a stroke would appear
+        // to do nothing on template elements. Force solid in the same
+        // message and record it for undo - mirrors the backgroundColor
+        // special case above.
+        var bwVal=parseFloat(data.value);
+        if(bwVal>0){
+          var curBS=getComputedStyle(el).borderStyle;
+          if(curBS==='none'||curBS==='hidden'){
+            applied=true;
+            undoStack.push({element:el,property:'borderStyle',oldValue:el.style.borderStyle,batchId:batchId});
+            el.style.borderStyle='solid';
+          }
         }
       }
       if(oldValue===data.value)continue; // no-op change - skip entirely
@@ -3278,6 +3385,25 @@ window.addEventListener('message',function(e){
     updatePageBreakMarkers();
     // Page-boundary dividers render only in inspect mode too.
     updateBoundaryMarkers();
+  }
+  if(data.type==='set-zoom'){
+    var z=Number(data.zoom);
+    if(isFinite(z)&&z>0){
+      var wasZoomedOut=editorZoomedOut;
+      editorZoomedOut=z<1;
+      var el=document.scrollingElement||document.documentElement;
+      if(editorZoomedOut){
+        // Enter pan-lock: remember where the user was (the reveal swaps the
+        // scroll geometry) and keep the document pinned there; the parent
+        // canvas does all the panning now.
+        if(el)lastInternalScrollTop=el.scrollTop||0;
+        lockInternalScroll();
+      }else if(wasZoomedOut){
+        // Back at 100%: restore the user's spot in the normal (one-screen)
+        // scroll geometry and hand scrolling back to the document.
+        if(el)el.scrollTop=lastInternalScrollTop;
+      }
+    }
   }
 });
 

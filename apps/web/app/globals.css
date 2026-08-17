@@ -11,6 +11,7 @@
   --animate-float-alt: landing-float-alt 7s ease-in-out infinite;
   --animate-dash-flow: landing-dash-flow 1.4s linear infinite;
   --animate-pulse-dot: landing-pulse-dot 2.6s ease-in-out infinite;
+  --animate-onboarding-fade-up: onboarding-fade-up 0.5s ease both;
 }
 
 @keyframes landing-float {
@@ -50,11 +51,24 @@
   }
 }
 
+/* Gentle fade-in used by the dashboard onboarding guide. */
+@keyframes onboarding-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-float,
   .animate-float-alt,
   .animate-dash-flow,
-  .animate-pulse-dot {
+  .animate-pulse-dot,
+  .animate-onboarding-fade-up {
     animation: none !important;
   }
 }
@@ -283,7 +297,7 @@
   --txt: #f5f5f5;
   --mut: #9ca3af;
   --red: #ef4444;
-  --green: #22c55e;
+  --green: #aef637;
 
   display: grid;
   grid-template-columns: 1fr 2fr;
