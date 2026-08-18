@@ -491,7 +491,11 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
           // when Puppeteer renders the page. Remove them for PDF output ONLY:
           // baking them into saved HTML would override the template's scroll
           // layout and make a reopened document unscrollable.
-          const htmlEl = clone.querySelector("html") as HTMLElement | null;
+          // The clone IS the <html> element (a clone of documentElement),
+          // and querySelector never matches its own context element — so
+          // clone.querySelector("html") always returned null and every
+          // htmlEl fix below was silently dead code. Use the clone itself.
+          const htmlEl = clone;
           const scrollEl = clone.querySelector(
             ".scroll-wrapper",
           ) as HTMLElement | null;

@@ -75,14 +75,33 @@ async function renderWithBrowserRun(
   binding: BrowserRunBinding,
   body: PdfGenerationOptions,
 ) {
+  // Parity with local dev (renderWithLocalChrome), which emulates SCREEN
+  // media and transparent-ifies the <html> root before printing:
+  //  - Browser Run PDFs default to PRINT media, which drops
+  //    @media-screen-only rules, repeats fixed-position chrome and
+  //    repaginates -> misaligned content that only shows in production.
+  //  - Template shells paint the root background (#161617 via
+  //    SYSTEM_RESET_CSS); Chromium paints the root background across the
+  //    ENTIRE PDF canvas on every page -> black pages. The quick action is
+  //    stateless (no page.evaluate), so the root is cleared via a CSS
+  //    override injected with addStyleTag instead.
+  const styleTags: { content: string }[] = [
+    {
+      content:
+        "html { background: transparent !important; overflow: visible !important; height: auto !important; }",
+    },
+  ];
+  if (body.css) styleTags.push({ content: body.css });
+
   const payload: Record<string, unknown> = {
     viewport: { width: 794, height: 1123 },
+    emulateMediaType: "screen",
+    addStyleTag: styleTags,
     pdfOptions: printOptions(body.options),
     gotoOptions: { waitUntil: "networkidle0" },
   };
   if (body.html) {
     payload.html = body.html;
-    if (body.css) payload.addStyleTag = [{ content: body.css }];
   } else if (body.url) {
     payload.url = body.url;
   }
