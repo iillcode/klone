@@ -67,12 +67,15 @@ export async function POST(request: NextRequest) {
     const browser = await getBrowser();
     const page = await browser.newPage();
 
-    // Set viewport to A4 width so layout is computed correctly.
-    // Puppeteer maps the viewport to the PDF printable area, so
-    // content laid out at 794px wide will map to the full A4 page.
+    // Set viewport to the EXACT A4 page size so layout is computed
+    // exactly as it will print (794 x 1123 px = 210 x 297 mm at 96 DPI).
+    // Puppeteer maps the viewport to the printable area, so content
+    // laid out at 794px wide fills the A4 width, and any vh/100%-height
+    // rule left in the template resolves to exactly ONE page — no
+    // oversized fragments that make the PDF hard to scroll.
     await page.setViewport({
       width: 794,
-      height: 1400,
+      height: 1123,
     });
 
     // Set content
@@ -93,13 +96,23 @@ export async function POST(request: NextRequest) {
     // instead of allowing print media rules to alter the document's appearance.
     await page.emulateMediaType("screen");
     await page.evaluate(async () => {
-      const bodyBackground = getComputedStyle(document.body).backgroundColor;
+      const rootStyle = document.documentElement.style;
+      const bodyStyle = document.body.style;
+      const bodyComputed = getComputedStyle(document.body).backgroundColor;
       if (
-        bodyBackground === "transparent" ||
-        bodyBackground === "rgba(0, 0, 0, 0)"
+        bodyComputed === "transparent" ||
+        bodyComputed === "rgba(0, 0, 0, 0)"
       ) {
-        document.body.style.backgroundColor = "rgb(30, 30, 30)";
+        bodyStyle.backgroundColor = "rgb(30, 30, 30)";
       }
+      // The html (root) background paints the ENTIRE print canvas —
+      // including every page-break gap — while the body box only covers
+      // the flow area. A coloured <html> (app shells commonly ship
+      // #161617) therefore shows up as dark strips around the page box
+      // on EVERY PDF page. Make the root transparent so the body
+      // background propagates to the canvas and all pages look uniform.
+      rootStyle.backgroundColor = "transparent";
+      rootStyle.background = "transparent";
 
       await document.fonts?.ready;
       await Promise.all(

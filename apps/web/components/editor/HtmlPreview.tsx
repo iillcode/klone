@@ -366,6 +366,13 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
           return null;
         }
 
+        // If a text edit is OPEN, the iframe hides the editing element
+        // (visibility:hidden) until set-text/cancel-edit arrives - a
+        // snapshot taken in that state would export/save the element with
+        // its text missing. Commit the in-progress edit first so the file
+        // always contains what the user typed.
+        commitTextEdit();
+
         // Let any pending editor messages (e.g. set-text restoring element
         // visibility) flush to the iframe before snapshotting the DOM.
         await new Promise((r) => setTimeout(r, 50));
@@ -518,6 +525,70 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
             }
             scrollEl.style.maxHeight = "none";
           }
+
+          // --- Page-canvas cleanup ---
+          // The document's own <html> rule often carries the app-shell
+          // background (#161617 in the default templates). In print,
+          // Chromium paints the ROOT element's background across the
+          // ENTIRE page canvas — so every area the body box does not
+          // cover (sheet margins, page-break gaps) shows that dark shell
+          // colour as ugly strips. Making <html> transparent lets the
+          // body background propagate to the canvas, so every PDF page
+          // is uniformly the document's own colour.
+          if (htmlEl) htmlEl.style.background = "transparent";
+          // Authored body margins (rare, but templates differ) leak the
+          // canvas colour and can spill content onto an extra sheet —
+          // for export the page box starts flush at the top.
+          if (bodyEl) bodyEl.style.margin = "0";
+
+          // User-template sheets (.klone-render-space) sit on the app
+          // canvas with a 40px margin + drop shadow. Both are editor
+          // chrome, not content: the margins push content down and can
+          // spill an almost-empty second page, and the shadow gets
+          // clipped at the page edges. Zero them for export so the PDF
+          // page IS the sheet.
+          if (scrollEl?.classList.contains("klone-render-space")) {
+            scrollEl.style.margin = "0";
+            scrollEl.style.boxShadow = "none";
+          }
+
+          // --- Chunk optimization ---
+          // Keep top-level content blocks intact across page breaks: a
+          // long document splits BETWEEN cards/sections, never through
+          // one, so each PDF page carries clean chunks that are easy to
+          // scroll through in a viewer. Blocks taller than a full page
+          // still get split (Chromium ignores break-inside when the
+          // block cannot fit on one page), so no content is ever lost.
+          const chunkRoot =
+            (scrollEl?.querySelector(
+              ":scope > .document-container",
+            ) as HTMLElement | null) ??
+            scrollEl ??
+            bodyEl;
+          if (chunkRoot) {
+            // Top-level blocks of every page region: the page boundaries
+            // themselves will become page breaks below, so they must stay
+            // breakable inside (their own children get chunked instead).
+            const avoidChunk = (el: HTMLElement) => {
+              el.style.breakInside = "avoid";
+              el.style.pageBreakInside = "avoid";
+            };
+            Array.from(chunkRoot.children).forEach((child) => {
+              const el = child as HTMLElement;
+              if (el.hasAttribute("data-editor-ui")) return;
+              if (el.hasAttribute("data-klone-page-boundary")) {
+                Array.from(el.children).forEach((gc) =>
+                  avoidChunk(gc as HTMLElement),
+                );
+                return;
+              }
+              avoidChunk(el);
+            });
+            // Widow/orphan control: never end a page on 1-2 stranded
+            // lines of a paragraph (keeps per-page chunks readable).
+            chunkRoot.style.orphans = "3";
+            chunkRoot.style.widows = "3";
+          }
           // querySelectorAll keeps document order, and the clone preserves it,
           // so clone[i] corresponds to live[i] for computed-style lookups.
           const liveSplitEls = Array.from(
@@ -577,7 +648,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
         // Serialize the full HTML document
         return "<!DOCTYPE html>\n" + clone.outerHTML;
       },
-      [],
+      [commitTextEdit],
     );
 
     useImperativeHandle(ref, () => ({
@@ -1058,10 +1129,14 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
                 borderRightWidth: editState.styles.borderRightWidth,
                 borderBottomWidth: editState.styles.borderBottomWidth,
                 borderLeftWidth: editState.styles.borderLeftWidth,
-                borderTopStyle: editState.styles.borderTopStyle,
-                borderRightStyle: editState.styles.borderRightStyle,
-                borderBottomStyle: editState.styles.borderBottomStyle,
-                borderLeftStyle: editState.styles.borderLeftStyle,
+                borderTopStyle: editState.styles
+                  .borderTopStyle as React.CSSProperties["borderTopStyle"],
+                borderRightStyle: editState.styles
+                  .borderRightStyle as React.CSSProperties["borderRightStyle"],
+                borderBottomStyle: editState.styles
+                  .borderBottomStyle as React.CSSProperties["borderBottomStyle"],
+                borderLeftStyle: editState.styles
+                  .borderLeftStyle as React.CSSProperties["borderLeftStyle"],
                 borderTopColor: editState.styles.borderTopColor,
                 borderRightColor: editState.styles.borderRightColor,
                 borderBottomColor: editState.styles.borderBottomColor,
