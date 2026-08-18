@@ -1,37 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
-import puppeteerCore, { type Browser } from "puppeteer-core";
 
-// Lazy-initialize browser instance
-let browser: Browser | null = null;
+/**
+ * PDF generation works in two completely separate modes:
+ *
+ * 1. PRODUCTION (Cloudflare Workers) → Cloudflare Browser Run. The route
+ *    grabs the `BROWSER` binding that OpenNext exposes on the Cloudflare
+ *    context and calls its `quickAction("pdf", ...)` endpoint. Nothing is
+ *    installed or bundled — the browser runs on Cloudflare's infrastructure.
+ *    IMPORTANT: puppeteer/chromium must NEVER be imported at the top level
+ *    here; OpenNext bundles the server with esbuild and a static
+ *    `import "puppeteer-core"` crashes the bundle (unresolvable bidi dynamic
+ *    imports) — and a local Chromium could not run in a Worker anyway.
+ *
+ * 2. LOCAL DEV (`next dev`, Node.js) → the system Chrome via puppeteer-core,
+ *    loaded through an INDIRECT dynamic import (non-literal specifier) so the
+ *    bundler cannot resolve it into the worker bundle, but the Node dev
+ *    runtime resolves it normally at request time.
+ */
 
-async function getBrowser(): Promise<Browser> {
-  if (browser && browser.connected) {
-    return browser;
-  }
+// Minimal shape of the Cloudflare Browser Run workers binding.
+type BrowserRunBinding = {
+  quickAction(action: string, options?: unknown): Promise<Response>;
+};
 
-  const isDev = process.env.NODE_ENV === "development";
-
-  if (isDev) {
-    // In development, use the system Chrome
-    browser = await puppeteerCore.launch({
-      headless: true,
-      executablePath:
-        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
-    });
-  } else {
-    // In production (Cloudflare Workers), use @sparticuz/chromium
-    const chromiumMod = await import("@sparticuz/chromium");
-    const chromium: any = chromiumMod.default || chromiumMod;
-    browser = await puppeteerCore.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    });
-  }
-
-  return browser;
+/** Reads the `BROWSER` binding from the Cloudflare context (workers only). */
+function getBrowserRunBinding(): BrowserRunBinding | null {
+  const ctx = (globalThis as Record<PropertyKey, unknown>)[
+    Symbol.for("__cloudflare-context__")
+  ] as { env?: { BROWSER?: BrowserRunBinding } } | undefined;
+  return ctx?.env?.BROWSER ?? null;
 }
 
 export interface PdfGenerationOptions {
@@ -52,48 +49,103 @@ export interface PdfGenerationOptions {
   };
 }
 
-export async function POST(request: NextRequest) {
+/** Shared print options for both engines. No PDF margins — the HTML handles
+ *  its own inner padding. Viewport is the EXACT A4 page (210x297mm at 96dpi)
+ *  so layout computes exactly as it will print and any leftover vh/100% rule
+ *  resolves to exactly ONE page. */
+function printOptions(options: PdfGenerationOptions["options"]) {
+  return {
+    format: "a4" as const,
+    landscape: options?.landscape || false,
+    printBackground: options?.printBackground ?? true,
+    scale: options?.scale || 1,
+    margin: {
+      top: options?.margin?.top || "0",
+      bottom: options?.margin?.bottom || "0",
+      left: options?.margin?.left || "0",
+      right: options?.margin?.right || "0",
+    },
+    preferCSSPageSize: false,
+  };
+}
+
+// ── Production: Cloudflare Browser Run (browser binding quick action) ──
+
+async function renderWithBrowserRun(
+  binding: BrowserRunBinding,
+  body: PdfGenerationOptions,
+) {
+  const payload: Record<string, unknown> = {
+    viewport: { width: 794, height: 1123 },
+    pdfOptions: printOptions(body.options),
+    gotoOptions: { waitUntil: "networkidle0" },
+  };
+  if (body.html) {
+    payload.html = body.html;
+    if (body.css) payload.addStyleTag = [{ content: body.css }];
+  } else if (body.url) {
+    payload.url = body.url;
+  }
+
+  const res = await binding.quickAction("pdf", payload);
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Browser Run PDF failed (${res.status}): ${errText}`);
+  }
+  return new Response(res.body, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": 'attachment; filename="document.pdf"',
+    },
+  });
+}
+
+// ── Local dev: system Chrome via puppeteer-core (Node runtime only) ──
+
+let devBrowser: {
+  connected: boolean;
+  newPage: () => Promise<any>;
+  close: () => Promise<void>;
+} | null = null;
+
+async function getDevBrowser() {
+  if (devBrowser && devBrowser.connected) return devBrowser;
+  // Indirect (NON-literal) specifier: keeps esbuild — which bundles the
+  // production Worker — from ever seeing/inlining puppeteer-core, while the
+  // local Node dev runtime still resolves the package normally.
+  const pkg = "puppeteer-core";
+  const puppeteer = (await import(/* webpackIgnore: true */ pkg)).default;
+  const launched = await puppeteer.launch({
+    headless: true,
+    executablePath:
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
+  });
+  devBrowser = launched;
+  return launched;
+}
+
+async function renderWithLocalChrome(body: PdfGenerationOptions) {
+  const browser = await getDevBrowser();
+  const page = await browser.newPage();
+
   try {
-    const body: PdfGenerationOptions = await request.json();
-    const { html, url, css, options } = body;
+    await page.setViewport({ width: 794, height: 1123 });
 
-    if (!html && !url) {
-      return NextResponse.json(
-        { error: "Either 'html' or 'url' must be provided" },
-        { status: 400 },
-      );
-    }
-
-    const browser = await getBrowser();
-    const page = await browser.newPage();
-
-    // Set viewport to the EXACT A4 page size so layout is computed
-    // exactly as it will print (794 x 1123 px = 210 x 297 mm at 96 DPI).
-    // Puppeteer maps the viewport to the printable area, so content
-    // laid out at 794px wide fills the A4 width, and any vh/100%-height
-    // rule left in the template resolves to exactly ONE page — no
-    // oversized fragments that make the PDF hard to scroll.
-    await page.setViewport({
-      width: 794,
-      height: 1123,
-    });
-
-    // Set content
-    if (html) {
-      // If custom CSS provided, inject it
-      let fullHtml = html;
-      if (css) {
-        const styleTag = `<style>${css}</style>`;
+    if (body.html) {
+      let fullHtml = body.html;
+      if (body.css) {
+        const styleTag = `<style>${body.css}</style>`;
         fullHtml = fullHtml.replace(/<head>/i, `<head>${styleTag}`);
       }
-
       await page.setContent(fullHtml, { waitUntil: "load" });
-    } else if (url) {
-      await page.goto(url, { waitUntil: "load" });
+    } else if (body.url) {
+      await page.goto(body.url, { waitUntil: "load" });
     }
 
-    // The export represents the editor preview, so retain screen-media styles
-    // instead of allowing print media rules to alter the document's appearance.
+    // The export represents the editor preview: keep screen-media styles
+    // instead of letting print rules alter the document's appearance.
     await page.emulateMediaType("screen");
     await page.evaluate(async () => {
       const rootStyle = document.documentElement.style;
@@ -105,12 +157,11 @@ export async function POST(request: NextRequest) {
       ) {
         bodyStyle.backgroundColor = "rgb(30, 30, 30)";
       }
-      // The html (root) background paints the ENTIRE print canvas —
-      // including every page-break gap — while the body box only covers
-      // the flow area. A coloured <html> (app shells commonly ship
-      // #161617) therefore shows up as dark strips around the page box
-      // on EVERY PDF page. Make the root transparent so the body
-      // background propagates to the canvas and all pages look uniform.
+      // The <html> root background paints the ENTIRE print canvas
+      // (including page-break gaps); a coloured root (app shells commonly
+      // ship #161617) shows as dark strips around the page box on EVERY
+      // PDF page. Make the root transparent so the body background
+      // propagates to the canvas and all pages look uniform.
       rootStyle.backgroundColor = "transparent";
       rootStyle.background = "transparent";
 
@@ -122,42 +173,52 @@ export async function POST(request: NextRequest) {
             (image) =>
               new Promise<void>((resolve) => {
                 image.addEventListener("load", () => resolve(), { once: true });
-                image.addEventListener("error", () => resolve(), { once: true });
+                image.addEventListener("error", () => resolve(), {
+                  once: true,
+                });
               }),
           ),
       );
     });
 
-    // No PDF margins — the HTML handles its own inner padding via the body.
-    const margin = {
-      top: options?.margin?.top || "0",
-      bottom: options?.margin?.bottom || "0",
-      left: options?.margin?.left || "0",
-      right: options?.margin?.right || "0",
-    };
-
-    const pdfOptions = {
-      format: "a4" as const,
-      landscape: options?.landscape || false,
-      printBackground: options?.printBackground ?? true,
-      scale: options?.scale || 1,
-      margin,
-      preferCSSPageSize: false,
-    };
-
-    // Generate PDF
-    const pdfBuffer = await page.pdf(pdfOptions);
-
-    // Close the page (but keep browser open for reuse)
-    await page.close();
-
-    // Return PDF as response
+    const pdfBuffer: Buffer = await page.pdf(printOptions(body.options));
     return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'attachment; filename="document.pdf"',
       },
     });
+  } finally {
+    await page.close();
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body: PdfGenerationOptions = await request.json();
+
+    if (!body.html && !body.url) {
+      return NextResponse.json(
+        { error: "Either 'html' or 'url' must be provided" },
+        { status: 400 },
+      );
+    }
+
+    // Production (Cloudflare Workers): Browser Run binding.
+    const binding = getBrowserRunBinding();
+    if (binding) {
+      return await renderWithBrowserRun(binding, body);
+    }
+
+    // Local dev (Node): system Chrome.
+    if (process.env.NODE_ENV === "development") {
+      return await renderWithLocalChrome(body);
+    }
+
+    return NextResponse.json(
+      { error: "PDF rendering is not configured (no BROWSER binding)" },
+      { status: 500 },
+    );
   } catch (error) {
     console.error("[PDF Generation Error]:", error);
     return NextResponse.json(
@@ -166,10 +227,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-// Cleanup browser on process exit
-process.on("exit", async () => {
-  if (browser) {
-    await browser.close();
-  }
-});
