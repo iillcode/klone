@@ -267,6 +267,25 @@
   }
 }
 
+/* ── Static buttons (global, app-wide) ──
+   Every system button renders state changes (hover, press, focus) as
+   INSTANT swaps — no transitions, no press-sink transforms. This rule
+   sits OUTSIDE all cascade layers, so it outranks every Tailwind
+   transition/transform utility any component may declare on a button
+   (transition-colors, transition-transform, duration-*, etc.), now and
+   in the future. Keyframe animations (e.g. the `animate-spin` loader on
+   "Saving…" buttons) are untouched — those signal work in progress. */
+button,
+a[role="button"],
+[role="button"] {
+  transition: none !important;
+}
+button *,
+a[role="button"] *,
+[role="button"] * {
+  transition: none !important;
+}
+
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }

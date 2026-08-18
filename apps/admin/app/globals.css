@@ -120,3 +120,20 @@
     @apply font-sans;
   }
 }
+
+/* ── Static buttons (global, app-wide) ──
+   Every system button renders state changes (hover, press, focus) as
+   INSTANT swaps — no transitions, no press-sink transforms. Sits outside
+   all cascade layers so it outranks every Tailwind transition/transform
+   utility on a button; keyframe animations (e.g. the Saving… spinner)
+   are untouched. */
+button,
+a[role="button"],
+[role="button"] {
+  transition: none !important;
+}
+button *,
+a[role="button"] *,
+[role="button"] * {
+  transition: none !important;
+}

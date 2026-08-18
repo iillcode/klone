@@ -20,21 +20,21 @@ export type PressVariant = "primary" | "dark" | "danger" | "ghost";
 export type PressSize = "xs" | "sm" | "md" | "lg";
 
 const pressBase =
-  "inline-flex cursor-pointer select-none items-center justify-center gap-2 border-none font-semibold transition-[transform,box-shadow,background-color,color] duration-[60ms] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#aef637] disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none";
+  "inline-flex cursor-pointer select-none items-center justify-center gap-2 border-none font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#52525b] disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none";
 
 const pressVariant: Record<PressVariant, string> = {
   // Lime face with a darker lime bottom edge.
   primary:
-    "bg-[#aef637] text-[#374151] hover:bg-[#9be22e] shadow-[0_4px_0_rgb(101,163,13),0_6px_10px_rgba(0,0,0,0.45)] active:translate-y-1 active:shadow-[0_0px_0_rgb(101,163,13),0_2px_4px_rgba(0,0,0,0.45)]",
+    "bg-[#aef637] text-[#374151] hover:bg-[#9be22e] shadow-[0_4px_0_rgb(101,163,13),0_6px_10px_rgba(0,0,0,0.45)]",
   // Raised charcoal face with a near-black bottom edge.
   dark:
-    "bg-[#262628] text-[#ededed] hover:bg-[#313133] shadow-[0_4px_0_#0a0a0b,0_6px_10px_rgba(0,0,0,0.4)] active:translate-y-1 active:shadow-[0_0px_0_#0a0a0b,0_2px_4px_rgba(0,0,0,0.4)]",
+    "bg-[#262628] text-[#ededed] hover:bg-[#313133] shadow-[0_4px_0_#0a0a0b,0_6px_10px_rgba(0,0,0,0.4)]",
   // Raised red face with a dark red bottom edge.
   danger:
-    "bg-[#dc2626] text-white hover:bg-[#ef4444] shadow-[0_4px_0_#7f1d1d,0_6px_10px_rgba(0,0,0,0.45)] active:translate-y-1 active:shadow-[0_0px_0_#7f1d1d,0_2px_4px_rgba(0,0,0,0.45)]",
+    "bg-[#dc2626] text-white hover:bg-[#ef4444] shadow-[0_4px_0_#7f1d1d,0_6px_10px_rgba(0,0,0,0.45)]",
   // Flat — for low-emphasis toolbar affordances (no edge).
   ghost:
-    "bg-transparent text-[#a1a1aa] hover:bg-[#2a2a2a] hover:text-[#e4e4e7] active:translate-y-px",
+    "bg-transparent text-[#a1a1aa] hover:bg-[#2a2a2a] hover:text-[#e4e4e7]",
 };
 
 const pressSize: Record<PressSize, string> = {

@@ -7,7 +7,7 @@ export function getEditorScript(): string {
   // will show an older version. Hard-refresh the page to reload it.
   if(window.__kloneEditorInjected)return; // never double-bind listeners
   window.__kloneEditorInjected=true;
-  console.log('[editor] script v36');
+  console.log('[editor] script v46');
 // ── Global pointer-events reset ──
 // Templates routinely ship 'pointer-events:none' on decorative/wrapper
 // elements, and CSS pointer-events INHERITS - without an override every
@@ -45,10 +45,33 @@ var undoStack=[];
 var redoStack=[];
 var inspectEnabled=false;
 var pendingEditEl=null;
+// True while the open text edit targets a MIXED-content element (own
+// direct text + child elements, e.g. <h1>Nexus<span>API</span></h1>):
+// committing replaces only the element's OWN text nodes so its child
+// elements survive (replacing textContent would wipe them out).
+var pendingEditMixed=false;
+// The exact own text node under edit while pendingEditMixed is true.
+var pendingEditTextNode=null;
 var editReqId=0;
+// Per-child visibility overrides applied when a mixed-content edit
+// starts (children get re-shown above the hidden parent); recorded so
+// they can be restored exactly on commit/cancel/abort.
+var pendingEditChildVis=[];
+function restoreEditChildVis(){
+  for(var evi=0;evi<pendingEditChildVis.length;evi++){
+    pendingEditChildVis[evi].el.style.visibility=pendingEditChildVis[evi].old;
+  }
+  pendingEditChildVis=[];
+}
 var isMoving=false;
 var moveDeltas=[];
 var selBoxEl=null;
+// Timestamp until which the selection box stays HIDDEN. When the user
+// makes ANY property-panel edit (fill, color, opacity, dimensions,
+// typography, stroke...) the purple selection highlight briefly covers the
+// result, so every applied style change hides the box for 1.5 seconds
+// (the overlay-pin loop re-checks this each frame and restores it after).
+var selBoxHiddenUntil=0;
 var isResizing=false;
 var resizeHandle='';
 var resizeStartX=0;
@@ -529,9 +552,16 @@ function removePageBoundary(boundary,record,sharedBatchId){
       hadSelection=true;
     }
   }
-  // A text edit in progress on this page must be abandoned too.
+  // A text edit in progress on this page must be abandoned too (restore
+  // child visibility overrides first, so an undo of the page delete
+  // brings the subtree back with clean inline styles).
   if(pendingEditEl&&boundary.contains(pendingEditEl)){
+    restoreEditChildVis();
+    pendingEditEl.style.visibility='';
     pendingEditEl=null;
+    pendingEditMixed=false;
+    pendingEditTextNode=null;
+    pendingEditChildVis.length=0;
     editReqId=0;
   }
   // Elements that were moved OFF this page leave origin-space placeholders
@@ -1136,7 +1166,7 @@ function layerName(el,tag){
   // A meaningful class name (first non-system) disambiguates identical layers.
   var cls='';
   if(typeof el.className==='string'&&el.className){
-    var parts=el.className.trim().split(/\s+/);
+    var parts=el.className.trim().split(/\\s+/);
     for(var i=0;i<parts.length;i++){
       var c=parts[i];
       if(!c||c.indexOf('klone-')===0)continue;
@@ -1147,7 +1177,7 @@ function layerName(el,tag){
   var name=cls?(base+' · '+cls):base;
   // Leaf text layers get a content snippet, Figma-style.
   if((!el.children||el.children.length===0)&&el.textContent){
-    var txt=el.textContent.replace(/\s+/g,' ').trim();
+    var txt=el.textContent.replace(/\\s+/g,' ').trim();
     if(txt){
       if(txt.length>26)txt=txt.slice(0,26)+'…';
       name=name+' · "'+txt+'"';
@@ -1643,7 +1673,15 @@ function fireSelected(){
         borderBottomWidth:s.borderBottomWidth,
         borderLeftWidth:s.borderLeftWidth,
         borderColor:s.borderColor,
+        borderTopColor:s.borderTopColor,
+        borderRightColor:s.borderRightColor,
+        borderBottomColor:s.borderBottomColor,
+        borderLeftColor:s.borderLeftColor,
         borderStyle:s.borderStyle,
+        borderTopStyle:s.borderTopStyle,
+        borderRightStyle:s.borderRightStyle,
+        borderBottomStyle:s.borderBottomStyle,
+        borderLeftStyle:s.borderLeftStyle,
         transform:s.transform
       }
     });
@@ -1683,7 +1721,7 @@ function deleteSelected(){
 
 function getTranslate(el){
   var t=el.style.transform||'';
-  var m=t.match(/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/);
+  var m=t.match(/translate\\((-?[\\d.]+)px,\\s*(-?[\\d.]+)px\\)/);
   if(m)return[parseFloat(m[1]),parseFloat(m[2])];
   // The inline transform may be authored differently or normalized by the
   // browser (translateX/translateY, matrix(), matrix3d()). Fall back to the
@@ -1692,7 +1730,7 @@ function getTranslate(el){
   // its original position.
   var cs=el.ownerDocument?getComputedStyle(el).transform:'none';
   if(cs&&cs!=='none'){
-    var mm=cs.match(/matrix3d\(([^)]+)\)/)||cs.match(/matrix\(([^)]+)\)/);
+    var mm=cs.match(/matrix3d\\(([^)]+)\\)/)||cs.match(/matrix\\(([^)]+)\\)/);
     if(mm){
       var parts=mm[1].split(',').map(parseFloat);
       if(parts.length>=6){
@@ -1808,7 +1846,11 @@ function ensureSystemFrame(){
   // real viewport to scroll within. The frame itself is click-through and
   // does NOT clip: the .scroll-wrapper is the scroll container, so a tall
   // user page scrolls to its bottom instead of being cut off.
-  frame.style.cssText='width:100%;max-width:100%;height:100%;margin:0 auto;overflow:visible;';
+  // NO max-width:100% here — the frame must always hug the FIXED page-sheet
+  // width so the template never shrinks or squeezes when the browser canvas
+  // gets narrower than the page. (A 100% cap clamped the frame to the canvas
+  // while the inner page kept its 794px width, visibly crushing the layout.)
+  frame.style.cssText='width:100%;height:100%;margin:0 auto;overflow:visible;';
   parent.insertBefore(frame,wrap);
   frame.appendChild(wrap);
   syncSystemFrameSize();
@@ -2233,6 +2275,14 @@ function updateSelectionBox(){
     selBoxEl.style.display='none';
     return;
   }
+  // Temporary suppression (e.g. 1.5s after a stroke change so the highlight
+  // doesn't cover the fresh border). Checked every frame by the pin loop,
+  // so the box comes back automatically once the window expires.
+  if(selBoxHiddenUntil&&Date.now()<selBoxHiddenUntil){
+    selBoxEl.style.display='none';
+    return;
+  }
+  selBoxHiddenUntil=0;
   var el=selectedEls[0];
   // A detached element (undo/redo racing a layout pass) has no box to track.
   if(!el.isConnected){
@@ -2261,6 +2311,10 @@ function overlayPinFrame(){
 
 document.addEventListener('mouseover',function(e){
   if((!inspectEnabled&&!splitMode)||isDragging)return;
+  // While a text edit is in progress the edited element is hidden under
+  // the parent's overlay - no hover highlighter should light up anywhere
+  // on the page until the edit is committed/cancelled.
+  if(pendingEditEl)return;
   var el=e.target;
   if(!el||!el.tagName)return;
   if(el.getAttribute&&el.getAttribute('data-editor-ui'))return;
@@ -2387,43 +2441,159 @@ document.addEventListener('click',function(e){
   removePageBoundary(page,true);
 });
 
+// ── Mixed-content text editing ──
+// Elements can combine their OWN direct text with child elements (e.g.
+// <h1>Nexus<span>API</span></h1>). Historically double-click editing was
+// leaf-only because a commit that replaces textContent would wipe out the
+// children. These helpers let the edit target exactly the OWN text
+// SEGMENT under the cursor; the commit then replaces only that text node
+// and the child elements survive.
+function ownTextNodes(el){
+  var out=[];
+  for(var i=0;i<el.childNodes.length;i++){
+    if(el.childNodes[i].nodeType===3)out.push(el.childNodes[i]);
+  }
+  return out;
+}
+function ownTextTrim(t){return t.replace(/\\s+/g,' ').trim();}
+function textNodeAtPoint(el,x,y){
+  var nodes=ownTextNodes(el);
+  var best=null,bestD=Infinity;
+  for(var i=0;i<nodes.length;i++){
+    if(!ownTextTrim(nodes[i].textContent))continue;
+    var range=document.createRange();
+    range.selectNodeContents(nodes[i]);
+    var rects=range.getClientRects();
+    for(var j=0;j<rects.length;j++){
+      var rc=rects[j];
+      if(rc.width<=0&&rc.height<=0)continue;
+      if(x>=rc.left-2&&x<=rc.right+2&&y>=rc.top-2&&y<=rc.bottom+2)return nodes[i];
+      var dx=x<rc.left?rc.left-x:(x>rc.right?x-rc.right:0);
+      var dy=y<rc.top?rc.top-y:(y>rc.bottom?y-rc.bottom:0);
+      var d=dx*dx+dy*dy;
+      if(d<bestD){bestD=d;best=nodes[i];}
+    }
+  }
+  return best;
+}
+function textRectOf(node){
+  var range=document.createRange();
+  range.selectNodeContents(node);
+  var rects=range.getClientRects();
+  var l=Infinity,t=Infinity,r2=-Infinity,b2=-Infinity;
+  for(var i=0;i<rects.length;i++){
+    var rc=rects[i];
+    if(rc.width<=0||rc.height<=0)continue;
+    if(rc.left<l)l=rc.left;
+    if(rc.top<t)t=rc.top;
+    if(rc.right>r2)r2=rc.right;
+    if(rc.bottom>b2)b2=rc.bottom;
+  }
+  if(l===Infinity)return null;
+  return {left:l,top:t,width:r2-l,height:b2-t};
+}
+
 document.addEventListener('dblclick',function(e){
   if(!inspectEnabled||isDragging)return;
   var el=e.target;
   if(!el||!isClickable(el))return;
-  // Text editing is only allowed on a SINGLE element with NO child
-  // elements (leaf nodes). Containers like body/div/table/ul - anything
-  // holding other elements - cannot be text-edited: replacing their text
-  // would wipe out their children.
+  // Text editing needs a SINGLE selection.
   if(selectedEls.length>1)return;
-  if(el.children&&el.children.length>0)return;
+  // Pure containers (body/div/table/ul - only child elements, no own
+  // text) stay locked. MIXED elements (own direct text + child elements,
+  // e.g. <h1>Nexus<span>API</span></h1>) edit ONLY their own text
+  // segment: the commit touches only the element's own text nodes, never
+  // its children (a textContent replace would wipe them out).
+  var ownNodes=ownTextNodes(el);
+  var mixed=!!(el.children&&el.children.length>0);
+  if(mixed&&ownNodes.every(function(n){return !ownTextTrim(n.textContent);}))return;
+  // If this element already has a LIVE text-edit overlay, a second
+  // double-click inside it (e.g. on a sibling span of a mixed element)
+  // must NOT restart/re-drop anything: the blur-commit path owns the
+  // lifecycle of the open edit, so bail out and let it complete.
+  if(pendingEditEl&&(e.target===pendingEditEl||pendingEditEl.contains(e.target)))return;
   e.preventDefault();
   deselect();
+  // No hover highlighter stays visible while the edit overlay is open.
+  clearHover();
   window.parent.postMessage({type:'selection-cleared'},'*');
+  // Mixed-content edit: pick the OWN text segment under the cursor (the
+  // closest one wins); that segment is the only editable part - child
+  // elements stay intact. Leaf edits behave as before (whole content).
+  var editNode=null,editRect=null;
+  if(mixed){
+    editNode=textNodeAtPoint(el,e.clientX,e.clientY);
+    if(!editNode)editNode=(function(){for(var on=0;on<ownNodes.length;on++){if(ownTextTrim(ownNodes[on].textContent))return ownNodes[on];}return null;})();
+    if(!editNode)return;
+    editRect=textRectOf(editNode);
+  }
   var s=getComputedStyle(el);
-  var r=el.getBoundingClientRect();
+  var r=(mixed&&editRect)?editRect:el.getBoundingClientRect();
   editReqId++;
   pendingEditEl=el;
+  pendingEditMixed=mixed&&!!editNode;
+  pendingEditTextNode=editNode;
   // Hide the element so the parent's edit overlay doesn't show a
-  // duplicated copy of the text underneath it.
-  el.style.visibility='hidden';
+  // duplicated copy of the text underneath it. For a MIXED edit only the
+  // OWN text disappears; the child elements are explicitly re-shown on
+  // top so the document keeps looking exactly as it does otherwise.
+  if(mixed){
+    el.style.visibility='hidden';
+    for(var vi=0;vi<el.children.length;vi++){
+      var ch=el.children[vi];
+      pendingEditChildVis.push({el:ch,old:ch.style.visibility||''});
+      ch.style.visibility='visible';
+    }
+  }else{
+    el.style.visibility='hidden';
+  }
+  // WYSIWYG: the parent renders the edit text with the element's own
+  // white-space rule. Authored HTML usually carries indentation/newlines
+  // that white-space:normal collapses when rendered; sending that raw text
+  // to the edit box makes it wrap differently (wider/taller) than the
+  // document shows. Normalize to the RENDERED content whenever the element
+  // collapses whitespace, so the edit box matches the document exactly.
+  // NOTE: this file is a template literal - regex escapes must be doubled
+  // (\\s) so the INJECTED script receives /s+/ → /\s+/.
+  var rawText=(mixed&&editNode)?editNode.textContent:el.textContent;
+  if(s.whiteSpace==='normal'||s.whiteSpace==='nowrap'){
+    rawText=rawText.replace(/\\s+/g,' ').trim();
+  }
   window.parent.postMessage({
     type:'edit-text-request',
     reqId:editReqId,
-    text:el.textContent,
+    text:rawText,
     tag:el.tagName.toLowerCase(),
     rect:{left:r.left,top:r.top,width:r.width,height:r.height},
     styles:{
       fontFamily:s.fontFamily,
       fontSize:s.fontSize,
       fontWeight:s.fontWeight,
+      fontStyle:s.fontStyle,
       lineHeight:s.lineHeight,
+      letterSpacing:s.letterSpacing,
+      wordSpacing:s.wordSpacing,
+      textTransform:s.textTransform,
+      textIndent:s.textIndent,
+      whiteSpace:s.whiteSpace,
       color:s.color,
       textAlign:s.textAlign,
       paddingTop:s.paddingTop,
       paddingRight:s.paddingRight,
       paddingBottom:s.paddingBottom,
       paddingLeft:s.paddingLeft,
+      borderTopWidth:s.borderTopWidth,
+      borderRightWidth:s.borderRightWidth,
+      borderBottomWidth:s.borderBottomWidth,
+      borderLeftWidth:s.borderLeftWidth,
+      borderTopStyle:s.borderTopStyle,
+      borderRightStyle:s.borderRightStyle,
+      borderBottomStyle:s.borderBottomStyle,
+      borderLeftStyle:s.borderLeftStyle,
+      borderTopColor:s.borderTopColor,
+      borderRightColor:s.borderRightColor,
+      borderBottomColor:s.borderBottomColor,
+      borderLeftColor:s.borderLeftColor,
       backgroundColor:s.backgroundColor
     }
   },'*');
@@ -3110,19 +3280,29 @@ window.addEventListener('message',function(e){
           el.style.backgroundImage='none';
         }
       }
-      if(data.property==='borderWidth'){
+      if(data.property==='borderWidth'||/^border(Top|Right|Bottom|Left)Width$/.test(data.property)){
         // A non-zero border width is INVISIBLE while border-style stays
         // 'none' (the CSS initial), so adding/raising a stroke would appear
-        // to do nothing on template elements. Force solid in the same
-        // message and record it for undo - mirrors the backgroundColor
-        // special case above.
+        // to do nothing on template elements. Force solid (ALL sides for the
+        // uniform write, only the matching side for per-side writes) in the
+        // same message and record it for undo - mirrors the backgroundColor
+        // special case above. A one-sided stroke therefore stays one-sided.
         var bwVal=parseFloat(data.value);
         if(bwVal>0){
-          var curBS=getComputedStyle(el).borderStyle;
-          if(curBS==='none'||curBS==='hidden'){
+          var perSide=data.property!=='borderWidth';
+          var styleProp=perSide?data.property.replace('Width','Style'):'borderStyle';
+          var curSideStyle=perSide?getComputedStyle(el)[styleProp]:getComputedStyle(el).borderStyle;
+          var needsSolid=(curSideStyle==='none'||curSideStyle==='hidden');
+          if(needsSolid){
             applied=true;
-            undoStack.push({element:el,property:'borderStyle',oldValue:el.style.borderStyle,batchId:batchId});
-            el.style.borderStyle='solid';
+            // Snapshot the style actually being changed so undo restores it
+            // exactly (uniform -> borderStyle; per-side -> borderTopStyle…).
+            undoStack.push({element:el,property:styleProp,oldValue:(perSide?(el.style[styleProp]||''):(el.style.borderStyle||'')),batchId:batchId});
+            if(perSide){
+              el.style[styleProp]='solid';
+            }else{
+              el.style.borderStyle='solid';
+            }
           }
         }
       }
@@ -3134,7 +3314,23 @@ window.addEventListener('message',function(e){
     if(!applied)return; // nothing actually changed - don't touch redoStack
     redoStack=[];
     var s=getComputedStyle(selectedEls[selectedEls.length-1]);
-    window.parent.postMessage({type:'style-updated',property:data.property,value:formatStyleValue(data.property,s[data.property])},'*');
+    // Echo the APPLIED value for border widths. The preview sheet renders
+    // scaled, so getComputedStyle returns rescaled px (9px authored ->
+    // ~8.3px computed) and echoing the computed value would make the panel
+    // Weight field visibly drift away from what the user typed. The value
+    // we just set is always the correct echo for widths.
+    var isBorderWidthProp=data.property==='borderWidth'||/^border(Top|Right|Bottom|Left)Width$/.test(data.property);
+    var echoValue=isBorderWidthProp?data.value:formatStyleValue(data.property,s[data.property]);
+    window.parent.postMessage({type:'style-updated',property:data.property,value:echoValue},'*');
+    // ANY property-panel edit (fill, color, opacity, dimensions, typography,
+    // corner radius, stroke, ...): hide the purple selection highlight for
+    // 1.5 seconds so the user sees the result of the change clearly, then it
+    // returns on its own (the overlay-pin loop re-enables it when the window
+    // expires). Rapid successive edits keep extending the window, so the box
+    // stays out of the way while the user is actively adjusting a control.
+    // (Pointer-driven drags/resizes/nudges are NOT suppressed - the selection
+    // box is the drag affordance itself and must remain visible.)
+    selBoxHiddenUntil=Date.now()+1500;
     updateSelectionBox();
   }
 
@@ -3190,16 +3386,34 @@ window.addEventListener('message',function(e){
   if(data.type==='set-text'){
     if(!pendingEditEl||data.reqId!==editReqId)return;
     var el=pendingEditEl;
+    var wasMixed=pendingEditMixed;
+    var node=pendingEditTextNode;
     pendingEditEl=null;
+    pendingEditMixed=false;
+    pendingEditTextNode=null;
     el.style.visibility='';
-    var oldHtml=el.innerHTML;
+    restoreEditChildVis();
     var newText=(data.text==null)?'':String(data.text);
-    if(newText!==el.textContent){
-      batchId++;
-      undoStack.push({element:el,property:'__text__',oldValue:oldHtml,batchId:batchId});
-      redoStack=[];
-      el.textContent=newText;
-      window.parent.postMessage({type:'style-updated',property:'textContent',value:newText},'*');
+    if(wasMixed&&node&&node.parentNode===el){
+      // Mixed-content edit: replace ONLY the edited own text node so the
+      // element's children survive the commit.
+      var oldOwn=node.textContent;
+      if(newText!==oldOwn){
+        batchId++;
+        undoStack.push({element:el,property:'__text__',oldValue:el.innerHTML,batchId:batchId});
+        redoStack=[];
+        node.textContent=newText;
+        window.parent.postMessage({type:'style-updated',property:'textContent',value:el.textContent},'*');
+      }
+    }else{
+      var oldHtml=el.innerHTML;
+      if(newText!==el.textContent){
+        batchId++;
+        undoStack.push({element:el,property:'__text__',oldValue:oldHtml,batchId:batchId});
+        redoStack=[];
+        el.textContent=newText;
+        window.parent.postMessage({type:'style-updated',property:'textContent',value:newText},'*');
+      }
     }
     selectedEls=[el];
     fireSelected();
@@ -3209,7 +3423,10 @@ window.addEventListener('message',function(e){
     if(pendingEditEl&&data.reqId===editReqId){
       var ce=pendingEditEl;
       pendingEditEl=null;
+      pendingEditMixed=false;
+      pendingEditTextNode=null;
       ce.style.visibility='';
+      restoreEditChildVis();
       selectedEls=[ce];
       fireSelected();
     }
@@ -3373,6 +3590,9 @@ window.addEventListener('message',function(e){
     inspectEnabled=data.enabled;
     if(!inspectEnabled){
       if(pendingEditEl)pendingEditEl.style.visibility='';
+      pendingEditMixed=false;
+      pendingEditTextNode=null;
+      restoreEditChildVis();
       pendingEditEl=null;
       editReqId=0;
       // The delete-confirm chip is inspect-mode UI - never leave it armed.

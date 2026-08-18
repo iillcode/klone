@@ -212,6 +212,34 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
     // into the reveal and grow it forever.
     const [revealHeight, setRevealHeight] = useState<number | null>(null);
 
+    // ── Fixed page WIDTH ──
+    // User-authored templates render a FIXED-width A4 sheet
+    // (.klone-render-space, width:794px). The iframe's layout box normally
+    // equals the canvas width, so whenever the canvas is NARROWER than the
+    // page (responsive screen widths, sidebars open in inspect mode) the
+    // page overflows the iframe's own <html> (overflow-x:auto) and the
+    // preview becomes horizontally scrollable — and zooming out then only
+    // scales the visible left part instead of showing the full page.
+    // Fix: never let the preview box be narrower than the page sheet. The
+    // box gets `min-width: pageWidth` and stays horizontally centered via
+    // translateX(-50%) + the existing scale-around-top-center transform, so
+    // the iframe document is always as wide as the page (no internal
+    // scrollbar) and the whole page fits when zoomed out.
+    const [pageWidth, setPageWidth] = useState<number | null>(null);
+    const updatePageWidth = useCallback(() => {
+      const doc = iframeRef.current?.contentDocument;
+      if (!doc) return;
+      const wrap = doc.querySelector<HTMLElement>(".scroll-wrapper");
+      // Only the fixed A4 sheet needs this; the default shell's width
+      // follows the canvas and never overflows.
+      if (!wrap || !wrap.classList.contains("klone-render-space")) {
+        setPageWidth((prev) => (prev === null ? prev : null));
+        return;
+      }
+      const w = Math.ceil(wrap.getBoundingClientRect().width);
+      if (w > 0) setPageWidth((prev) => (prev === w ? prev : w));
+    }, []);
+
     // ── Text edit overlay: the editor lives HERE (parent document), so
     // focus is stable and the sandboxed iframe never fights for it. The
     // iframe only reports the element rect + computed styles and applies
@@ -798,6 +826,21 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       }
     }, [editState]);
 
+    // WYSIWYG sizing: the edit box starts at the element's exact size
+    // (locked width, min-height = element height). As the user types, it
+    // grows downward to fit the draft instead of clipping it, matching
+    // what the document will show after commit. Re-measure on every draft
+    // change so the overlay never renders smaller or wider than the text.
+    useLayoutEffect(() => {
+      if (!editState) return;
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.style.height = "auto";
+      const min = editState.rect.height;
+      const next = Math.max(min, ta.scrollHeight);
+      ta.style.height = `${next}px`;
+    }, [draft, editState]);
+
     // Forward inspect mode to the iframe so it can gate hover/selection behavior
     useEffect(() => {
       iframeRef.current?.contentWindow?.postMessage(
@@ -862,10 +905,26 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       if (!zoomedOut || typeof ResizeObserver === "undefined") return;
       const iframe = iframeRef.current;
       if (!iframe) return;
-      const obs = new ResizeObserver(() => updateRevealHeight());
+      const obs = new ResizeObserver(updateRevealHeight);
       obs.observe(iframe);
       return () => obs.disconnect();
     }, [zoomedOut, updateRevealHeight]);
+
+    // ── Page-width tracking (every zoom level) ──
+    // The preview box must never be narrower than the fixed A4 sheet,
+    // otherwise the iframe document grows its own horizontal scrollbar.
+    // Measure once at mount, then keep it current on window resizes and on
+    // document switches (the iframe's box tracks the reveal value, so a
+    // ResizeObserver also covers the zoomed-out reflow).
+    useLayoutEffect(() => {
+      updatePageWidth();
+      const id = window.setInterval(updatePageWidth, 300);
+      window.addEventListener("resize", updatePageWidth);
+      return () => {
+        window.clearInterval(id);
+        window.removeEventListener("resize", updatePageWidth);
+      };
+    }, [updatePageWidth]);
 
     const srcDoc = html
       ? injectEditorScript(normalizeTemplateHtml(html))
@@ -899,16 +958,33 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
       >
         <div
           className="relative w-full"
-          style={
-            zoom < 1 && revealHeight
-              ? {
-                  height: revealHeight,
-                  transform: `scale(${zoom})`,
-                  transformOrigin: "top center",
-                  willChange: "transform",
-                }
-              : { width: "100%", height: "100%" }
-          }
+          style={(() => {
+            const base: React.CSSProperties =
+              zoom < 1 && revealHeight
+                ? { height: revealHeight }
+                : { width: "100%", height: "100%" };
+            if (pageWidth) {
+              // Never let the preview box be narrower than the FIXED page
+              // sheet (see `pageWidth` above), at ANY zoom: the iframe
+              // document then always fits the whole page, so the preview is
+              // never horizontally scrollable — zooming out reveals the full
+              // width, and at 100% on a narrow canvas the page is simply
+              // cropped at the canvas edges (overflow-x-hidden container).
+              // `left:50%` + `translateX(-50%)` keep the (possibly oversized)
+              // box horizontally centered; when the canvas is wider than the
+              // page the box equals 100% and the pair is a no-op.
+              base.minWidth = pageWidth;
+              base.left = "50%";
+              base.transform = `translateX(-50%) scale(${zoom})`;
+              base.transformOrigin = "top center";
+              base.willChange = "transform";
+            } else if (zoom < 1) {
+              base.transform = `scale(${zoom})`;
+              base.transformOrigin = "top center";
+              base.willChange = "transform";
+            }
+            return base;
+          })()}
         >
           <iframe
             ref={iframeRef}
@@ -931,6 +1007,9 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
                 { type: "set-zoom", zoom },
                 "*",
               );
+              // Re-measure the page width on reload (doc switch) so the
+              // zoomed-out box matches the new document immediately.
+              updatePageWidth();
             }}
           />
           {editState && (
@@ -940,7 +1019,7 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
               left: editState.rect.left,
               top: editState.rect.top,
               width: editState.rect.width,
-              height: editState.rect.height,
+              minHeight: editState.rect.height,
             }}
           >
             <textarea
@@ -950,13 +1029,24 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
               onKeyDown={handleEditKeyDown}
               onBlur={commitTextEdit}
               spellCheck={false}
-              className="w-full h-full resize-none outline-none rounded-none border-0 shadow-none"
+              className="w-full resize-none outline-none rounded-none border-0 shadow-none"
               style={{
                 boxSizing: "border-box",
+                display: "block",
                 fontFamily: editState.styles.fontFamily,
                 fontSize: editState.styles.fontSize,
                 fontWeight: editState.styles.fontWeight,
+                fontStyle: editState.styles.fontStyle,
                 lineHeight: editState.styles.lineHeight,
+                letterSpacing: editState.styles.letterSpacing,
+                wordSpacing: editState.styles.wordSpacing,
+                textTransform: editState.styles
+                  .textTransform as React.CSSProperties["textTransform"],
+                textIndent: editState.styles.textIndent,
+                // Match the element's authored white-space rule so the text
+                // wraps EXACTLY like the document (normal collapses source
+                // whitespace; pre/pre-wrap keeps line breaks visible).
+                whiteSpace: editState.styles.whiteSpace as React.CSSProperties["whiteSpace"],
                 color: editState.styles.color,
                 textAlign: editState.styles
                   .textAlign as React.CSSProperties["textAlign"],
@@ -964,9 +1054,20 @@ export const HtmlPreview = forwardRef<HtmlPreviewHandle, HtmlPreviewProps>(
                 paddingRight: editState.styles.paddingRight,
                 paddingBottom: editState.styles.paddingBottom,
                 paddingLeft: editState.styles.paddingLeft,
+                borderTopWidth: editState.styles.borderTopWidth,
+                borderRightWidth: editState.styles.borderRightWidth,
+                borderBottomWidth: editState.styles.borderBottomWidth,
+                borderLeftWidth: editState.styles.borderLeftWidth,
+                borderTopStyle: editState.styles.borderTopStyle,
+                borderRightStyle: editState.styles.borderRightStyle,
+                borderBottomStyle: editState.styles.borderBottomStyle,
+                borderLeftStyle: editState.styles.borderLeftStyle,
+                borderTopColor: editState.styles.borderTopColor,
+                borderRightColor: editState.styles.borderRightColor,
+                borderBottomColor: editState.styles.borderBottomColor,
+                borderLeftColor: editState.styles.borderLeftColor,
                 backgroundColor: hasBg ? bg : "transparent",
                 overflow: "hidden",
-                whiteSpace: "pre-wrap",
               }}
             />
             </div>

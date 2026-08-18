@@ -86,8 +86,12 @@ export function PreviewEditor({
   // appears. Layout size is unchanged, so no horizontal scrollbars can
   // ever appear.
   const [zoom, setZoom] = useState(1);
+  // 100% is the MAXIMUM zoom: the document is authored at its native size
+  // and zooming in past that only enlarges pixels without adding detail.
+  // Every zoom path (buttons, Ctrl/⌘ + / - / 0, wheel zoom) funnels through
+  // clampZoom, so this single bound covers the whole canvas.
   const clampZoom = useCallback(
-    (z: number) => Math.min(2, Math.max(0.25, Math.round(z * 100) / 100)),
+    (z: number) => Math.min(1, Math.max(0.25, Math.round(z * 100) / 100)),
     [],
   );
   const zoomBy = useCallback(
@@ -168,10 +172,16 @@ export function PreviewEditor({
     setIsEditing(editing);
   }, []);
 
-  // Expand shorthand properties (padding, margin) into sub-properties that the toolbar reads
+  // Expand shorthand properties (padding, margin, borders) into the
+  // sub-properties the property sections actually read. IMPORTANT: this must
+  // be a PURE function of (property, value, currentStyles) — callers run from
+  // zero-dependency useCallbacks, so reading stale component state here would
+  // silently apply outdated expansions.
+  const BORDER_SIDES = ["Top", "Right", "Bottom", "Left"] as const;
   function expandStyleProps(
     property: string,
     value: string,
+    styles: Record<string, string>,
   ): Record<string, string> {
     if (property === "padding") {
       return {
@@ -196,37 +206,113 @@ export function PreviewEditor({
       // image (backgroundImage) so the sidebar stays in sync immediately.
       return { backgroundColor: value, backgroundImage: "none" };
     }
-    if (property === "borderWidth") {
-      // Mirror the iframe: setting a non-zero border width force-solidifies a
-      // 'none' border-style so the stroke is visible — but only when the
-      // border is currently invisible, never clobbering dashed/groove/etc.
-      const w = parseFloat(value);
-      const cur = selectedElements[0]?.styles?.borderStyle;
-      if (w > 0 && (!cur || cur === "none" || cur === "hidden")) {
-        return { borderWidth: value, borderStyle: "solid" };
-      }
-      return { borderWidth: value };
-    }
-    return { [property]: value };
+    // ---- Borders ----
+    // The StrokeSection derives color / style / weight from the PER-SIDE
+    // values (borderTopWidth…, borderTopColor…), so every border-related write
+    // must be decomposed into per-side properties. Without that the section
+    // keeps showing stale per-side values and only refreshes on the next
+    // selection — the "changes appear only after leaving the panel" bug.
+  //
+  // Values flow two ways: user clicks send single values ('1px', 'solid',
+  // '#ff0000'); the iframe round-trip sends COMPUTED styles, which serialize
+  // as CSS shorthand when sides differ ("none none solid", "2px 0px").
+  // splitShorthand() expands both shapes to exactly four sides. (Colors may
+  // contain parens/spaces — "rgb(37, 99, 235)" — so split only on
+  // whitespace that is NOT inside parentheses.)
+  function splitShorthand(value: string): [string, string, string, string] {
+    const parts = value.trim().split(/\s+(?![^(]*\))/);
+    if (parts.length === 1) return [parts[0], parts[0], parts[0], parts[0]];
+    if (parts.length === 2) return [parts[0], parts[1], parts[0], parts[1]];
+    if (parts.length === 3) return [parts[0], parts[1], parts[2], parts[1]];
+    return [parts[0], parts[1], parts[2], parts[3]];
   }
+  const isNoneStyle = (v: string | undefined) =>
+    !v || v === "none" || v === "hidden" || v.includes("none");
+
+  if (
+    property === "borderWidth" ||
+    property === "borderColor" ||
+    property === "borderStyle"
+  ) {
+    const suffix = property.slice(6); // "Width" | "Color" | "Style"
+    const [t, r, b, l] = splitShorthand(value);
+    const vals = [t, r, b, l];
+    const updates: Record<string, string> = { [property]: value };
+    BORDER_SIDES.forEach((side, i) => {
+      updates[`border${side}${suffix}`] = vals[i];
+    });
+    // Mirror the iframe: a non-zero border width is INVISIBLE while its
+    // side's style is still 'none'/'hidden' (the CSS initial), so when the
+    // element currently has NO visible styles at all, force every side
+    // solid (exactly like the iframe's uniform-borderWidth special case;
+    // elements that already have a genuine partial stroke are untouched).
+    if (property === "borderWidth") {
+      const anyPositive = vals.some((v) => parseFloat(v) > 0);
+      if (anyPositive) {
+        const allNone = BORDER_SIDES.every((side) => {
+          const cs = styles[`border${side}Style`] ?? styles.borderStyle;
+          return isNoneStyle(cs);
+        });
+        if (allNone) {
+          updates.borderStyle = "solid";
+          for (const side of BORDER_SIDES) {
+            updates[`border${side}Style`] = "solid";
+          }
+        }
+      }
+    }
+    return updates;
+  }
+  // Per-side width (T/R/B/L fields in the panel): set just that side and,
+  // mirroring the iframe, force that side solid when it's currently none.
+  const perSideMatch = property.match(/^border(Top|Right|Bottom|Left)Width$/);
+  if (perSideMatch) {
+    const side = perSideMatch[1];
+    const updates: Record<string, string> = { [property]: value };
+    if (parseFloat(value) > 0) {
+      const cs = styles[`border${side}Style`];
+      if (isNoneStyle(cs)) updates[`border${side}Style`] = "solid";
+    }
+    return updates;
+  }
+  return { [property]: value };
+}
 
   // Any canvas mutation (apply-style, text edit, undo, redo) marks the doc
-  // as unsaved so the user knows to hit Save.
-  const handleStyleUpdated = useCallback((property: string, value: string) => {
-    setDirty(true);
-    const updates = expandStyleProps(property, value);
-    setSelectedElements((prev) =>
-      prev.map((el) => ({ ...el, styles: { ...el.styles, ...updates } })),
-    );
-  }, []);
+  // as unsaved so the user knows to hit Save. Updates are computed from the
+  // latest element styles (inside the functional setState) so they reflect
+  // the real current stroke/border state, not a stale closure.
+  const handleStyleUpdated = useCallback(
+    (property: string, value: string) => {
+      setDirty(true);
+      setSelectedElements((prev) =>
+        prev.map((el) => ({
+          ...el,
+          styles: {
+            ...el.styles,
+            ...expandStyleProps(property, value, el.styles),
+          },
+        })),
+      );
+    },
+    [],
+  );
 
-  const handleApplyStyle = useCallback((property: string, value: string) => {
-    previewRef.current?.applyStyleMulti(property, value);
-    const updates = expandStyleProps(property, value);
-    setSelectedElements((prev) =>
-      prev.map((el) => ({ ...el, styles: { ...el.styles, ...updates } })),
-    );
-  }, []);
+  const handleApplyStyle = useCallback(
+    (property: string, value: string) => {
+      previewRef.current?.applyStyleMulti(property, value);
+      setSelectedElements((prev) =>
+        prev.map((el) => ({
+          ...el,
+          styles: {
+            ...el.styles,
+            ...expandStyleProps(property, value, el.styles),
+          },
+        })),
+      );
+    },
+    [],
+  );
 
   const handleDelete = useCallback(() => {
     previewRef.current?.deleteMulti();
@@ -602,8 +688,9 @@ export function PreviewEditor({
             </button>
             <button
               onClick={() => zoomBy(1.2)}
-              title="Zoom in (Ctrl++)"
-              className="w-7 h-10 flex items-center justify-center text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2a2a2a] transition-colors rounded-r-xl"
+              disabled={zoom >= 1}
+              title={zoom >= 1 ? "100% is the maximum zoom" : "Zoom in (Ctrl++)"}
+              className="w-7 h-10 flex items-center justify-center text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2a2a2a] transition-colors rounded-r-xl disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             >
               <PlusIcon />
             </button>

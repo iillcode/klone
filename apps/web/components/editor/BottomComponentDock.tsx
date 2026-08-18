@@ -5,9 +5,14 @@ import { SearchIcon, PlusIcon, ComponentsIcon } from "./icons/toolbar-icons";
 
 import type { ComponentGroup } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
-import { pressClasses } from "@/components/ui/Button";
 
 /* ─── Bottom dock: "Insert component" tool + grouped template library ── */
+
+/** Simple static face for the two dock buttons — same 3D dark look as
+ *  pressClasses("dark") but with NO transition and NO press-sink animation:
+ *  hover is an instant color swap and clicking never moves the button. */
+const dockBtn =
+  "inline-flex cursor-pointer select-none items-center justify-center gap-2 border-none font-semibold bg-[#262628] text-[#ededed] hover:bg-[#313133] shadow-[0_4px_0_#0a0a0b,0_6px_10px_rgba(0,0,0,0.4)] rounded-[8px] px-3 py-1.5 text-[12.5px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#52525b]";
 
 interface BottomComponentDockProps {
   /** Grouped template components loaded from the document's own template. */
@@ -235,8 +240,10 @@ export function BottomComponentDock({
               : "No components in this template"
           }
           className={cn(
-            open ? pressClasses("primary", "sm") : pressClasses("dark", "sm"),
-            "disabled:cursor-not-allowed",
+            dockBtn,
+            // Subtle pressed-state cue instead of the lime face.
+            open && "bg-[#313133]",
+            "disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none",
           )}
         >
           <ComponentsIcon className="w-[19px] h-[19px]" />
@@ -248,9 +255,9 @@ export function BottomComponentDock({
         <button
           onClick={onAddPage}
           title="Add page"
-          className={pressClasses("dark", "sm")}
+          className={dockBtn}
         >
-          <PlusIcon className="w-[19px] h-[19px] text-[#aef637]" />
+          <PlusIcon className="w-[19px] h-[19px]" />
           <span className="text-[13px] font-medium">Add page</span>
           {pageCount > 1 && (
             <span className="text-[10px] text-[#71717a] font-mono ml-0.5">

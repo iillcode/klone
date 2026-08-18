@@ -6,6 +6,10 @@ import {
   updateDocumentContent,
 } from "@/lib/data/documents";
 import { getTemplateBySlug } from "@/lib/data/templates-db";
+import {
+  recordGeneration,
+  recordGenerationForDocument,
+} from "@/lib/data/generations";
 
 export type CreateDocumentResult = { id: string } | { error: string };
 export type SaveDocumentResult = { ok: true } | { error: string };
@@ -53,6 +57,10 @@ export async function saveDocumentContent(
     return { error: "Could not save document." };
   }
 
+  // Record this save as a snapshot in the `generations` table. A failed
+  // snapshot is logged but never blocks the save itself.
+  void recordGenerationForDocument(docId, html);
+
   return { ok: true };
 }
 
@@ -96,6 +104,14 @@ export async function createDocumentFromHtml(
   if (!doc) {
     return { error: "Could not create document." };
   }
+
+  // Record this initial save as a snapshot in the `generations` table.
+  void recordGeneration({
+    document_id: doc.id,
+    template_id: doc.template_id,
+    title: doc.title,
+    html_code: html,
+  });
 
   return { id: doc.id };
 }
