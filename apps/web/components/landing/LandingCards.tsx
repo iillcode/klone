@@ -154,7 +154,7 @@ function DocumentCard({
     <div
       className={`group relative overflow-hidden rounded-xl border bg-[#1a1a1a] ${
         selected
-          ? "border-[#aef637]"
+          ? "border-[#8b5cf6]"
           : "border-[#262626] hover:border-[#3d3d3d]"
       }`}
     >
@@ -274,7 +274,7 @@ function TemplateCard({
       disabled={creating}
       className={`group relative block overflow-hidden rounded-xl border bg-[#1a1a1a] text-left disabled:cursor-wait disabled:opacity-70 ${
         selected
-          ? "border-[#aef637]"
+          ? "border-[#8b5cf6]"
           : "border-[#262626] hover:border-[#3d3d3d]"
       }`}
     >
