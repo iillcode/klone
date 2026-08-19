@@ -173,7 +173,7 @@ export function Sidebar({
       <div className="flex-none border-t border-[#2d2d2d]/60 p-2">
         <button
           onClick={() => setSettingsOpen(true)}
-          className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[#1c1c1c]"
+          className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors"
         >
           <span className="relative grid h-8 w-8 flex-none place-items-center rounded-full bg-[#16245a] text-[11px] font-bold text-[#8fb3ff] ring-1 ring-[#2d2d2d]">
             {initials}
