@@ -2,9 +2,21 @@ import { createServerClient as createSupabaseServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
+ * API routes that must be reachable WITHOUT a session (webhooks, public
+ * checkout, etc). These are called by external services or anonymous visitors,
+ * so the middleware must not require auth for them.
+ */
+const PUBLIC_API_PATHS = [
+  "/api/checkout",
+];
+
+/**
  * Protected paths that require authentication.
  */
 export function isProtectedPath(pathname: string): boolean {
+  if (PUBLIC_API_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+    return false;
+  }
   return (
     pathname === "/" ||
     pathname.startsWith("/preview/") ||

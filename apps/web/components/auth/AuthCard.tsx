@@ -281,6 +281,15 @@ export function AuthCard({ mode, urlError }: AuthCardProps) {
       </div>
 
       <form action={handleFormAction} onSubmit={handleSubmit} noValidate>
+        <input
+          type="hidden"
+          name="redirect"
+          value={
+            typeof window !== "undefined"
+              ? new URLSearchParams(window.location.search).get("redirect") ?? ""
+              : ""
+          }
+        />
         {mode === "signup" && (
           <div className="mb-4">
             <TextField

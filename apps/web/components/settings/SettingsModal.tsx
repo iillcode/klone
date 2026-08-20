@@ -8,7 +8,7 @@ import { useTheme } from "@/components/ui/theme-provider";
 import {
   Check,
   CreditCard,
-  Download,
+  ExternalLink,
   Gem,
   Loader2,
   Lock,
@@ -25,7 +25,7 @@ import { pressClasses } from "@/components/ui/Button";
 // Types + nav config
 // ---------------------------------------------------------------------------
 
-type SectionId = "profile" | "security" | "billing" | "appearance";
+type SectionId = "profile" | "security" | "payments" | "appearance";
 
 interface SettingsModalProps {
   open: boolean;
@@ -36,7 +36,7 @@ interface SettingsModalProps {
 const ACCOUNT_NAV: { id: SectionId; label: string; icon: typeof User }[] = [
   { id: "profile", label: "Profile", icon: User },
   { id: "security", label: "Security", icon: Shield },
-  { id: "billing", label: "Billing", icon: CreditCard },
+  { id: "payments", label: "Payments", icon: CreditCard },
 ];
 
 const PREF_NAV: { id: SectionId; label: string; icon: typeof Monitor }[] = [
@@ -401,104 +401,215 @@ function SecuritySection({ profile }: { profile: UserProfile | null }) {
   );
 }
 
-function BillingSection({ profile }: { profile: UserProfile | null }) {
-  const plan = profile?.plan === "pro" ? "Pro" : "Hobby";
-  const credits = profile?.credits_balance ?? 0;
-  const creditPct = Math.min(100, Math.round((credits / 20) * 100));
+interface PaymentRow {
+  id: string;
+  created_at: string;
+  description: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  provider: string | null;
+  provider_reference: string | null;
+  subscription_id: string | null;
+  active: boolean;
+}
+
+function PaymentsSection({ profile }: { profile: UserProfile | null }) {
+  const [rows, setRows] = useState<PaymentRow[] | null>(null);
+  const [dodoCustomerId, setDodoCustomerId] = useState<string | null>(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(
+    null,
+  );
+  const [activePaymentId, setActivePaymentId] = useState<string | null>(null);
+  const [portalLoginUrl, setPortalLoginUrl] = useState<string | null>(null);
+  const [portalOpening, setPortalOpening] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/payments", { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Failed to load payments");
+        if (!cancelled) {
+          setRows(json.payments ?? []);
+          setDodoCustomerId(json.dodoCustomerId ?? null);
+          setSubscriptionStatus(json.subscriptionStatus ?? null);
+          setActivePaymentId(json.activePaymentId ?? null);
+          setPortalLoginUrl(json.portalLoginUrl ?? null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setLoadError(e instanceof Error ? e.message : "Failed to load");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Open the Dodo customer portal. If we have a Dodo customer id, request a
+  // dynamic session (drops the user straight in, no email re-entry);
+  // otherwise fall back to the static email-based login link.
+  const openPortal = async () => {
+    if (portalOpening) return;
+    setPortalOpening(true);
+    try {
+      if (dodoCustomerId) {
+        const res = await fetch("/api/billing-portal", {
+          method: "POST",
+          cache: "no-store",
+        });
+        const json = await res.json();
+        if (res.ok && json.url) {
+          window.open(json.url, "_blank", "noreferrer");
+          return;
+        }
+        // Fall through to static link on any error (e.g. no_customer).
+      }
+      if (portalLoginUrl) {
+        window.open(portalLoginUrl, "_blank", "noreferrer");
+      }
+    } finally {
+      setPortalOpening(false);
+    }
+  };
+
+  const hasActiveSub = subscriptionStatus === "active";
+  const isCancelled =
+    subscriptionStatus === "cancelled" || subscriptionStatus === "expired";
+  const isProOrActive = profile?.plan === "pro" || hasActiveSub;
 
   return (
-    <div id="settings-billing" className="space-y-3">
-      <SecTitle h="Billing" p="Plan, usage and invoices." />
-      <Panel>
-        <Prow>
-          <RowText
-            b={
-              <>
-                {plan}{" "}
-                <span className={stBlue} style={{ marginLeft: 6 }}>
-                  {plan === "Pro" ? "Active" : "Free"}
-                </span>
-              </>
-            }
-            span="Monthly usage resets on the 1st."
-          />
-          <button className={cn(btnPrimary, btnSm)} type="button">
-            <Gem className="h-3.5 w-3.5" /> Upgrade
-          </button>
-        </Prow>
-        <Prow block>
-          <div className="grid gap-3.5">
-            <div>
-              <div className="flex justify-between text-[12.5px] text-[#a3a3a3]">
-                <span>AI credits</span>
-                <b className="text-[#f5f5f5]">{credits} / 20</b>
-              </div>
-              <div className="mt-[7px] h-1.5 overflow-hidden rounded-full bg-[#242424]">
-                <i
-                  className="block h-full rounded-full bg-gradient-to-r from-[#9be22e] to-[#aef637]"
-                  style={{ width: `${creditPct}%` }}
-                />
-              </div>
-            </div>
+    <div id="settings-payments" className="space-y-3">
+      <SecTitle h="Payments" p="Transactions and your billing portal." />
+
+      {isProOrActive ? (
+        <Panel>
+          <div className="flex items-center justify-between gap-4 px-5 py-[15px]">
+            <RowText
+              b="Dodo Payments portal"
+              span={
+                isCancelled
+                  ? "Your plan is cancelled — you keep Pro until the period ends, then revert to Hobby."
+                  : "Manage your subscription, update payment methods and download invoices."
+              }
+            />
+            {portalLoginUrl || dodoCustomerId ? (
+              <button
+                className={cn(btnPrimary, btnSm)}
+                type="button"
+                onClick={openPortal}
+                disabled={portalOpening}
+              >
+                {portalOpening ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ExternalLink className="h-3.5 w-3.5" />
+                )}
+                Manage billing
+              </button>
+            ) : (
+              <span className="text-[12.5px] text-[#a3a3a3]">
+                Portal not configured
+              </span>
+            )}
           </div>
-        </Prow>
-      </Panel>
+        </Panel>
+      ) : (
+        <Panel>
+          <div className="flex items-center justify-between gap-4 px-5 py-[15px]">
+            <RowText
+              b="No active subscription"
+              span="Upgrade to Klone Pro to unlock the billing portal."
+            />
+            <button
+              className={cn(btnPrimary, btnSm)}
+              type="button"
+              onClick={() => (window.location.href = "/pricing")}
+            >
+              <Gem className="h-3.5 w-3.5" /> Upgrade
+            </button>
+          </div>
+        </Panel>
+      )}
 
       <Panel>
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
-            <thead>
-              <tr className="text-left text-[11.5px] font-semibold uppercase tracking-wider text-[#6f6f6f]">
-                <th className="border-b border-b-[#1f1f1f] px-5 py-2.5">
-                  Invoice
-                </th>
-                <th className="border-b border-b-[#1f1f1f] px-5 py-2.5">
-                  Date
-                </th>
-                <th className="border-b border-b-[#1f1f1f] px-5 py-2.5">
-                  Amount
-                </th>
-                <th className="border-b border-b-[#1f1f1f] px-5 py-2.5">
-                  Status
-                </th>
-                <th className="border-b border-b-[#1f1f1f] px-5 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                ["#2026-007", "Jul 1, 2026", "$0.00", "Paid"],
-                ["#2026-006", "Jun 1, 2026", "$0.00", "Paid"],
-                ["#2026-005", "May 1, 2026", "$12.00", "Due"],
-              ].map(([id, date, amount, status]) => (
-                <tr
-                  key={id}
-                  className="[&+&>td]:border-t [&>td]:border-t-[#1f1f1f]"
-                >
-                  <td className="px-5 py-3 font-mono text-[12.5px] text-[#f5f5f5]">
-                    {id}
-                  </td>
-                  <td className="px-5 py-3 text-[#a3a3a3]">{date}</td>
-                  <td className="px-5 py-3 text-[#a3a3a3]">{amount}</td>
-                  <td className="px-5 py-3">
-                    {status === "Paid" ? (
-                      <span className={stGreen}>{status}</span>
-                    ) : (
-                      <span className={stYellow}>{status}</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <button
-                      className="text-[#a3a3a3] transition-colors hover:text-[#f5f5f5]"
-                      type="button"
-                      aria-label={`Download ${id}`}
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
+          {loadError && (
+            <p className="px-5 py-4 text-[12.5px] text-[#f87171]">
+              {loadError}
+            </p>
+          )}
+          {!loadError && rows === null && (
+            <div className="flex items-center gap-2 px-5 py-6 text-[12.5px] text-[#a3a3a3]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading payments…
+            </div>
+          )}
+          {!loadError && rows !== null && rows.length === 0 && (
+            <p className="px-5 py-6 text-[12.5px] text-[#a3a3a3]">
+              No payment records yet.
+            </p>
+          )}
+          {!loadError && rows !== null && rows.length > 0 && (
+            <table className="w-full border-collapse text-[13px]">
+              <thead>
+                <tr className="text-left text-[11.5px] font-semibold uppercase tracking-wider text-[#6f6f6f]">
+                  <th className="border-b border-b-[#1f1f1f] px-5 py-2.5">
+                    Date
+                  </th>
+                  <th className="border-b border-b-[#1f1f1f] px-5 py-2.5">
+                    Description
+                  </th>
+                  <th className="border-b border-b-[#1f1f1f] px-5 py-2.5">
+                    Amount
+                  </th>
+                  <th className="border-b border-b-[#1f1f1f] px-5 py-2.5">
+                    Status
+                  </th>
+                  <th className="border-b border-b-[#1f1f1f] px-5 py-2.5" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="[&+&>td]:border-t [&>td]:border-t-[#1f1f1f]"
+                  >
+                    <td className="whitespace-nowrap px-5 py-3 text-[#a3a3a3]">
+                      {new Date(r.created_at).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </td>
+                    <td className="px-5 py-3 text-[#f5f5f5]">
+                      {r.description ?? "Klone Pro"}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3 text-[#a3a3a3]">
+                      {r.currency} {r.amount.toFixed(2)}
+                    </td>
+                    <td className="px-5 py-3">
+                      {r.status === "succeeded" || r.status === "paid" ? (
+                        <span className={stGreen}>Paid</span>
+                      ) : (
+                        <span className={stYellow}>{r.status}</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      {r.id === activePaymentId ? (
+                        <span className={stBlue}>Active</span>
+                      ) : r.subscription_id && !r.active ? (
+                        <span className={stYellow}>Cancelled</span>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </Panel>
     </div>
@@ -721,7 +832,7 @@ export function SettingsModal({ open, onClose, profile }: SettingsModalProps) {
 
             {section === "profile" && <ProfileSection profile={profile} />}
             {section === "security" && <SecuritySection profile={profile} />}
-            {section === "billing" && <BillingSection profile={profile} />}
+            {section === "payments" && <PaymentsSection profile={profile} />}
             {section === "appearance" && <AppearanceSection />}
           </div>
         </main>

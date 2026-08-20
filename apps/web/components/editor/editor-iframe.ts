@@ -7,7 +7,7 @@ export function getEditorScript(): string {
   // will show an older version. Hard-refresh the page to reload it.
   if(window.__kloneEditorInjected)return; // never double-bind listeners
   window.__kloneEditorInjected=true;
-  console.log('[editor] script v46');
+  console.log('[editor] script v51');
 // ── Global pointer-events reset ──
 // Templates routinely ship 'pointer-events:none' on decorative/wrapper
 // elements, and CSS pointer-events INHERITS - without an override every
@@ -291,6 +291,15 @@ function insertClipboardNode(container,afterEl){
     for(var k=0;k<kids.length;k++)kids[k].style.pointerEvents='auto';
     undoStack.push({property:'__page_boundary__',element:node,adding:true,nextSibling:afterEl?afterEl.nextSibling:null,parentNode:container,batchId:batchId});
     redoStack=[];
+    // A pasted page grows the container (wherever it lands) - pin any
+    // bottom-anchored elements that drift, in the same paste batch.
+    var anchored=captureBottomAnchored(container,node);
+    if(afterEl&&afterEl.parentNode)container.insertBefore(node,afterEl.nextSibling);
+    else container.appendChild(node);
+    if(anchored.length>0)applyBottomAnchoredPin(anchored,batchId);
+    // Zoom-out reveal: same async-cascade story for a pasted page.
+    schedulePinRecheck(batchId,anchored);
+    return node;
   }else{
     undoStack.push({property:'__component__',element:node,adding:true,nextSibling:afterEl?afterEl.nextSibling:null,parentNode:container,batchId:batchId});
     redoStack=[];
@@ -373,6 +382,122 @@ function pageBoundaryCss(){
   return 'display:block;position:relative;width:100%;min-height:'+getPageHeightPx()+'px;margin:0;padding:0;border:0;pointer-events:none;';
 }
 
+// ── Bottom-anchored element pinning on page-count changes ──
+// Template elements anchored via a bottom offset (e.g. position:absolute;
+// bottom:20mm) sit against the BOTTOM edge of their containing block.
+// Adding/removing a page boundary grows/shrinks the container by a page,
+// which silently drags those elements down to (or up off) the new page
+// edge. Snapshot the rect (and inline translate) of every bottom-anchored
+// element on the FIRST page BEFORE the change, then pin each one back in
+// place with a compensating translate afterwards. The pin is recorded in
+// the SAME undo batch as the boundary change, so one undo reverses both.
+// Nested elements whose ancestor was already pinned get delta 0 (the
+// ancestor's transform carries them), so they stay untouched.
+function captureBottomAnchored(container,excludeRoot){
+  var list=[];
+  // Capture the WHOLE document, not just page 1: a boundary can be
+  // inserted anywhere (paste of a copied page), growing whatever container
+  // it lands in. The later delta check makes the pin a no-op for every
+  // element that did not actually move, so this is both simpler and safer
+  // for arbitrary template structures.
+  var all=document.querySelectorAll('*');
+  for(var i=0;i<all.length;i++){
+    var el=all[i];
+    if(excludeRoot&&(el===excludeRoot||excludeRoot.contains(el)))continue;
+    if(isPageBoundary(el))continue;
+    // Never touch editor chrome (selection box, marquee, guides, markers)
+    // or system placeholders - only template content gets pinned.
+    if(el.getAttribute&&el.getAttribute('data-editor-ui'))continue;
+    if(isPagePlaceholder(el))continue;
+    var cs=getComputedStyle(el);
+    if(cs.position!=='absolute')continue; // fixed rides the viewport, never shifts
+    if(cs.bottom==='auto')continue; // only bottom-anchored elements drift
+    list.push({el:el,rect:el.getBoundingClientRect(),tr:el.style.transform||''});
+  }
+  return list;
+}
+function applyBottomAnchoredPin(list,bid){
+  var pinnedAncestors=[];
+  // Capture order is document order (querySelectorAll), so ancestors are
+  // pinned before descendants - a child of a pinned element already moves
+  // with its ancestor and must be skipped, or it would be compensated twice.
+  for(var i=0;i<list.length;i++){
+    var it=list[i];
+    if(!it.el.isConnected)continue;
+    var carried=false;
+    for(var pa=0;pa<pinnedAncestors.length;pa++){
+      if(pinnedAncestors[pa].contains(it.el)){carried=true;break;}
+    }
+    if(carried)continue;
+    var r=it.el.getBoundingClientRect();
+    var dx=r.left-it.rect.left;
+    var dy=r.top-it.rect.top;
+    if(!dx&&!dy)continue; // nothing moved (or layout unaffected)
+    if(bid>0){
+      undoStack.push({element:it.el,property:'transform',oldValue:it.tr,batchId:bid});
+    }
+    var nx=Math.round(-dx*100)/100;
+    var ny=Math.round(-dy*100)/100;
+    // Merge the correction into the leading translate() when one exists,
+    // otherwise PREPEND one. Prepending composes correctly in front of ANY
+    // template-authored transform (rotate/scale/matrix): the shift is
+    // applied in page space regardless of what follows, and nothing is
+    // ever lost.
+    var tr=it.tr||'';
+    var lead=tr.match(/^translate\\(\\s*(-?[\\d.]+)px\\s*,\\s*(-?[\\d.]+)px\\s*\\)/);
+    if(lead){
+      var mx=Math.round((parseFloat(lead[1])+nx)*100)/100;
+      var my=Math.round((parseFloat(lead[2])+ny)*100)/100;
+      it.el.style.transform='translate('+mx+'px,'+my+'px)'+tr.slice(lead[0].length);
+    }else{
+      it.el.style.transform='translate('+nx+'px,'+ny+'px)'+(tr?' '+tr:'');
+    }
+    pinnedAncestors.push(it.el);
+  }
+}
+
+// ── Deferred pin recheck (zoom-out reveal cascade) ──
+// While zoomed out (<100%), the parent grows the iframe's layout box to the
+// full document height ASYNCHRONOUSLY (doc-height postMessage -> React state
+// -> CSS cascade -> iframe box resizes), and the reveal height even ticks
+// repeatedly while settling. The synchronous pin therefore sees delta 0
+// right after a boundary append (the containing block has not resized yet),
+// and the bottom-anchored element drops once the cascade lands. Re-run pin
+// passes on every iframe resize until the layout has been quiet for 600ms,
+// recording late corrections in the SAME undo batch as the boundary op, so
+// one undo still reverses everything. When the layout has already settled,
+// every delta is 0 and these passes are no-ops.
+var pendingPinBid=0;
+var pendingPinTimer=null;
+var pendingPinList=null; // the BEFORE-op snapshot, reused on every settling step
+function schedulePinRecheck(bid,list){
+  if(!bid||!list||list.length===0)return;
+  pendingPinBid=bid;
+  pendingPinList=list;
+  if(pendingPinTimer)clearTimeout(pendingPinTimer);
+  pendingPinTimer=setTimeout(finalizePinRecheck,600);
+}
+// One settling step: compensate drift measured against the ORIGINAL pre-op
+// snapshot (a fresh capture here would always measure delta 0 against
+// itself), then keep watching - the cascade may still be growing. The pin
+// is idempotent on the same snapshot: an already-compensated element has
+// zero drift and is skipped.
+function stepPinRecheck(){
+  if(!pendingPinBid||!pendingPinList)return;
+  applyBottomAnchoredPin(pendingPinList,pendingPinBid);
+  if(pendingPinTimer){
+    clearTimeout(pendingPinTimer);
+    pendingPinTimer=setTimeout(finalizePinRecheck,600);
+  }
+}
+// The layout has been quiet long enough - every further drift would be
+// user-driven, so stop pinning for this batch.
+function finalizePinRecheck(){
+  pendingPinBid=0;
+  pendingPinList=null;
+  if(pendingPinTimer){clearTimeout(pendingPinTimer);pendingPinTimer=null;}
+}
+
 // Append a new empty page (a page-sized container) at the end of the doc.
 // autoMoveDropped: when the user drags an element to the bottom and THEN
 // adds the page, any element from that drag whose centre now sits inside
@@ -385,6 +510,11 @@ function addPageBoundary(record,sharedBatchId,autoMoveDropped){
   var b=document.createElement('div');
   b.setAttribute('data-klone-page-boundary','');
   b.style.cssText=pageBoundaryCss();
+  // Bottom-anchored (position:absolute; bottom:..) elements on the first
+  // page ride the container's bottom edge - snapshot them BEFORE the page
+  // grows the container, and pin them back afterwards. Same undo batch as
+  // the boundary itself.
+  var anchored=record?captureBottomAnchored(container,null):[];
   var bid=0;
   if(record){
     bid=sharedBatchId||++batchId;
@@ -392,6 +522,10 @@ function addPageBoundary(record,sharedBatchId,autoMoveDropped){
     redoStack=[];
   }
   container.appendChild(b);
+  if(anchored.length>0)applyBottomAnchoredPin(anchored,bid);
+  // Zoom-out reveal: the parent grows the iframe box asynchronously, so the
+  // definitive recheck runs once that cascade settles (same undo batch).
+  schedulePinRecheck(bid,anchored);
   // Freshly dragged elements that ended up at/below the new page's top
   // edge are moved onto it, preserving their exact visual drop position.
   if(autoMoveDropped&&lastDragMoveEls.length>0){
@@ -568,12 +702,21 @@ function removePageBoundary(boundary,record,sharedBatchId){
   // on their old pages - free them too (their content is gone now). Kept
   // on the undo entry so undoing the page delete restores them.
   var removedPlaceholders=removePlaceholdersFor(boundary);
+  // Removing a page SHRINKS the container - bottom-anchored elements on
+  // the first page would shift up, so snapshot and re-pin them (same undo
+  // batch as the boundary removal). Content on the page being deleted is
+  // excluded: it disappears with the boundary.
+  var container=getContentContainer();
+  var anchored=record&&container?captureBottomAnchored(container,boundary):[];
   if(record){
     var bid=sharedBatchId||++batchId;
     undoStack.push({property:'__page_boundary__',element:boundary,adding:false,nextSibling:boundary.nextSibling,parentNode:parent,placeholders:removedPlaceholders,batchId:bid});
     redoStack=[];
   }
   boundary.remove();
+  if(anchored.length>0)applyBottomAnchoredPin(anchored,bid);
+  // Zoom-out reveal: the box shrink also lands asynchronously - recheck.
+  schedulePinRecheck(bid,anchored);
   if(hadSelection){
     if(selectedEls.length===0){
       if(selBoxEl)selBoxEl.style.display='none';
@@ -3234,7 +3377,7 @@ if(__kloneAuthoredBgEl){
   document.body.__kloneAuthoredBg=(__kloneComputedBg&&__kloneComputedBg!=='transparent'&&__kloneComputedBg!=='rgba(0, 0, 0, 0)')?__kloneComputedBg:'';
   document.body.style.setProperty('background-color','#161617','important');
 }
-window.addEventListener('resize',function(){updateSelectionBox();updatePageBreakMarkers();syncSystemFrameSize();syncPageBoundarySizes();updateBoundaryMarkers();});
+window.addEventListener('resize',function(){updateSelectionBox();updatePageBreakMarkers();syncSystemFrameSize();syncPageBoundarySizes();updateBoundaryMarkers();stepPinRecheck();});
 // NOTE: there is deliberately NO scroll listener - overlays live in document
 // space, so the compositor scrolls them with the content automatically,
 // with zero lag or jitter. The old fixed + JS scroll-chase is exactly what
@@ -3370,9 +3513,10 @@ window.addEventListener('message',function(e){
   }
 
   if(data.type==='add-page'){
-    // autoMoveDropped: pull any element the user JUST dragged down onto the
-    // new page so it stays selectable and lands where the user wanted it.
-    addPageBoundary(true,0,true);
+    // Always add a fully EMPTY page: auto-moving recently dragged elements
+    // onto it ("autoMoveDropped") was pulling the template's last element
+    // onto every new page, so it is disabled here.
+    addPageBoundary(true,0,false);
   }
 
   if(data.type==='add-component'){
@@ -3491,42 +3635,55 @@ window.addEventListener('message',function(e){
     batchId++;
     for(var ai=0;ai<selectedEls.length;ai++){
       var ael=selectedEls[ai];
-      // The page container that holds the element defines the alignment
-      // box (page 1 = content container, pages 2+ = the page boundary).
-      var apage=getPageContainer(getPageIndexOf(ael));
-      if(!apage)continue;
-      var pcs=getComputedStyle(apage);
-      var pRect=apage.getBoundingClientRect();
-      // Content box: subtract padding so alignment lands inside the page.
-      var pL=parseFloat(pcs.paddingLeft)||0;
-      var pR=parseFloat(pcs.paddingRight)||0;
-      var pT=parseFloat(pcs.paddingTop)||0;
-      var pB=parseFloat(pcs.paddingBottom)||0;
-      var cLeft=pRect.left+pL;
-      var cTop=pRect.top+pT;
-      var cW=pRect.width-pL-pR;
+      // Alignment frame = the element's OWN parent element: positioning
+      // happens inside the parent tag's box, never across the entire page.
+      // Direct children of the page content box (whose parent IS the page
+      // container) keep aligning to the page box as before.
+      var pageIndex=getPageIndexOf(ael);
+      var pageBox=getPageContainer(pageIndex);
+      var apar=ael.parentElement;
+      var aframe=(apar&&apar!==pageBox&&apar!==document.body)?apar:pageBox;
+      if(!aframe||!aframe.isConnected)continue;
+      var fcs=getComputedStyle(aframe);
+      var fRect=aframe.getBoundingClientRect();
+      // Content box: subtract padding so alignment lands inside the box.
+      var fL=parseFloat(fcs.paddingLeft)||0;
+      var fR=parseFloat(fcs.paddingRight)||0;
+      var fT=parseFloat(fcs.paddingTop)||0;
+      var fB=parseFloat(fcs.paddingBottom)||0;
+      var cLeft=fRect.left+fL;
+      var cTop=fRect.top+fT;
+      var cW=fRect.width-fL-fR;
       // Page 1 lives inside a scroll container whose visible height is NOT
       // the page height, so vertical alignment on page 1 must use the true
       // PDF page height (one page of content), not the wrapper's viewport.
-      var cH=pRect.height-pT-pB;
-      var pageIndex=getPageIndexOf(ael);
-      if(pageIndex<=0)cH=getPageHeightPx();
-      var ar=ael.getBoundingClientRect();
-      var t=getTranslate(ael);
-      // The element's flow position (translate removed), then the target
-      // translate that lands it at the desired alignment edge.
-      var flowX=ar.left-t[0];
-      var flowY=ar.top-t[1];
-      var nx=t[0],ny=t[1];
+      var cH=fRect.height-fT-fB;
+      if(aframe===pageBox&&pageIndex<=0)cH=getPageHeightPx();
+      // Measure the element's FLOW position with every transform removed
+      // (the same technique drag uses): subtracting a translate from the
+      // current rect is only exact for pure translates, while rotated or
+      // scaled elements have no usable linear decomposition. Restoring is
+      // instant (same frame, forced reflow below), so nothing flickers.
+      var rawTr=ael.style.transform||'';
+      ael.style.transform='';
+      var fr=ael.getBoundingClientRect();
+      var flowX=fr.left;
+      var flowY=fr.top;
+      // Preserve any non-translate transforms the template authored
+      // (rotate/scale/etc.): keep everything, rebuild the leading translate.
+      var leadTr=rawTr.match(/^translate\\(\\s*(-?[\\d.]+)px\\s*,\\s*(-?[\\d.]+)px\\s*\\)/);
+      var restTr=leadTr?rawTr.slice(leadTr[0].length):rawTr;
+      if(restTr&&!leadTr)restTr=' '+restTr;
+      var nx=0,ny=0;
       if(align==='left')nx=cLeft-flowX;
-      else if(align==='center-x')nx=(cLeft+(cW-ar.width)/2)-flowX;
-      else if(align==='right')nx=(cLeft+cW-ar.width)-flowX;
+      else if(align==='center-x')nx=(cLeft+(cW-fr.width)/2)-flowX;
+      else if(align==='right')nx=(cLeft+cW-fr.width)-flowX;
       if(align==='top')ny=cTop-flowY;
-      else if(align==='center-y')ny=(cTop+(cH-ar.height)/2)-flowY;
-      else if(align==='bottom')ny=(cTop+cH-ar.height)-flowY;
-      var nt=(nx===0&&ny===0)?'':'translate('+nx+'px,'+ny+'px)';
-      if(ael.style.transform===nt)continue; // no-op - skip undo entry
-      undoStack.push({element:ael,property:'transform',oldValue:ael.style.transform||'',batchId:batchId});
+      else if(align==='center-y')ny=(cTop+(cH-fr.height)/2)-flowY;
+      else if(align==='bottom')ny=(cTop+cH-fr.height)-flowY;
+      var nt=(nx===0&&ny===0)?(restTr?restTr.replace(/^ /,''):''):'translate('+nx+'px,'+ny+'px)'+restTr;
+      if(rawTr===nt){ael.style.transform=rawTr;continue;} // no-op - skip undo entry
+      undoStack.push({element:ael,property:'transform',oldValue:rawTr,batchId:batchId});
       ael.style.transform=nt;
     }
     redoStack=[];

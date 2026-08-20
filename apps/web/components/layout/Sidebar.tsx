@@ -55,6 +55,11 @@ export function Sidebar({
   };
 
   const handleCreate = (slug: string) => {
+    // Free users can't create — send them to pricing to upgrade instead.
+    if (!canCreate) {
+      router.push("/pricing");
+      return;
+    }
     setCreating(slug);
     startTransition(async () => {
       const result = await createDocumentFromTemplate(slug);
@@ -101,10 +106,15 @@ export function Sidebar({
     .join("")
     .toUpperCase();
 
+  // Free/Hobby users can browse the dashboard but cannot create projects or
+  // export — that's a Pro feature. We disable the create affordances up front
+  // (the server action also enforces this via requireProPlan).
+  const canCreate = profile?.plan === "pro";
+
   return (
     <aside className="flex h-full w-60 flex-none flex-col border-r border-[#2d2d2d] bg-[#161617]">
       {/* Search */}
-      <label className="mx-3 mt-3 mb-2.5 flex h-9 flex-none cursor-text items-center gap-2 rounded-lg border border-[#262626] bg-[#1e1e1e] px-3 text-[#a1a1aa]">
+      <label className="mx-3 mt-3 mb-2.5 flex h-9 flex-none cursor-text items-center gap-2 rounded-[8px] border border-[#262626] bg-[#1e1e1e] px-3 text-[#a1a1aa]">
         <Search className="h-[15px] w-[15px]" />
         <input
           ref={inputRef}
@@ -134,12 +144,17 @@ export function Sidebar({
             key={t.id}
             className={itemClass}
             onClick={() => handleCreate(t.slug)}
-            disabled={creating !== null}
+            disabled={!canCreate}
+            title={canCreate ? undefined : "Upgrade to Klone Pro to create projects"}
           >
             <FileText className="h-4 w-4 text-[#a1a1aa]" />
             {t.name}
             <span className="ml-auto flex-none">
-              {creating === t.slug ? (
+              {!canCreate ? (
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#a1a1aa]">
+                  Pro
+                </span>
+              ) : creating === t.slug ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-[#a1a1aa]" />
               ) : (
                 <ChevronRight className="h-3.5 w-3.5 text-[#a1a1aa]" />
@@ -161,10 +176,10 @@ export function Sidebar({
         </p>
         <button
           onClick={() => handleCreate("blank")}
-          disabled={creating !== null}
+          disabled={!canCreate}
           className={`${pressClasses("primary", "sm")} mt-3 w-full`}
         >
-          Get started
+          {canCreate ? "Get started" : "Upgrade to create"}
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -173,7 +188,7 @@ export function Sidebar({
       <div className="flex-none border-t border-[#2d2d2d]/60 p-2">
         <button
           onClick={() => setSettingsOpen(true)}
-          className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[#1c1c1c]"
+          className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors"
         >
           <span className="relative grid h-8 w-8 flex-none place-items-center rounded-full bg-[#16245a] text-[11px] font-bold text-[#8fb3ff] ring-1 ring-[#2d2d2d]">
             {initials}

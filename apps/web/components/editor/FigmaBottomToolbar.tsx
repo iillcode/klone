@@ -121,7 +121,7 @@ export function FigmaBottomToolbar({
           <button
             onClick={onShare}
             disabled={downloading}
-            className={`${pressClasses("primary", "sm")} min-w-[110px]`}
+            className={`${pressClasses("primary", "sm")} min-w-[110px] bg-white! text-[#374151]! hover:bg-[#f0f0f0]! shadow-[0_4px_0_#d4d4d8,0_6px_10px_rgba(0,0,0,0.45)]!`}
           >
             {downloading ? (
               <SpinnerIcon />

@@ -9,10 +9,10 @@ import {
   type LayerNode,
 } from "./HtmlPreview";
 import { FigmaBottomToolbar } from "./FigmaBottomToolbar";
-import { MinusIcon, PlusIcon } from "./icons/toolbar-icons";
+
 import { Sidebar } from "@/components/layout/Sidebar";
 import type { UserProfile } from "@/lib/data/users";
-import { PropertiesSidebar } from "./PropertiesSidebar";
+import { PropertiesSidebar, PANEL_SECTIONS, type PanelSectionId } from "./PropertiesSidebar";
 import { BottomComponentDock } from "./BottomComponentDock";
 import type { ComponentGroup } from "@/lib/data/types";
 import type { TemplateRow } from "@/lib/data/template-db-types";
@@ -138,6 +138,20 @@ export function PreviewEditor({
   // Left sidebar is open either by hamburger toggle OR by inspect mode
   const leftOpen = leftSidebarOpen || inspectMode;
   const rightOpen = inspectMode;
+
+  // ── Section quick-nav (canvas rail → properties panel) ──
+  // The canvas rail lives on the right edge of the canvas (editor-style
+  // overlay); clicking an icon asks the properties panel to scroll to the
+  // matching Design section and flash a 2s highlight. `token` changes on
+  // every click so repeating the same section retriggers the effect.
+  const [navRequest, setNavRequest] = useState<{
+    section: PanelSectionId;
+    token: number;
+  } | null>(null);
+  const navToSection = (section: PanelSectionId) => {
+    if (!inspectMode) setInspectMode(true); // the panel must be open
+    setNavRequest({ section, token: Date.now() });
+  };
 
   // Only process element selection when inspect mode is active
   const handleElementSelect = useCallback(
@@ -667,35 +681,6 @@ export function PreviewEditor({
             </div>
           </div>
 
-          {/* ── Zoom controls: bottom-left pill ──
-              Canvas zoom scales the preview around its horizontal center
-              (see HtmlPreview), so the page never moves sideways - the
-              document only scrolls vertically. */}
-          <div className="absolute bottom-3 left-3 z-10 flex items-center h-10 rounded-xl bg-[#1e1e1e] border border-[#2d2d2d] shadow-lg select-none">
-            <button
-              onClick={() => zoomBy(1 / 1.2)}
-              title="Zoom out (Ctrl+-)"
-              className="w-7 h-10 flex items-center justify-center text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2a2a2a] transition-colors rounded-l-xl"
-            >
-              <MinusIcon />
-            </button>
-            <button
-              onClick={() => zoomTo(1)}
-              title="Reset zoom to 100% (Ctrl+0)"
-              className="px-1.5 h-10 min-w-[50px] text-[11px] font-medium text-[#e4e4e7] tabular-nums hover:bg-[#2a2a2a] transition-colors"
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-            <button
-              onClick={() => zoomBy(1.2)}
-              disabled={zoom >= 1}
-              title={zoom >= 1 ? "100% is the maximum zoom" : "Zoom in (Ctrl++)"}
-              className="w-7 h-10 flex items-center justify-center text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#2a2a2a] transition-colors rounded-r-xl disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-            >
-              <PlusIcon />
-            </button>
-          </div>
-
           {/* ── Split-mode hint (inspect mode + split mode) ── */}
           {inspectMode && splitMode && (
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
@@ -712,6 +697,27 @@ export function PreviewEditor({
           )}
 
           {/* ── Add page (now lives in the bottom dock, inspect mode only) ── */}
+
+          {/* ── Section quick-nav rail: canvas right edge ──
+              One icon per Design-panel section. Clicking scrolls the
+              properties sidebar to that section (shown while the panel is
+              open) - Figma-style overlay pinned to the canvas edge. */}
+          {rightOpen && (
+            <div className="absolute right-2 top-1/2 z-10 -translate-y-1/2 flex flex-col items-center gap-0.5 rounded-lg border border-[#2d2d2d] bg-[#1e1e1e]/90 p-1 shadow-lg backdrop-blur-sm">
+              {PANEL_SECTIONS.map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  title={label}
+                  aria-label={`Go to ${label} section`}
+                  onClick={() => navToSection(id)}
+                  className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent p-0 text-[#8a8a8a] outline-none transition-colors hover:bg-white/5 hover:text-[#f0f0f0]"
+                >
+                  <Icon className="size-3.5" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ── Right sidebar: Design properties ── */}
@@ -746,6 +752,7 @@ export function PreviewEditor({
                 .filter((id): id is string => !!id)}
               onSelectLayer={handleSelectLayer}
               onReorderLayer={handleReorderLayer}
+              navRequest={navRequest}
             />
           </div>
         </div>

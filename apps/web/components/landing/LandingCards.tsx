@@ -152,11 +152,7 @@ function DocumentCard({
 
   return (
     <div
-      className={`group relative overflow-hidden rounded-xl border bg-[#1a1a1a] ${
-        selected
-          ? "border-[#aef637]"
-          : "border-[#262626] hover:border-[#3d3d3d]"
-      }`}
+      className="group relative overflow-hidden rounded-xl border border-[#262626] bg-[#1a1a1a] hover:border-[#3d3d3d]"
     >
       <div className="relative aspect-[16/10] overflow-hidden">
         <PagePreview html={doc.html_code} title={doc.title} />
@@ -272,11 +268,7 @@ function TemplateCard({
       }}
       onDoubleClick={() => onSelect(template.slug)}
       disabled={creating}
-      className={`group relative block overflow-hidden rounded-xl border bg-[#1a1a1a] text-left disabled:cursor-wait disabled:opacity-70 ${
-        selected
-          ? "border-[#aef637]"
-          : "border-[#262626] hover:border-[#3d3d3d]"
-      }`}
+      className="group relative block overflow-hidden rounded-xl border border-[#262626] bg-[#1a1a1a] text-left hover:border-[#3d3d3d] disabled:cursor-wait disabled:opacity-70"
     >
       <div className="relative aspect-[16/10] overflow-hidden">
         <PagePreview html={template.preview_html} title={template.name} />

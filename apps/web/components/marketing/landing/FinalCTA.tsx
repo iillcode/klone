@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { ButtonLink } from "@/components/ui/Button";
+import { GetStartedButton } from "@/components/marketing/GetStartedButton";
 import { GridLines, LandingContainer } from "./Section";
 
 /** Large clean centered final call-to-action. */
@@ -16,10 +17,10 @@ export function FinalCTA() {
             Explore Klone today
           </h2>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <ButtonLink href="/register" size="lg" className="group">
+            <GetStartedButton size="lg" className="group">
               Start building
               <ArrowRight size={16} className="transition-transform duration-200 group-hover:translate-x-1" />
-            </ButtonLink>
+            </GetStartedButton>
             <ButtonLink href="#how" variant="dark" size="lg">
               See how it works
             </ButtonLink>
