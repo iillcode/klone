@@ -1,21 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowUpRight, LayoutDashboard, Menu, X } from "lucide-react";
+import { ArrowUpRight, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ButtonLink } from "@/components/ui/Button";
-import { createClient } from "@/lib/supabase/client";
 
 const NAV_LINKS = [
   { label: "Templates", href: "#templates" },
   { label: "How it works", href: "#how" },
-  { label: "Pricing", href: "/pricing" },
-  { label: "Docs", href: "/docs" },
-];
-
-/** Nav links shown to authenticated users (drop the auth CTAs). */
-const AUTH_NAV_LINKS = [
-  { label: "Home", href: "/home" },
   { label: "Pricing", href: "/pricing" },
   { label: "Docs", href: "/docs" },
 ];
@@ -67,31 +59,12 @@ export function KloneWordmark({
 export function LandingNavbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // Resolve auth state on the client so the navbar can swap between the
-  // logged-in (Home / Pricing / Dashboard) and logged-out (Sign in / Get
-  // started) experiences.
-  useEffect(() => {
-    let active = true;
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      if (active) setSignedIn(Boolean(data.user));
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setSignedIn(Boolean(session?.user));
-    });
-    return () => {
-      active = false;
-      sub.subscription.unsubscribe();
-    };
   }, []);
 
   return (
@@ -115,7 +88,7 @@ export function LandingNavbar() {
         </a>
 
         <ul className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 lg:flex">
-          {(signedIn ? AUTH_NAV_LINKS : NAV_LINKS).map((link) => (
+          {NAV_LINKS.map((link) => (
             <li key={link.label}>
               <a
                 href={link.href}
@@ -128,28 +101,19 @@ export function LandingNavbar() {
         </ul>
 
         <div className="hidden items-center gap-6 lg:flex">
-          {signedIn ? (
-            <ButtonLink href="/dashboard" className="group">
-              <LayoutDashboard size={14} />
-              Dashboard
-            </ButtonLink>
-          ) : (
-            <>
-              <a
-                href="/login"
-                className="text-[14px] font-medium text-[#a1a1a6] transition-colors duration-150 hover:text-[#ededed] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#aef637]"
-              >
-                Sign in
-              </a>
-              <ButtonLink href="/register" className="group">
-                Get started
-                <ArrowUpRight
-                  size={14}
-                  className="transition-transform duration-150 group-hover:translate-x-px group-hover:-translate-y-px"
-                />
-              </ButtonLink>
-            </>
-          )}
+          <a
+            href="/login"
+            className="text-[14px] font-medium text-[#a1a1a6] transition-colors duration-150 hover:text-[#ededed] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#aef637]"
+          >
+            Sign in
+          </a>
+          <ButtonLink href="/register" className="group">
+            Get started
+            <ArrowUpRight
+              size={14}
+              className="transition-transform duration-150 group-hover:translate-x-px group-hover:-translate-y-px"
+            />
+          </ButtonLink>
         </div>
 
         <button
@@ -166,7 +130,7 @@ export function LandingNavbar() {
       {mobileOpen && (
         <div className="border-t border-[#2a2a2c] bg-[#161617] px-5 py-4 lg:hidden">
           <ul className="flex flex-col gap-1">
-            {(signedIn ? AUTH_NAV_LINKS : NAV_LINKS).map((link) => (
+            {NAV_LINKS.map((link) => (
               <li key={link.label}>
                 <a
                   href={link.href}
@@ -179,21 +143,12 @@ export function LandingNavbar() {
             ))}
           </ul>
           <div className="mt-4 flex items-center gap-3 border-t border-[#2a2a2c] pt-4">
-            {signedIn ? (
-              <ButtonLink href="/dashboard" className="w-full">
-                <LayoutDashboard size={14} />
-                Dashboard
-              </ButtonLink>
-            ) : (
-              <>
-                <ButtonLink href="/login" variant="dark" className="flex-1">
-                  Sign in
-                </ButtonLink>
-                <ButtonLink href="/register" className="flex-1">
-                  Get started
-                </ButtonLink>
-              </>
-            )}
+            <ButtonLink href="/login" variant="dark" className="flex-1">
+              Sign in
+            </ButtonLink>
+            <ButtonLink href="/register" className="flex-1">
+              Get started
+            </ButtonLink>
           </div>
         </div>
       )}

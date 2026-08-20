@@ -5,7 +5,6 @@ import { useState } from "react";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pressClasses } from "@/components/ui/Button";
-import { createClient } from "@/lib/supabase/client";
 
 /**
  * Resolve the current signed-in user's email client-side so the checkout
@@ -13,15 +12,11 @@ import { createClient } from "@/lib/supabase/client";
  * webhook (which matches by email) attributes the payment to the right user.
  */
 async function getSessionEmail(): Promise<string | null> {
-  try {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    return user?.email ?? null;
-  } catch {
-    return null;
-  }
+  // Anonymous visitors have no client session and no `email` prop, so we
+  // must NOT construct a Supabase client here (that crashes the page when
+  // public NEXT_PUBLIC_ env vars are unavailable). Callers that know the
+  // user is logged in should pass `email` from a server component instead.
+  return null;
 }
 
 interface CheckoutButtonProps {

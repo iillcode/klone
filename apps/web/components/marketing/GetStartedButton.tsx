@@ -1,45 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { ButtonLink } from "@/components/ui/Button";
-import { createClient } from "@/lib/supabase/client";
 
 /**
- * Auth-aware primary CTA. When the visitor is signed in, the button points to
- * the app dashboard; otherwise it points to /register. This lets the same
- * "Get started" copy work for both first-time visitors and returning users.
+ * Primary CTA. Points to `href` (defaults to /register) so the same "Get
+ * started" copy works for both first-time visitors and returning users.
+ * Auth-gated destinations are handled server-side after sign-in, so this no
+ * longer performs a client-side session lookup.
  */
 export function GetStartedButton({
   children,
   href = "/register",
-  dashboardHref = "/dashboard",
   size = "lg",
   variant = "primary",
   className,
 }: {
   children: React.ReactNode;
   href?: string;
-  dashboardHref?: string;
   size?: "xs" | "sm" | "md" | "lg";
   variant?: "primary" | "dark" | "danger" | "ghost";
   className?: string;
 }) {
-  const [signedIn, setSignedIn] = useState(false);
-
-  useEffect(() => {
-    const supabase = createClient();
-    let active = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (active) setSignedIn(Boolean(data.user));
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
-
   return (
     <ButtonLink
-      href={signedIn ? dashboardHref : href}
+      href={href}
       size={size}
       variant={variant}
       className={className}
