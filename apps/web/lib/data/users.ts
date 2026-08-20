@@ -12,11 +12,13 @@ export interface UserProfile {
   bio: string | null;
   plan: string;
   credits_balance: number;
+  dodo_customer_id: string | null;
+  subscription_status: string | null;
   created_at: string;
 }
 
 const PROFILE_FIELDS =
-  "id, email, full_name, avatar_url, username, website, bio, plan, credits_balance, created_at";
+  "id, email, full_name, avatar_url, username, website, bio, plan, credits_balance, dodo_customer_id, subscription_status, created_at";
 
 /** Fetch the current user's profile row, or null when signed out/missing. */
 export async function getProfile(): Promise<UserProfile | null> {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireProPlan } from "@/lib/auth";
 
 /**
  * PDF generation works in two completely separate modes:
@@ -214,6 +215,10 @@ async function renderWithLocalChrome(body: PdfGenerationOptions) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Pro-only feature: one-click A4 PDF export. Redirects free/unauthenticated
+    // users to /login or /pricing before any rendering happens.
+    await requireProPlan();
+
     const body: PdfGenerationOptions = await request.json();
 
     if (!body.html && !body.url) {

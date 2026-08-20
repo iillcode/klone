@@ -1,8 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ElementInfo, AlignMode, LayerNode } from "./HtmlPreview";
-import { PencilRuler, PanelsTopLeft } from "lucide-react";
+import {
+  PencilRuler,
+  PanelsTopLeft,
+  Move,
+  LayoutTemplate,
+  Palette,
+  PaintBucket,
+  PenLine,
+  Sparkles,
+  Type,
+  Files,
+} from "lucide-react";
 import { LayerTree } from "./ui/LayerTree";
 import {
   Undo2,
@@ -39,6 +50,26 @@ const MAJOR_SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: "Clear selection", keys: ["Esc"] },
 ];
 
+/**
+ * Quick-nav sections of the Design panel. Each maps to a rendered section
+ * inside the scrollable properties area; navigating to one scrolls to the
+ * section and flashes a 2-second highlight. Order matches the panel.
+ * Exported so the canvas quick-nav rail (PreviewEditor) renders the same
+ * sections.
+ */
+export const PANEL_SECTIONS = [
+  { id: "position", label: "Position & Size", Icon: Move },
+  { id: "layout", label: "Layout", Icon: LayoutTemplate },
+  { id: "appearance", label: "Appearance", Icon: Palette },
+  { id: "stroke", label: "Stroke", Icon: PenLine },
+  { id: "fill", label: "Fill", Icon: PaintBucket },
+  { id: "effects", label: "Effects", Icon: Sparkles },
+  { id: "typography", label: "Typography", Icon: Type },
+  { id: "pages", label: "Pages", Icon: Files },
+] as const;
+
+export type PanelSectionId = (typeof PANEL_SECTIONS)[number]["id"];
+
 interface PropertiesSidebarProps {
   selectedElements: ElementInfo[];
   onApplyStyle: (property: string, value: string) => void;
@@ -67,6 +98,12 @@ interface PropertiesSidebarProps {
     targetId: string,
     position: "before" | "after" | "inner",
   ) => void;
+  /**
+   * Quick-nav request from the canvas rail (PreviewEditor). When this
+   * changes, the panel switches to the Design tab, scrolls to the section,
+   * and flashes a 2-second highlight on it.
+   */
+  navRequest?: { section: PanelSectionId; token: number } | null;
 }
 
 export function PropertiesSidebar({
@@ -89,6 +126,7 @@ export function PropertiesSidebar({
   selectedLayerIds = [],
   onSelectLayer,
   onReorderLayer,
+  navRequest = null,
 }: PropertiesSidebarProps) {
   // Design = property editing, Layers = open-pencil-style folder tree.
   const [tab, setTab] = useState<"design" | "layers">("design");
@@ -134,6 +172,56 @@ export function PropertiesSidebar({
 
   // Format numbers without trailing decimals (12.5 stays 12.5, 12.0 → 12)
   const fmtNum = (n: number) => (Math.round(n * 10) / 10).toString();
+
+  // ── Section quick-nav rail ──
+  // A slim icon rail beside the property panel: clicking an icon scrolls
+  // the properties area to that section and flashes a 2s highlight on it.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sectionRefs = useRef<Partial<Record<PanelSectionId, HTMLElement | null>>>({});
+  const [highlightedSection, setHighlightedSection] =
+    useState<PanelSectionId | null>(null);
+  const highlightTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
+    },
+    [],
+  );
+  const goToSection = (id: PanelSectionId) => {
+    setTab("design"); // sections only exist in the Design tab
+    const container = scrollRef.current;
+    const el = sectionRefs.current[id];
+    if (container && el) {
+      // offsetTop-free scroll math: works regardless of positioned
+      // ancestors between the section and the scroll container.
+      const top =
+        el.getBoundingClientRect().top -
+        container.getBoundingClientRect().top +
+        container.scrollTop;
+      container.scrollTo({ top: Math.max(0, top - 4), behavior: "smooth" });
+    }
+    setHighlightedSection(id);
+    if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(
+      () => setHighlightedSection(null),
+      2000,
+    );
+  };
+  // External quick-nav requests come from the canvas rail. Run the
+  // navigation after the panel has rendered (tab may need to flip to
+  // "design" first, which mounts the sections).
+  useEffect(() => {
+    if (!navRequest) return;
+    const t = window.setTimeout(() => goToSection(navRequest.section), 60);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navRequest?.token]);
+  const sectionHighlightCls = (id: PanelSectionId) =>
+    "transition-colors duration-300 " +
+    // Highlight face uses the same background as the dock/header buttons
+    // (bg-[#262628] — the "Save" button color), so the flash reads as a
+    // system surface, not an accent color.
+    (highlightedSection === id ? "bg-[#262628]" : "");
 
   // Rotation / flip helpers (compose with the existing translate transform).
   const rotation = Math.round(parseFloat(s?.rotate || "0")) || 0;
@@ -194,9 +282,10 @@ export function PropertiesSidebar({
       {/* ── Scrollable properties area (panel padding 14px) ── */}
       <div
         className={
-          "flex-1 overflow-y-auto scrollbar-none py-2.5" +
+          "flex-1 min-h-0 overflow-y-auto scrollbar-none py-2.5" +
           (tab === "layers" ? " hidden" : "")
         }
+        ref={scrollRef}
       >
         {!hasSelection && (
           <div className="flex h-full flex-col items-center justify-center p-3">
@@ -296,7 +385,15 @@ export function PropertiesSidebar({
             </div>
 
             {/* ── Position ── */}
-            <div className="px-3 py-2.5 border-b border-[#3a3a3a]">
+            <div
+              ref={(el) => {
+                sectionRefs.current.position = el;
+              }}
+              className={
+                "px-3 py-2.5 border-b border-[#3a3a3a] " +
+                sectionHighlightCls("position")
+              }
+            >
               <div className="text-[11px] font-semibold text-[#f0f0f0] mb-3">
                 Position
               </div>
@@ -426,31 +523,78 @@ export function PropertiesSidebar({
             </div>
 
             {/* ── Layout ── */}
-            <LayoutSection
-              styles={s}
-              onApplyStyle={onApplyStyle}
-              container={isContainerSel}
-              text={first?.tag === "span" || first?.tag === "p" || first?.tag === "h1" || first?.tag === "button"}
-            />
+            <div
+              ref={(el) => {
+                sectionRefs.current.layout = el;
+              }}
+              className={sectionHighlightCls("layout")}
+            >
+              <LayoutSection
+                styles={s}
+                onApplyStyle={onApplyStyle}
+                container={isContainerSel}
+                text={first?.tag === "span" || first?.tag === "p" || first?.tag === "h1" || first?.tag === "button"}
+              />
+            </div>
 
             {/* ── Appearance ── */}
-            <AppearanceSection styles={s} onApplyStyle={onApplyStyle} />
+            <div
+              ref={(el) => {
+                sectionRefs.current.appearance = el;
+              }}
+              className={sectionHighlightCls("appearance")}
+            >
+              <AppearanceSection styles={s} onApplyStyle={onApplyStyle} />
+            </div>
 
             {/* ── Stroke ── */}
-            <StrokeSection styles={s} onApplyStyle={onApplyStyle} />
+            <div
+              ref={(el) => {
+                sectionRefs.current.stroke = el;
+              }}
+              className={sectionHighlightCls("stroke")}
+            >
+              <StrokeSection styles={s} onApplyStyle={onApplyStyle} />
+            </div>
 
             {/* ── Fill (open-pencil clone) ── */}
-            <FillSection styles={s} onApplyStyle={onApplyStyle} />
+            <div
+              ref={(el) => {
+                sectionRefs.current.fill = el;
+              }}
+              className={sectionHighlightCls("fill")}
+            >
+              <FillSection styles={s} onApplyStyle={onApplyStyle} />
+            </div>
 
             {/* ── Effects ── */}
-            <EffectsSection styles={s} onApplyStyle={onApplyStyle} />
+            <div
+              ref={(el) => {
+                sectionRefs.current.effects = el;
+              }}
+              className={sectionHighlightCls("effects")}
+            >
+              <EffectsSection styles={s} onApplyStyle={onApplyStyle} />
+            </div>
 
             {/* ── Typography ── */}
-            <TypographyPanel styles={s} onApplyStyle={onApplyStyle} />
+            <div
+              ref={(el) => {
+                sectionRefs.current.typography = el;
+              }}
+              className={sectionHighlightCls("typography")}
+            >
+              <TypographyPanel styles={s} onApplyStyle={onApplyStyle} />
+            </div>
 
             {/* ── Pages ── */}
             {onMoveToPage && pageCount > 0 && !isContainerSel && (
-              <div className="px-3 py-2.5">
+              <div
+                ref={(el) => {
+                  sectionRefs.current.pages = el;
+                }}
+                className={"px-3 py-2.5 " + sectionHighlightCls("pages")}
+              >
                 <div className="text-[11px] font-semibold text-[#f0f0f0] mb-3">
                   Pages
                 </div>

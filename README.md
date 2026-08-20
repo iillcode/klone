@@ -489,3 +489,8 @@ supabase db push --db-url "$DATABASE_URL"
 Get-Process node | Stop-Process -Force
 Remove-Item apps\web\.next -Recurse -Force
  ```
+
+
+ # TO RUN SSH SEVER 
+
+ ssh -o ServerAliveInterval=60 -R 80:localhost:3000 nokey@localhost.run

@@ -8,11 +8,10 @@ import { cn } from "@/lib/utils";
 
 /* ─── Bottom dock: "Insert component" tool + grouped template library ── */
 
-/** Simple static face for the two dock buttons — same 3D dark look as
- *  pressClasses("dark") but with NO transition and NO press-sink animation:
- *  hover is an instant color swap and clicking never moves the button. */
+/** Transparent face for the two dock buttons — no fill, no 3D shadow;
+ *  only a subtle hover/active tint so the icons + labels stay readable. */
 const dockBtn =
-  "inline-flex cursor-pointer select-none items-center justify-center gap-2 border-none font-semibold bg-[#262628] text-[#ededed] hover:bg-[#313133] shadow-[0_4px_0_#0a0a0b,0_6px_10px_rgba(0,0,0,0.4)] rounded-[8px] px-3 py-1.5 text-[12.5px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#52525b]";
+  "inline-flex cursor-pointer select-none items-center justify-center gap-2 border-none font-semibold bg-transparent text-[#ededed] hover:bg-white/5 rounded-[8px] px-3 py-1.5 text-[12.5px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#52525b]";
 
 interface BottomComponentDockProps {
   /** Grouped template components loaded from the document's own template. */
@@ -143,7 +142,7 @@ export function BottomComponentDock({
 
   return (
     <div
-      className="fixed bottom-3 left-1/2 -translate-x-1/2 z-20"
+      className="fixed bottom-2 left-1/2 -translate-x-1/2 z-20"
       ref={dockRef}
     >
       {/* Component library popup — centered above the dock */}
@@ -241,9 +240,9 @@ export function BottomComponentDock({
           }
           className={cn(
             dockBtn,
-            // Subtle pressed-state cue instead of the lime face.
-            open && "bg-[#313133]",
-            "disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none",
+            // Subtle pressed-state cue.
+            open && "bg-white/10",
+            "disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50",
           )}
         >
           <ComponentsIcon className="w-[19px] h-[19px]" />

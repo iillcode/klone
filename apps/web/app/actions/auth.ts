@@ -17,6 +17,7 @@ export async function login(
 ): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const redirectTo = String(formData.get("redirect") ?? "").trim();
 
   if (!email || !password) {
     return { error: "Email and password are required." };
@@ -37,7 +38,11 @@ export async function login(
     await ensureUserProfile(supabase, data.user);
   }
 
-  redirect("/");
+  // Send the user back to where they came from (e.g. /pricing after an
+  // anonymous checkout attempt), defaulting to home.
+  const safeRedirect =
+    redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
+  redirect(safeRedirect);
 }
 
 export async function register(

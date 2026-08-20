@@ -13,12 +13,14 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@dodopayments/nextjs": "^0.3.8",
     "@repo/ui": "workspace:*",
     "@sparticuz/chromium": "^133.0.0",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.49.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dodopayments": "^2.47.0",
     "lucide-react": "^1.24.0",
     "next": "16.2.11",
     "puppeteer": "^24.0.0",
@@ -37,6 +39,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "svix": "^2.0.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wrangler": "^4.112.0"

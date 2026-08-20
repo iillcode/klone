@@ -1,0 +1,9 @@
+{
+  "name": "dodo-webhook",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "supabase functions serve dodo-webhook --no-verify-jwt --workdir ../..",
+    "deploy": "supabase functions deploy dodo-webhook --no-verify-jwt --workdir ../.."
+  }
+}

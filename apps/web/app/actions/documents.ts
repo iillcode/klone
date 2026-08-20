@@ -6,6 +6,7 @@ import {
   updateDocumentContent,
 } from "@/lib/data/documents";
 import { getTemplateBySlug } from "@/lib/data/templates-db";
+import { requireProPlan } from "@/lib/auth";
 
 export type CreateDocumentResult = { id: string } | { error: string };
 export type SaveDocumentResult = { ok: true } | { error: string };
@@ -19,6 +20,9 @@ export type DeleteDocumentResult = { ok: true } | { error: string };
 export async function createDocumentFromTemplate(
   templateId: string,
 ): Promise<CreateDocumentResult> {
+  // Pro-only feature. requireProPlan redirects free/unauthenticated users.
+  await requireProPlan();
+
   const template = await getTemplateBySlug(templateId);
   if (!template) {
     return { error: `Unknown template '${templateId}'.` };
@@ -44,6 +48,8 @@ export async function saveDocumentContent(
   docId: string,
   html: string,
 ): Promise<SaveDocumentResult> {
+  await requireProPlan();
+
   if (!html || html.length === 0) {
     return { error: "Nothing to save." };
   }
@@ -62,6 +68,8 @@ export async function saveDocumentContent(
 export async function deleteDocumentAction(
   docId: string,
 ): Promise<DeleteDocumentResult> {
+  await requireProPlan();
+
   if (!docId) {
     return { error: "Missing document id." };
   }
@@ -83,6 +91,8 @@ export async function createDocumentFromHtml(
   html: string,
   templateSlug?: string | null,
 ): Promise<CreateDocumentResult> {
+  await requireProPlan();
+
   if (!html || html.length === 0) {
     return { error: "Nothing to save." };
   }

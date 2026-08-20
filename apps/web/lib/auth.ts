@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getProfile, type UserProfile } from "@/lib/data/users";
 
 export type SessionUser = {
   userId: string;
@@ -68,4 +69,40 @@ export async function getSession(): Promise<SessionUser | null> {
     userId: user.id,
     email: user.email ?? "",
   };
+}
+
+/**
+ * Require a signed-in user (any plan). Redirects to /login when there is no
+ * session. Unlike requireProPlan, this does NOT check the plan, so free users
+ * can still reach the dashboard — they just can't create projects / export.
+ */
+export async function requireSession(): Promise<UserProfile | null> {
+  const profile = await getProfile();
+  if (!profile) {
+    redirect("/login");
+  }
+  return profile;
+}
+
+/**
+ * Require an authenticated user on an ACTIVE Pro plan.
+ *
+ * Redirects (in priority order):
+ *   - not signed in            -> /login
+ *   - signed in but not "pro"  -> /pricing   (upgrade / subscribe)
+ *
+ * Returns the full profile so callers can use `plan`, `credits_balance`, etc.
+ * Use this in server actions / API routes that power PAID features (document
+ * creation, PDF export). The dashboard layout only requires a session, so
+ * free users can browse the dashboard but are blocked here.
+ */
+export async function requireProPlan(): Promise<UserProfile> {
+  const profile = await getProfile();
+  if (!profile) {
+    redirect("/login");
+  }
+  if (profile.plan !== "pro") {
+    redirect("/pricing");
+  }
+  return profile;
 }

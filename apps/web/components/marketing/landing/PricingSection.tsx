@@ -1,5 +1,5 @@
 import { ArrowRight, Check } from "lucide-react";
-import { ButtonLink } from "@/components/ui/Button";
+import { CheckoutButton } from "@/components/marketing/CheckoutButton";
 import { GridLines, LandingContainer } from "./Section";
 
 const PLAN_FEATURES = [
@@ -13,12 +13,12 @@ const PLAN_FEATURES = [
   "Priority email support",
 ];
 
-const ASSURANCES = ["Cancel anytime", "No setup fees", "7-day free trial"];
+const ASSURANCES = ["Cancel anytime", "No setup fees", "Full access from day one"];
 
 const FAQS = [
   {
     q: "Is there a free trial?",
-    a: "Yes — every new account starts with 7 days of the full plan, free. No card required until the trial ends.",
+    a: "No — Klone Pro is a paid plan, but you can start anytime and cancel with one click. You only pay when you're ready to use the full editor and export.",
   },
   {
     q: "What do I get with this plan?",
@@ -83,12 +83,11 @@ export function PricingSection() {
                 Or $190/year — two months free.
               </p>
 
-              <ButtonLink href="/register" size="lg" className="group mt-6 w-full">
-                Start 7-day free trial
-                <ArrowRight size={15} className="transition-transform duration-200 group-hover:translate-x-1" />
-              </ButtonLink>
+              <CheckoutButton size="lg" className="mt-6 w-full">
+                Get Klone Pro
+              </CheckoutButton>
               <p className="mt-3 text-center text-[12px] text-[#8a8a8a]">
-                No card required to start.
+                Cancel anytime — keep your documents and exports.
               </p>
             </div>
 
